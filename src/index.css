@@ -1,15 +1,37 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Outfit:wght@300;400;600;800&display=swap');
 
 :root {
-  --bg-primary: #0a0a0f;
-  --bg-secondary: #13131a;
-  --text-primary: #ffffff;
-  --text-secondary: #a0a0b0;
-  --accent: #6d28d9;
-  --accent-glow: rgba(109, 40, 217, 0.5);
-  --accent-secondary: #0ea5e9;
-  --surface: rgba(255, 255, 255, 0.03);
-  --surface-border: rgba(255, 255, 255, 0.08);
+  /* Dark Blue palette (HUD) */
+  --c50: #F0F1FF;
+  --c100: #E4E5FF;
+  --c200: #CDCFFF;
+  --c300: #A5A5FF;
+  --c400: #7973FF;
+  --c500: #4D3BFF;
+  --c600: #3813FF;
+  --c700: #2F02FF;
+  --c800: #2701D6;
+  --c900: #2103A9;
+  --c950: #110077;
+
+  --bg: #020210;
+  --panel: #05061e;
+  --panel-2: #070926;
+  --line: rgba(122, 115, 255, 0.18);
+  --text: var(--c50);
+  --muted: var(--c300);
+  --glow: var(--c500);
+
+  /* Mapeo para Landing y UI genérica */
+  --bg-primary: #020210;
+  --bg-secondary: #05061e;
+  --text-primary: var(--c50);
+  --text-secondary: var(--c300);
+  --accent: var(--c500);
+  --accent-glow: rgba(77, 59, 255, 0.5);
+  --accent-secondary: var(--c300);
+  --surface: rgba(122, 115, 255, 0.03);
+  --surface-border: rgba(122, 115, 255, 0.18);
 }
 
 * {
@@ -18,48 +40,40 @@
   box-sizing: border-box;
 }
 
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background-color: var(--bg);
+}
+
 body {
-  font-family: 'Outfit', sans-serif;
-  background-color: var(--bg-primary);
+  font-family: 'Rajdhani', sans-serif;
   color: var(--text-primary);
   min-height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  overflow-x: hidden;
+  overflow: hidden;
   position: relative;
+  background:
+    radial-gradient(ellipse at 50% -10%, rgba(79, 66, 255, 0.18), transparent 55%),
+    radial-gradient(ellipse at 100% 110%, rgba(33, 3, 169, 0.25), transparent 60%),
+    var(--bg);
 }
 
-/* Background effects */
-body::before, body::after {
-  content: '';
-  position: absolute;
-  width: 500px;
-  height: 500px;
-  border-radius: 50%;
-  filter: blur(120px);
-  z-index: -1;
-  animation: float 20s infinite ease-in-out alternate;
+/* faint scanline / grid texture */
+.grid-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background-image:
+    linear-gradient(rgba(122, 115, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(122, 115, 255, 0.035) 1px, transparent 1px);
+  background-size: 38px 38px;
+  mask-image: radial-gradient(circle at 50% 40%, black, transparent 75%);
+  -webkit-mask-image: radial-gradient(circle at 50% 40%, black, transparent 75%);
 }
 
-body::before {
-  background: var(--accent-glow);
-  top: -100px;
-  left: -100px;
-}
-
-body::after {
-  background: rgba(14, 165, 233, 0.2);
-  bottom: -100px;
-  right: -100px;
-  animation-delay: -10s;
-}
-
-@keyframes float {
-  0% { transform: translate(0, 0); }
-  100% { transform: translate(50px, 50px); }
-}
-
+/* LANDING PAGE WRAPPER / CONTAINER */
 .container {
   text-align: center;
   padding: 3rem;
@@ -74,6 +88,9 @@ body::after {
   animation: fadeUp 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   opacity: 0;
   transform: translateY(30px);
+  margin: 0 auto;
+  position: relative;
+  z-index: 2;
 }
 
 @keyframes fadeUp {
@@ -90,10 +107,10 @@ body::after {
   width: 80px;
   height: 80px;
   border-radius: 20px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-secondary));
+  background: linear-gradient(135deg, var(--accent), var(--c300));
   margin-bottom: 2rem;
   box-shadow: 0 0 30px var(--accent-glow);
-  animation: pulse 3s infinite;
+  animation: logoPulse 3s infinite;
 }
 
 .logo-container svg {
@@ -102,23 +119,24 @@ body::after {
   color: white;
 }
 
-@keyframes pulse {
+@keyframes logoPulse {
   0% { box-shadow: 0 0 30px var(--accent-glow); }
   50% { box-shadow: 0 0 50px var(--accent-glow); }
   100% { box-shadow: 0 0 30px var(--accent-glow); }
 }
 
-h1 {
+h1.landing-title {
+  font-family: 'Orbitron', sans-serif;
   font-size: 3rem;
   font-weight: 800;
   margin-bottom: 1rem;
-  background: linear-gradient(to right, #fff, #a0a0b0);
+  background: linear-gradient(to right, #fff, var(--c300));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   letter-spacing: -1px;
 }
 
-p {
+p.landing-desc {
   color: var(--text-secondary);
   font-size: 1.1rem;
   line-height: 1.6;
@@ -130,21 +148,21 @@ p {
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 1rem;
-  background: rgba(16, 185, 129, 0.1);
-  color: #10b981;
+  background: rgba(122, 115, 255, 0.1);
+  color: var(--c200);
   border-radius: 999px;
   font-weight: 600;
   font-size: 0.9rem;
   margin-bottom: 2rem;
-  border: 1px solid rgba(16, 185, 129, 0.2);
+  border: 1px solid var(--line);
 }
 
 .status-dot {
   width: 8px;
   height: 8px;
-  background: #10b981;
+  background: var(--c400);
   border-radius: 50%;
-  box-shadow: 0 0 10px #10b981;
+  box-shadow: 0 0 10px var(--c400);
   animation: blink 2s infinite;
 }
 
@@ -172,8 +190,8 @@ p {
 }
 
 .btn-primary {
-  background: var(--text-primary);
-  color: var(--bg-primary);
+  background: var(--c50);
+  color: var(--bg);
   box-shadow: 0 4px 15px rgba(255, 255, 255, 0.2);
 }
 
@@ -190,21 +208,11 @@ p {
 
 .btn-secondary:hover {
   background: var(--surface);
-  border-color: rgba(255, 255, 255, 0.2);
+  border-color: rgba(122, 115, 255, 0.3);
 }
-
-.footer {
-  margin-top: 3rem;
-  font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.3);
-}
-
-/* ==========================================
-   DASHBOARD INFRASTRUCTURE STYLE SYSTEM
-   ========================================== */
 
 .btn-accent {
-  background: linear-gradient(135deg, var(--accent), var(--accent-secondary));
+  background: linear-gradient(135deg, var(--c500), var(--c300));
   color: white;
   box-shadow: 0 4px 15px var(--accent-glow);
 }
@@ -214,376 +222,639 @@ p {
   box-shadow: 0 8px 25px var(--accent-glow);
 }
 
-.dashboard-wrapper {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background-color: var(--bg-primary);
-  z-index: 100;
-  display: grid;
-  grid-template-columns: 340px 1fr 380px;
-  grid-template-rows: 64px 1fr;
-  color: var(--text-primary);
-  font-family: 'Outfit', sans-serif;
-  overflow: hidden;
-  box-shadow: 0 0 100px rgba(0, 0, 0, 0.8);
-  animation: fadeIn 0.4s ease-out;
+.footer {
+  margin-top: 3rem;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.3);
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.dashboard-header {
-  grid-column: 1 / -1;
-  grid-row: 1;
+/* ==========================================
+   HUD HEADER STYLES
+   ========================================== */
+header.hud-header {
+  position: relative;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 1.5rem;
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--surface-border);
+  padding: 10px 28px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(17, 0, 119, 0.35), transparent);
+  height: 71px;
 }
 
-.header-title-container {
+.brand {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 14px;
 }
 
-.header-logo {
+.emblem {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1.5px solid var(--c400);
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-secondary));
-  color: white;
+  box-shadow: 0 0 14px var(--c600), inset 0 0 10px rgba(122, 115, 255, 0.4);
+  position: relative;
 }
 
-.header-logo svg {
-  width: 20px;
-  height: 20px;
+.emblem::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  border: 1px dashed var(--c300);
+  opacity: 0.6;
+  animation: spin 9s linear infinite;
 }
 
-.header-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  background: linear-gradient(to right, #ffffff, #a0a0b0);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+.emblem::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--c200);
+  box-shadow: 0 0 8px var(--c200);
 }
 
-.header-actions {
+h1.hud-title {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 2px;
+  margin: 0;
+  text-transform: uppercase;
+  color: var(--c50);
+}
+
+.brand small {
+  display: block;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  padding: 6px 14px;
+  border: 1px solid var(--c700);
+  border-radius: 20px;
+  color: var(--c200);
+  background: rgba(47, 2, 255, 0.08);
+}
+
+.status-pill i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--c400);
+  box-shadow: 0 0 8px var(--c400);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+nav.hud-nav {
   display: flex;
   align-items: center;
+  gap: 4px;
+}
+
+.nav-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--muted);
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10.5px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all .18s ease;
+}
+
+.nav-btn .ic {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-btn .ic svg {
+  width: 100%;
+  height: 100%;
+}
+
+.nav-btn:hover {
+  color: var(--c100);
+  background: rgba(122, 115, 255, 0.08);
+  border-color: var(--c800);
+}
+
+.nav-btn.active {
+  color: var(--c50);
+  border-color: var(--c500);
+  background: linear-gradient(180deg, rgba(79, 58, 255, 0.22), rgba(79, 58, 255, 0.04));
+  box-shadow: 0 0 12px rgba(77, 59, 255, 0.35), inset 0 0 8px rgba(122, 115, 255, 0.15);
+}
+
+.nav-btn.active::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: -1px;
+  height: 2px;
+  background: var(--c300);
+  box-shadow: 0 0 6px var(--c300);
+}
+
+.clockwrap {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.mini-ring {
+  position: relative;
+  width: 52px;
+  height: 52px;
+}
+
+.mini-ring svg {
+  transform: rotate(-90deg);
+}
+
+.mini-ring .lbl {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 8.5px;
+  color: var(--c200);
+  line-height: 1.1;
+}
+
+#clockTime {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+  color: var(--c100);
+  letter-spacing: 1px;
+  text-align: right;
+}
+
+#clockDate {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  color: var(--muted);
+  letter-spacing: 1px;
+  text-align: right;
+}
+
+/* ==========================================
+   HUD LAYOUT SYSTEM
+   ========================================== */
+.app {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 250px 1fr 300px;
+  height: calc(100% - 71px);
+  background-color: var(--bg);
+}
+
+aside {
+  padding: 18px 16px;
+  overflow-y: auto;
+}
+
+.sidebar {
+  border-right: 1px solid var(--line);
+  background: rgba(5, 6, 30, 0.5);
+  display: flex;
+  flex-direction: column;
   gap: 1rem;
 }
 
-.dashboard-sidebar {
-  grid-column: 1;
-  grid-row: 2;
-  background: var(--bg-secondary);
-  border-right: 1px solid var(--surface-border);
-  padding: 1.5rem;
+.detail-panel {
+  border-left: 1px solid var(--line);
+  background: rgba(5, 6, 30, 0.5);
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
-  overflow-y: auto;
 }
 
-.dashboard-canvas-container {
-  grid-column: 2;
-  grid-row: 2;
-  position: relative;
-  background: #06060a;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-}
-
-.network-graph-canvas {
-  width: 100%;
-  height: 100%;
-}
-
-.dashboard-inspector {
-  grid-column: 3;
-  grid-row: 2;
-  background: var(--bg-secondary);
-  border-left: 1px solid var(--surface-border);
-  padding: 1.5rem;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.section-title {
-  font-size: 0.9rem;
-  font-weight: 600;
+.eyebrow {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10.5px;
+  letter-spacing: 2px;
+  color: var(--c400);
   text-transform: uppercase;
-  letter-spacing: 1px;
-  color: var(--text-secondary);
-  margin-bottom: 0.5rem;
+  margin: 0 0 10px 0;
 }
 
-.search-input {
+#search {
   width: 100%;
-  padding: 0.75rem 1rem;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--surface-border);
-  color: white;
+  background: var(--panel-2);
+  border: 1px solid var(--c800);
+  color: var(--text);
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 14px;
   outline: none;
-  font-family: inherit;
-  font-size: 0.9rem;
+  margin-bottom: 12px;
   transition: all 0.3s;
 }
 
-.search-input:focus {
-  border-color: var(--accent-secondary);
-  box-shadow: 0 0 10px rgba(14, 165, 233, 0.2);
+#search:focus {
+  border-color: var(--c400);
+  box-shadow: 0 0 0 3px rgba(122, 115, 255, 0.15);
 }
 
-.filter-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+#search::placeholder {
+  color: var(--c900);
 }
 
-.filter-btn {
+.cat-btn {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.6rem 0.8rem;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid transparent;
-  color: var(--text-secondary);
-  font-family: inherit;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.filter-btn:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: white;
-}
-
-.filter-btn.active {
-  background: rgba(109, 40, 217, 0.15);
-  border-color: rgba(109, 40, 217, 0.3);
-  color: white;
-}
-
-.filter-count {
-  font-size: 0.75rem;
-  background: rgba(255, 255, 255, 0.08);
-  padding: 0.15rem 0.4rem;
-  border-radius: 4px;
-  color: var(--text-secondary);
-}
-
-.inspector-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  text-align: center;
-  color: var(--text-secondary);
-  gap: 1rem;
-  padding: 2rem;
-}
-
-.inspector-empty svg {
-  width: 48px;
-  height: 48px;
-  opacity: 0.3;
-}
-
-.inspector-header {
-  border-bottom: 1px solid var(--surface-border);
-  padding-bottom: 1rem;
-}
-
-.inspector-title {
-  font-size: 1.5rem;
-  font-weight: 600;
-  word-break: break-all;
-  margin-top: 0.5rem;
-}
-
-.property-table {
   width: 100%;
-  border-collapse: collapse;
-}
-
-.property-table tr {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-}
-
-.property-table tr:last-child {
-  border-bottom: none;
-}
-
-.property-table td {
-  padding: 0.75rem 0;
-  vertical-align: top;
-  font-size: 0.9rem;
-}
-
-.property-key {
-  color: var(--text-secondary);
-  font-weight: 500;
-  width: 40%;
-}
-
-.property-value {
-  color: white;
-  word-break: break-all;
-}
-
-.badge {
-  display: inline-block;
-  padding: 0.25rem 0.5rem;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--c200);
+  padding: 9px 10px;
+  margin-bottom: 4px;
   border-radius: 6px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 14.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .15s ease;
 }
 
-.badge-project { background: rgba(59, 130, 246, 0.12); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.25); }
-.badge-network { background: rgba(16, 185, 129, 0.12); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.25); }
-.badge-endpoint { background: rgba(71, 85, 105, 0.15); color: #cbd5e1; border: 1px solid rgba(71, 85, 105, 0.25); }
-.badge-software { background: rgba(6, 182, 212, 0.12); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.25); }
-.badge-installation { background: rgba(139, 92, 246, 0.12); color: #c084fc; border: 1px solid rgba(139, 92, 246, 0.25); }
-.badge-finding { background: rgba(245, 158, 11, 0.12); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.25); }
-.badge-vulnerability { background: rgba(239, 68, 68, 0.12); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.25); }
-.badge-remediation { background: rgba(20, 184, 166, 0.12); color: #2dd4bf; border: 1px solid rgba(20, 184, 166, 0.25); }
-.badge-patch { background: rgba(234, 179, 8, 0.12); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.25); }
-.badge-ttp { background: rgba(236, 72, 153, 0.12); color: #f472b6; border: 1px solid rgba(236, 72, 153, 0.25); }
-.badge-threatactor { background: rgba(156, 163, 175, 0.1); color: #e2e8f0; border: 1px solid rgba(156, 163, 175, 0.2); }
-
-.loader-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  gap: 1rem;
-  color: var(--text-secondary);
+.cat-btn:hover {
+  background: rgba(122, 115, 255, 0.08);
 }
 
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid rgba(255, 255, 255, 0.05);
-  border-radius: 50%;
-  border-top-color: var(--accent-secondary);
-  animation: spin 1s ease-in-out infinite;
+.cat-btn.active {
+  background: linear-gradient(90deg, rgba(79, 58, 255, 0.22), rgba(79, 58, 255, 0.02));
+  border-color: var(--c700);
+  color: var(--c50);
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+.cat-btn .count {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  background: rgba(122, 115, 255, 0.1);
+  padding: 2px 8px;
+  border-radius: 10px;
 }
 
-.canvas-toast {
-  position: absolute;
-  bottom: 1.5rem;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(19, 19, 26, 0.85);
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--surface-border);
-  padding: 0.75rem 1.5rem;
-  border-radius: 999px;
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-  pointer-events: none;
-  z-index: 50;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+.cat-btn.active .count {
+  color: var(--c100);
+  background: rgba(122, 115, 255, 0.22);
 }
 
-.status-dot-active {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #10b981;
-  box-shadow: 0 0 10px #10b981;
-}
-
-.graph-legend {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  background: rgba(19, 19, 26, 0.85);
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--surface-border);
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
-  font-size: 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  z-index: 40;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+.legend {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
 }
 
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 9px;
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 8px;
+  font-family: 'Share Tech Mono', monospace;
 }
 
-.legend-color {
-  width: 10px;
-  height: 10px;
+.legend-dot {
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
+  flex-shrink: 0;
 }
 
 /* ==========================================
-   APT RANKING PANEL STYLES
+   GRAPH STAGE & SVG NODES
    ========================================== */
+.graph-stage {
+  position: relative;
+  overflow: hidden;
+  background: #02020a;
+}
 
+.ring-deco {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  opacity: 0.4;
+}
+
+.ring-deco.r1 {
+  animation: spin 60s linear infinite;
+}
+
+.ring-deco.r2 {
+  animation: spin 90s linear infinite reverse;
+}
+
+#graph {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 5;
+}
+
+.node-group {
+  cursor: grab;
+}
+
+.node-group:active {
+  cursor: grabbing;
+}
+
+.node-group.grabbing circle.core {
+  stroke-width: 2.5;
+}
+
+.node-group text {
+  font-family: 'Share Tech Mono', monospace;
+  fill: var(--c100);
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.node-group .sub {
+  fill: var(--muted);
+  font-size: 9px;
+}
+
+.node-group.dim {
+  opacity: 0.12;
+}
+
+.node-group.selected circle.core {
+  stroke: var(--c50);
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 8px var(--c300));
+}
+
+.edge {
+  stroke: var(--c700);
+  stroke-width: 1.2;
+  opacity: 0.55;
+  fill: none;
+  transition: opacity 0.3s;
+}
+
+.edge.dim {
+  opacity: 0.05;
+}
+
+.edge.flow {
+  stroke-dasharray: 4 5;
+  animation: dash 2.4s linear infinite;
+}
+
+.corner-widget {
+  position: absolute;
+  font-family: 'Share Tech Mono', monospace;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 1px;
+  z-index: 10;
+}
+
+.cw-tl {
+  top: 16px;
+  left: 16px;
+}
+
+.cw-br {
+  bottom: 16px;
+  right: 16px;
+  text-align: right;
+}
+
+.cw-bl {
+  bottom: 16px;
+  left: 16px;
+}
+
+/* ==========================================
+   DETAIL PANEL & GAUGES
+   ========================================== */
+.detail-empty {
+  color: var(--c900);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12.5px;
+  margin-top: 60px;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.badge {
+  display: inline-block;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 9.5px;
+  letter-spacing: 1.5px;
+  padding: 4px 10px;
+  border-radius: 3px;
+  border: 1px solid var(--c600);
+  color: var(--c200);
+  background: rgba(56, 19, 255, 0.12);
+  margin-bottom: 10px;
+}
+
+.node-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 16px;
+  color: var(--c50);
+  margin: 0 0 18px 0;
+  letter-spacing: 0.5px;
+}
+
+.gauge-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 22px;
+}
+
+.gauge-big {
+  position: relative;
+  width: 112px;
+  height: 112px;
+}
+
+.gauge-big svg {
+  transform: rotate(-90deg);
+}
+
+.gauge-big .val {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.gauge-big .val b {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 22px;
+  color: var(--c50);
+}
+
+.gauge-big .val span {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  color: var(--muted);
+  letter-spacing: 1px;
+}
+
+.gauge-small {
+  position: relative;
+  width: 72px;
+  height: 72px;
+}
+
+.gauge-small svg {
+  transform: rotate(-90deg);
+}
+
+.gauge-small .val {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+
+.gauge-small .val b {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 13px;
+  color: var(--c100);
+}
+
+.gauge-small .val span {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 7.5px;
+  color: var(--muted);
+}
+
+.prop-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.prop-row .k {
+  color: var(--muted);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding-top: 2px;
+}
+
+.prop-row .v {
+  color: var(--c50);
+  text-align: right;
+  max-width: 170px;
+  font-weight: 500;
+  word-break: break-all;
+}
+
+.pill {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10.5px;
+  padding: 2px 9px;
+  border-radius: 10px;
+}
+
+.pill.true {
+  background: var(--c600);
+  color: var(--c50);
+}
+
+.pill.false {
+  border: 1px solid var(--c800);
+  color: var(--muted);
+}
+
+/* ==========================================
+   APT RANKING PANEL & OTHER UTILITIES
+   ========================================== */
 .apt-panel-overlay {
   position: fixed;
   top: 0;
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(0, 0, 0, 0.65);
+  background: rgba(0, 0, 0, 0.75);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   z-index: 200;
   display: flex;
   align-items: center;
   justify-content: center;
-  animation: fadeIn 0.3s ease-out;
+  animation: hudFadeIn 0.3s ease-out;
+}
+
+@keyframes hudFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .apt-panel {
-  background: var(--bg-secondary);
-  border: 1px solid var(--surface-border);
-  border-radius: 20px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
   width: 90%;
   max-width: 780px;
   max-height: 85vh;
   overflow-y: auto;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7), 0 0 60px rgba(109, 40, 217, 0.15);
-  animation: aptSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.8), 0 0 30px var(--c900);
+  animation: hudSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   opacity: 0;
   transform: translateY(40px);
 }
 
-@keyframes aptSlideUp {
+@keyframes hudSlideUp {
   to {
     opacity: 1;
     transform: translateY(0);
@@ -595,36 +866,36 @@ p {
   align-items: center;
   justify-content: space-between;
   padding: 1.5rem 2rem;
-  border-bottom: 1px solid var(--surface-border);
+  border-bottom: 1px solid var(--line);
   position: sticky;
   top: 0;
-  background: var(--bg-secondary);
+  background: var(--panel);
   z-index: 10;
-  border-radius: 20px 20px 0 0;
+  border-radius: 12px 12px 0 0;
 }
 
 .apt-panel-header h2 {
+  font-family: 'Orbitron', sans-serif;
   font-size: 1.4rem;
   font-weight: 700;
-  background: linear-gradient(135deg, #f87171, #ec4899, #a855f7);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--c50);
+  text-shadow: 0 0 10px var(--c600);
   margin: 0;
 }
 
 .apt-panel-subtitle {
   font-size: 0.8rem;
-  color: var(--text-secondary);
+  color: var(--c300);
   margin-top: 0.25rem;
 }
 
 .apt-panel-close {
   width: 36px;
   height: 36px;
-  border-radius: 10px;
+  border-radius: 6px;
   background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--surface-border);
-  color: var(--text-secondary);
+  border: 1px solid var(--line);
+  color: var(--c200);
   font-size: 1.1rem;
   cursor: pointer;
   display: flex;
@@ -634,7 +905,7 @@ p {
 }
 
 .apt-panel-close:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(122, 115, 255, 0.15);
   color: white;
 }
 
@@ -646,9 +917,9 @@ p {
 }
 
 .apt-card {
-  background: rgba(255, 255, 255, 0.025);
-  border: 1px solid var(--surface-border);
-  border-radius: 14px;
+  background: rgba(5, 6, 30, 0.6);
+  border: 1px solid var(--line);
+  border-radius: 8px;
   padding: 1.25rem 1.5rem;
   transition: all 0.3s ease;
   position: relative;
@@ -662,17 +933,16 @@ p {
   left: 0;
   width: 4px;
   height: 100%;
-  border-radius: 4px 0 0 4px;
 }
 
-.apt-card.rank-1::before { background: linear-gradient(180deg, #f59e0b, #ef4444); }
-.apt-card.rank-2::before { background: linear-gradient(180deg, #a855f7, #6366f1); }
-.apt-card.rank-3::before { background: linear-gradient(180deg, #3b82f6, #06b6d4); }
+.apt-card.rank-1::before { background: var(--c400); }
+.apt-card.rank-2::before { background: var(--c600); }
+.apt-card.rank-3::before { background: var(--c800); }
 .apt-card.rank-other::before { background: rgba(255, 255, 255, 0.1); }
 
 .apt-card:hover {
-  border-color: rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--c400);
+  background: rgba(122, 115, 255, 0.05);
   transform: translateX(4px);
 }
 
@@ -686,19 +956,20 @@ p {
 .apt-card-rank {
   width: 32px;
   height: 32px;
-  border-radius: 10px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-family: 'Orbitron', sans-serif;
   font-weight: 800;
   font-size: 0.9rem;
   flex-shrink: 0;
 }
 
-.rank-1 > .apt-card-top > .apt-card-rank { background: linear-gradient(135deg, #f59e0b, #ef4444); color: white; }
-.rank-2 > .apt-card-top > .apt-card-rank { background: linear-gradient(135deg, #a855f7, #6366f1); color: white; }
-.rank-3 > .apt-card-top > .apt-card-rank { background: linear-gradient(135deg, #3b82f6, #06b6d4); color: white; }
-.rank-other > .apt-card-top > .apt-card-rank { background: rgba(255, 255, 255, 0.08); color: var(--text-secondary); }
+.rank-1 > .apt-card-top > .apt-card-rank { background: var(--c500); color: white; box-shadow: 0 0 10px var(--c500); }
+.rank-2 > .apt-card-top > .apt-card-rank { background: var(--c700); color: white; }
+.rank-3 > .apt-card-top > .apt-card-rank { background: var(--c900); color: white; }
+.rank-other > .apt-card-top > .apt-card-rank { background: rgba(255, 255, 255, 0.08); color: var(--muted); }
 
 .apt-card-info {
   flex: 1;
@@ -706,6 +977,7 @@ p {
 }
 
 .apt-card-name {
+  font-family: 'Orbitron', sans-serif;
   font-size: 1.1rem;
   font-weight: 700;
   color: white;
@@ -725,12 +997,12 @@ p {
   align-items: center;
   gap: 0.3rem;
   padding: 0.2rem 0.6rem;
-  border-radius: 6px;
+  border-radius: 4px;
   font-size: 0.7rem;
-  font-weight: 600;
-  background: rgba(99, 102, 241, 0.12);
-  color: #a5b4fc;
-  border: 1px solid rgba(99, 102, 241, 0.2);
+  font-family: 'Share Tech Mono', monospace;
+  background: rgba(122, 115, 255, 0.1);
+  color: var(--c200);
+  border: 1px solid var(--line);
 }
 
 .apt-motivation-badge {
@@ -738,12 +1010,12 @@ p {
   align-items: center;
   gap: 0.3rem;
   padding: 0.2rem 0.6rem;
-  border-radius: 6px;
+  border-radius: 4px;
   font-size: 0.7rem;
-  font-weight: 600;
-  background: rgba(236, 72, 153, 0.1);
-  color: #f9a8d4;
-  border: 1px solid rgba(236, 72, 153, 0.2);
+  font-family: 'Share Tech Mono', monospace;
+  background: rgba(122, 115, 255, 0.1);
+  color: var(--c200);
+  border: 1px solid var(--line);
 }
 
 .apt-card-coverage {
@@ -752,6 +1024,7 @@ p {
 }
 
 .apt-coverage-value {
+  font-family: 'Orbitron', sans-serif;
   font-size: 1.6rem;
   font-weight: 800;
   color: white;
@@ -759,8 +1032,9 @@ p {
 }
 
 .apt-coverage-label {
+  font-family: 'Share Tech Mono', monospace;
   font-size: 0.7rem;
-  color: var(--text-secondary);
+  color: var(--muted);
   margin-top: 0.2rem;
 }
 
@@ -779,9 +1053,9 @@ p {
   transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.rank-1 .apt-progress-fill { background: linear-gradient(90deg, #f59e0b, #ef4444); }
-.rank-2 .apt-progress-fill { background: linear-gradient(90deg, #a855f7, #6366f1); }
-.rank-3 .apt-progress-fill { background: linear-gradient(90deg, #3b82f6, #06b6d4); }
+.rank-1 .apt-progress-fill { background: var(--c400); }
+.rank-2 .apt-progress-fill { background: var(--c600); }
+.rank-3 .apt-progress-fill { background: var(--c800); }
 .rank-other .apt-progress-fill { background: rgba(255, 255, 255, 0.2); }
 
 .apt-ttp-chips {
@@ -794,31 +1068,30 @@ p {
   display: inline-flex;
   align-items: center;
   padding: 0.2rem 0.55rem;
-  border-radius: 5px;
+  border-radius: 4px;
   font-size: 0.7rem;
-  font-weight: 500;
+  font-family: 'Share Tech Mono', monospace;
   background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: var(--text-secondary);
+  border: 1px solid var(--line);
+  color: var(--c200);
   transition: all 0.2s;
 }
 
 .apt-ttp-chip:hover {
-  background: rgba(139, 92, 246, 0.15);
-  border-color: rgba(139, 92, 246, 0.3);
-  color: #c4b5fd;
+  background: rgba(122, 115, 255, 0.15);
+  border-color: var(--c400);
 }
 
 .apt-ttp-chip .chip-id {
   font-weight: 700;
-  color: #a5b4fc;
+  color: var(--c100);
   margin-right: 0.35rem;
 }
 
 .apt-panel-empty {
   text-align: center;
   padding: 3rem 2rem;
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
 .apt-panel-empty svg {
@@ -830,24 +1103,23 @@ p {
 
 .apt-btn-header {
   padding: 0.45rem 1rem;
-  border-radius: 10px;
-  font-family: inherit;
+  border-radius: 6px;
+  font-family: 'Orbitron', sans-serif;
   font-weight: 600;
   font-size: 0.85rem;
   cursor: pointer;
   transition: all 0.3s ease;
   border: none;
   outline: none;
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(168, 85, 247, 0.15));
-  color: #f9a8d4;
-  border: 1px solid rgba(236, 72, 153, 0.25);
+  background: linear-gradient(135deg, rgba(77, 59, 255, 0.15), rgba(122, 115, 255, 0.15));
+  color: var(--c200);
+  border: 1px solid var(--line);
 }
 
 .apt-btn-header:hover {
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(168, 85, 247, 0.25));
-  border-color: rgba(236, 72, 153, 0.4);
+  background: linear-gradient(135deg, rgba(77, 59, 255, 0.25), rgba(122, 115, 255, 0.25));
+  border-color: var(--c400);
   transform: translateY(-1px);
-  box-shadow: 0 4px 15px rgba(236, 72, 153, 0.15);
 }
 
 .apt-panel-loading {
@@ -857,6 +1129,69 @@ p {
   justify-content: center;
   padding: 3rem;
   gap: 1rem;
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
+.loader-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 1rem;
+  color: var(--muted);
+  font-family: 'Share Tech Mono', monospace;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255, 255, 255, 0.05);
+  border-radius: 50%;
+  border-top-color: var(--c400);
+  animation: spin 1s ease-in-out infinite;
+}
+
+/* ==========================================
+   ANIMATIONS & MISC
+   ========================================== */
+@keyframes spin {
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+@keyframes spinSimple {
+  to { transform: rotate(360deg); }
+}
+
+.spinner {
+  animation: spinSimple 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+@keyframes dash {
+  to { stroke-dashoffset: -18; }
+}
+
+@keyframes ping {
+  0% { r: 16; opacity: 0.5; }
+  100% { r: 34; opacity: 0; }
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--c800);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
