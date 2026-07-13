@@ -110,17 +110,7 @@ export function DashboardPage({
             </div>
           </div>
 
-          <div style={{ marginTop: 'auto', paddingTop: '10px' }}>
-            <p className="eyebrow">Base de Datos</p>
-            <button
-              className="btn btn-accent"
-              onClick={handleReset}
-              style={{ width: '100%', padding: '0.6rem 0.8rem', fontSize: '0.85rem', fontFamily: 'Orbitron', borderRadius: '6px' }}
-              disabled={loading}
-            >
-              {loading ? 'Inicializando...' : 'Restablecer Datos'}
-            </button>
-          </div>
+
         </aside>
 
         {/* MAIN AREA */}
