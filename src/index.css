@@ -45,6 +45,8 @@ html, body {
   padding: 0;
   height: 100%;
   background-color: var(--bg);
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: none;
 }
 
 body {
@@ -566,6 +568,7 @@ aside {
   position: relative;
   overflow: hidden;
   background: #02020a;
+  overscroll-behavior: none;
 }
 
 .ring-deco {
@@ -591,6 +594,8 @@ aside {
   width: 100%;
   height: 100%;
   z-index: 5;
+  display: block;
+  cursor: grab;
 }
 
 .node-group {
@@ -599,6 +604,10 @@ aside {
 
 .node-group:active {
   cursor: grabbing;
+}
+
+.node-group.free {
+  cursor: move;
 }
 
 .node-group.grabbing circle.core {
@@ -627,6 +636,10 @@ aside {
   filter: drop-shadow(0 0 8px var(--c300));
 }
 
+.vuln-ping-ring {
+  animation: ping 1.8s ease-out infinite;
+}
+
 .edge {
   stroke: var(--c700);
   stroke-width: 1.2;
@@ -653,6 +666,10 @@ aside {
   z-index: 10;
 }
 
+.status-stable {
+  color: var(--c300);
+}
+
 .cw-tl {
   top: 16px;
   left: 16px;
@@ -667,6 +684,32 @@ aside {
 .cw-bl {
   bottom: 16px;
   left: 16px;
+}
+
+/* Error de conexión del grafo */
+.graph-error-box {
+  padding: 3rem;
+  color: #f87171;
+  background: var(--panel);
+  margin: 2rem;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+}
+
+.graph-error-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.graph-error-text {
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.graph-error-retry-btn {
+  font-family: 'Orbitron', sans-serif;
+  margin-top: 1.5rem;
 }
 
 /* ==========================================
@@ -1149,7 +1192,7 @@ aside {
   border: 3px solid rgba(255, 255, 255, 0.05);
   border-radius: 50%;
   border-top-color: var(--c400);
-  animation: spin 1s ease-in-out infinite;
+  animation: spinSimple 1s ease-in-out infinite;
 }
 
 /* ==========================================
@@ -1161,10 +1204,6 @@ aside {
 
 @keyframes spinSimple {
   to { transform: rotate(360deg); }
-}
-
-.spinner {
-  animation: spinSimple 1s ease-in-out infinite;
 }
 
 @keyframes pulse {
