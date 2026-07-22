@@ -1,20 +1,18 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 
-// Constantes de físicas, equivalentes a las que usaba vis-network (barnesHut)
 const PHYSICS = {
-  repulsion: 2500,          // equivalente a gravitationalConstant (negativo = repulsión)
+  repulsion: 2500,
   springLength: 100,
-  springConstant: 0.015,    // muelle débil, así los nodos no se aglutinan al generarse
+  springConstant: 0.015,
   damping: 0.09,
-  centralGravity: 0.02,     // atracción suave hacia la capa vertical de cada nodo
-  avoidOverlapPadding: 12,  // margen extra de colisión entre nodos
-  maxSpeed: 18              // límite de velocidad para evitar que la simulación "explote"
+  centralGravity: 0.02,
+  avoidOverlapPadding: 12,
+  maxSpeed: 18
 };
 
 const CANVAS_WIDTH = 900;
 const CANVAS_HEIGHT = 640;
 
-// Devuelve la posición Y de la capa vertical según la categoría del nodo
 const getLayerY = (categoryId) => {
   switch (categoryId) {
     case 'proyecto': return 80;
@@ -30,25 +28,22 @@ const getLayerY = (categoryId) => {
   }
 };
 
-// Código de color por categoría, sobre la paleta azul del tema (--c200..--c900),
-// con dos excepciones explícitas: endpoint en blanco, vulnerabilidad en rojo.
 const getNodeColor = (categoryId) => {
   switch (categoryId) {
-    case 'proyecto': return '#4D3BFF';       // --c500
-    case 'red': return '#7973FF';            // --c400
-    case 'endpoint': return '#FFFFFF';       // blanco puro
-    case 'hardware': return '#A5A5FF';       // --c300
-    case 'instalacion': return '#3813FF';    // --c600
-    case 'software': return '#CDCFFF';       // --c200
-    case 'hallazgo': return '#2F02FF';       // --c700
-    case 'vulnerabilidad': return '#ef4444'; // rojo
-    case 'remediacion': return '#2701D6';    // --c800
-    case 'parche': return '#2103A9';         // --c900
-    default: return '#A5A5FF';               // --c300, fallback
+    case 'proyecto': return '#4D3BFF';
+    case 'red': return '#7973FF';
+    case 'endpoint': return '#FFFFFF';
+    case 'hardware': return '#A5A5FF';
+    case 'instalacion': return '#3813FF';
+    case 'software': return '#CDCFFF';
+    case 'hallazgo': return '#2F02FF';
+    case 'vulnerabilidad': return '#ef4444';
+    case 'remediacion': return '#2701D6';
+    case 'parche': return '#2103A9';
+    default: return '#A5A5FF';
   }
 };
 
-// Radio por categoría: Proyecto > Endpoint > resto (todos al mismo nivel)
 const getNodeRadius = (categoryId) => {
   switch (categoryId) {
     case 'proyecto': return 32;
@@ -68,24 +63,33 @@ export function NetworkGraph({
   fetchInfrastructure
 }) {
   const [layoutNodes, setLayoutNodes] = useState([]);
-  const nodesRef = useRef([]);           // fuente de verdad mutable que usa el bucle de físicas
-  const draggedNodeIdRef = useRef(null); // id del nodo que se está arrastrando activamente (si hay alguno)
+  const nodesRef = useRef([]);
+  const draggedNodeIdRef = useRef(null);
   const svgRef = useRef(null);
   const animationFrameRef = useRef(null);
 
-  // Estado de pan/zoom: qué porción del canvas de 900x640 se está viendo
-  const [viewBox, setViewBox] = useState({ x: 0, y: 0, w: CANVAS_WIDTH, h: CANVAS_HEIGHT });
-  const viewBoxRef = useRef(viewBox); // FIX: esta ref faltaba por completo — sin ella, handleBackgroundMouseDown
-                                       // rompía con "viewBoxRef is not defined" en cuanto intentabas panear
-  const panStateRef = useRef(null);
-  const panFrameRef = useRef(null);   // FIX: esta también faltaba — necesaria para agrupar el paneo en 1 rAF/frame
+  // FIX: además de la ref normal, guardamos el nodo <svg> en estado a través
+  // de una callback ref. Esto es lo que permite que el useEffect del wheel
+  // se re-ejecute exactamente cuando el <svg> se monta de verdad — antes,
+  // con useEffect(() => {...}, []), el efecto corría UNA sola vez durante el
+  // primer render (que muestra el spinner de loading, sin <svg> todavía),
+  // encontraba la ref en null, y nunca más volvía a intentarlo — el zoom
+  // quedaba muerto para siempre aunque el grafo ya estuviera visible.
+  const [svgEl, setSvgEl] = useState(null);
+  const svgCallbackRef = useCallback((node) => {
+    svgRef.current = node;
+    setSvgEl(node);
+  }, []);
 
-  // FIX: este efecto también faltaba — mantiene viewBoxRef sincronizada con el estado viewBox
+  const [viewBox, setViewBox] = useState({ x: 0, y: 0, w: CANVAS_WIDTH, h: CANVAS_HEIGHT });
+  const viewBoxRef = useRef(viewBox);
+  const panStateRef = useRef(null);
+  const panFrameRef = useRef(null);
+
   useEffect(() => {
     viewBoxRef.current = viewBox;
   }, [viewBox]);
 
-  // Inicializar posiciones de los nodos cuando cambian los datos del grafo
   useEffect(() => {
     if (!graphData.nodes || graphData.nodes.length === 0) {
       nodesRef.current = [];
@@ -93,7 +97,6 @@ export function NetworkGraph({
       return;
     }
 
-    // Excluir TTPs y ThreatActors del mapa visual (se consultan vía TOP APTs)
     const visibleNodes = graphData.nodes.filter(n =>
       !n.labels.includes('TTP') && !n.labels.includes('ThreatActor')
     );
@@ -113,7 +116,7 @@ export function NetworkGraph({
         fy: 0,
         r: getNodeRadius(n.categoryId),
         color: getNodeColor(n.categoryId),
-        pinned: false // true una vez que el usuario lo suelta tras arrastrarlo: deja de moverse por física
+        pinned: false
       };
     });
 
@@ -121,13 +124,11 @@ export function NetworkGraph({
     setLayoutNodes(initial);
   }, [graphData]);
 
-  // Bucle continuo de físicas: repulsión + colisión, resortes por relación, gravedad de capa
   useEffect(() => {
     const tick = () => {
       const nodes = nodesRef.current;
 
       if (nodes.length > 0) {
-        // 1. Repulsión entre todos los pares de nodos (equivalente a barnesHut) + colisión dura
         for (let i = 0; i < nodes.length; i++) {
           const a = nodes[i];
           let fx = 0;
@@ -158,7 +159,6 @@ export function NetworkGraph({
           a.fy = fy;
         }
 
-        // 2. Atracción por relaciones (resortes)
         graphData.relationships.forEach(rel => {
           const source = nodes.find(n => n.id === rel.source);
           const target = nodes.find(n => n.id === rel.target);
@@ -177,7 +177,6 @@ export function NetworkGraph({
           }
         });
 
-        // 3. Integración: velocidad + amortiguación + gravedad de capa vertical + límites
         nodes.forEach(node => {
           if (node.id === draggedNodeIdRef.current || node.pinned) {
             node.vx = 0;
@@ -219,15 +218,44 @@ export function NetworkGraph({
   }, [graphData]);
 
   const screenToSvgPoint = (clientX, clientY) => {
-    const svgEl = svgRef.current;
-    if (!svgEl) return { x: 0, y: 0 };
-    const pt = svgEl.createSVGPoint();
+    const svgElNode = svgRef.current;
+    if (!svgElNode) return { x: 0, y: 0 };
+    const pt = svgElNode.createSVGPoint();
     pt.x = clientX;
     pt.y = clientY;
-    return pt.matrixTransform(svgEl.getScreenCTM().inverse());
+    return pt.matrixTransform(svgElNode.getScreenCTM().inverse());
   };
 
-  // Arrastrar un nodo individual con el ratón
+  // FIX: ahora depende de [svgEl] en vez de []. Se re-ejecuta cada vez que
+  // el <svg id="graph"> realmente se monta o desmonta (por ejemplo al salir
+  // del estado de loading), garantizando que el listener de wheel se
+  // enganche cuando el elemento existe de verdad.
+  useEffect(() => {
+    if (!svgEl) return;
+
+    const wheelHandler = (e) => {
+      e.preventDefault();
+      const svgP = screenToSvgPoint(e.clientX, e.clientY);
+      const zoomFactor = e.deltaY > 0 ? 1.1 : 0.9;
+
+      setViewBox(vb => {
+        const newW = Math.max(200, Math.min(3000, vb.w * zoomFactor));
+        const newH = Math.max(150, Math.min(2200, vb.h * zoomFactor));
+        const ratioX = (svgP.x - vb.x) / vb.w;
+        const ratioY = (svgP.y - vb.y) / vb.h;
+        return {
+          x: svgP.x - ratioX * newW,
+          y: svgP.y - ratioY * newH,
+          w: newW,
+          h: newH
+        };
+      });
+    };
+
+    svgEl.addEventListener('wheel', wheelHandler, { passive: false });
+    return () => svgEl.removeEventListener('wheel', wheelHandler);
+  }, [svgEl]);
+
   const handleNodeMouseDown = (e, nodeId) => {
     e.preventDefault();
     e.stopPropagation();
@@ -266,7 +294,6 @@ export function NetworkGraph({
     window.addEventListener('mouseup', onMouseUp);
   };
 
-  // Doble click sobre un nodo: lo "suelta" de nuevo para que vuelva a obedecer la física
   const handleNodeDoubleClick = (e, nodeId) => {
     e.preventDefault();
     e.stopPropagation();
@@ -276,10 +303,6 @@ export function NetworkGraph({
     }
   };
 
-  // Paneo del canvas: arrastrar el fondo vacío (no un nodo) desplaza la vista.
-  // Agrupa todos los mousemove del mismo frame en un único setViewBox vía rAF,
-  // y captura originX/originY en constantes locales para evitar la race condition
-  // con panStateRef.current volviéndose null a mitad de un update diferido.
   const handleBackgroundMouseDown = (e) => {
     panStateRef.current = {
       startClientX: e.clientX,
@@ -334,25 +357,6 @@ export function NetworkGraph({
     window.addEventListener('mouseup', onMouseUp);
   };
 
-  const handleWheel = (e) => {
-    e.preventDefault();
-    const svgP = screenToSvgPoint(e.clientX, e.clientY);
-    const zoomFactor = e.deltaY > 0 ? 1.1 : 0.9;
-
-    setViewBox(vb => {
-      const newW = Math.max(200, Math.min(3000, vb.w * zoomFactor));
-      const newH = Math.max(150, Math.min(2200, vb.h * zoomFactor));
-      const ratioX = (svgP.x - vb.x) / vb.w;
-      const ratioY = (svgP.y - vb.y) / vb.h;
-      return {
-        x: svgP.x - ratioX * newW,
-        y: svgP.y - ratioY * newH,
-        w: newW,
-        h: newH
-      };
-    });
-  };
-
   const getEdgePath = (sourceId, targetId) => {
     const sourceNode = layoutNodes.find(n => n.id === sourceId);
     const targetNode = layoutNodes.find(n => n.id === targetId);
@@ -396,10 +400,9 @@ export function NetworkGraph({
 
       <svg
         id="graph"
-        ref={svgRef}
+        ref={svgCallbackRef}
         viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`}
         preserveAspectRatio="xMidYMid meet"
-        onWheel={handleWheel}
       >
         <defs>
           <filter id="glow" x="-100%" y="-100%" width="300%" height="300%">
