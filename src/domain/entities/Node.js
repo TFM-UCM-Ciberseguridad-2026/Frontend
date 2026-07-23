@@ -44,15 +44,17 @@ export class Node {
 
     switch (label) {
       case 'Project':
-        return props.name || `Proyecto #${props.id}`;
+        return props.nombre || props.name || `Proyecto #${props.id}`;
       case 'Network':
-        return `${props.name || 'Red'} (${props.cidr || ''})`;
+        return `${props.nombre || props.name || 'Red'} (${props.cidr || ''})`;
       case 'Endpoint':
         return props.hostname || `Host #${props.id}`;
       case 'Software':
         return `${props.name || 'Software'} v${props.version || ''}`;
       case 'SoftwareInstallation':
-        return `Inst: ${props.path || props.id}`;
+        // FIX: antes leía props.path (clave inexistente); la clave real es
+        // "install_path" (json:"install_path" en el struct Go)
+        return props.install_path || `Inst: #${props.installation_id || props.id}`;
       case 'Finding':
         return props.title || `Finding #${props.id}`;
       case 'Vulnerability':
@@ -66,7 +68,7 @@ export class Node {
       case 'ThreatActor':
         return props.name || `Actor #${props.id}`;
       case 'Hardware':
-        return props.name || `Hardware #${props.id}`;
+        return `${props.manufacturer || ''} ${props.model || ''}`.trim() || `Hardware #${props.id}`;
       default:
         return `${label} (${props.id || 'N/A'})`;
     }

@@ -3,6 +3,8 @@ import { HudHeader } from '../components/HudHeader/HudHeader';
 import { NetworkGraph } from '../components/NetworkGraph/NetworkGraph';
 import { NodeInspector } from '../components/NodeInspector/NodeInspector';
 import { TopAptsModal } from '../components/TopApts/TopAptsModal';
+import { AddAssetButton } from '../components/AddAssets/AddAssetsButton';
+import '../components/AddAssets/AddAssetsButton.css';
 
 export function DashboardPage({
   setShowDashboard,
@@ -16,6 +18,7 @@ export function DashboardPage({
   filterType,
   setFilterType,
   toastMessage,
+  showToast, // Se añade showToast como prop recibida
   showAPTPanel,
   setShowAPTPanel,
   aptData,
@@ -41,8 +44,23 @@ export function DashboardPage({
     { key: 'Remediation', label: 'Remediación', color: 'var(--c500)' },
   ];
 
+  // Mapeos de proyectos y endpoints a partir de graphData
+  const projects = (graphData?.nodes || [])
+    .filter(n => n.labels?.includes('Project') || n.primaryLabel === 'Project')
+    .map(n => ({ 
+      id: n.properties?.id || n.id, 
+      name: n.properties?.name || `Proyecto #${n.properties?.id || n.id}` 
+    }));
+
+  const endpoints = (graphData?.nodes || [])
+    .filter(n => n.labels?.includes('Endpoint') || n.primaryLabel === 'Endpoint')
+    .map(n => ({ 
+      id: n.properties?.id || n.id, 
+      name: n.properties?.hostname || `Host #${n.properties?.id || n.id}` 
+    }));
+
   // Filtrado de nodos para inventario/redes
-  const filteredNodes = graphData.nodes.filter(node => {
+  const filteredNodes = (graphData?.nodes || []).filter(node => {
     const matchesSearch = !searchQuery || node.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCat = filterType === 'ALL' || node.primaryLabel === filterType;
     return matchesSearch && matchesCat;
@@ -85,7 +103,7 @@ export function DashboardPage({
                 >
                   <span>{c.label}</span>
                   <span className="count">
-                    {c.key === 'ALL' ? graphData.nodes.length : getNodeCountByType(c.key)}
+                    {c.key === 'ALL' ? (graphData?.nodes?.length || 0) : getNodeCountByType(c.key)}
                   </span>
                 </button>
               ))}
@@ -109,12 +127,18 @@ export function DashboardPage({
               ))}
             </div>
           </div>
-
-
         </aside>
 
         {/* MAIN AREA */}
         <main className="graph-stage">
+          {/* Botón para agregar activos dentro del contenedor principal */}
+          <AddAssetButton
+            projects={projects}
+            endpoints={endpoints}
+            onCreated={() => fetchInfrastructure(true)}
+            showToast={showToast}
+          />
+
           {activeNav === 'grafo' && (
             <NetworkGraph
               graphData={graphData}
@@ -161,7 +185,7 @@ export function DashboardPage({
                         </span>
                       </td>
                       <td style={{ padding: '10px 12px', color: 'var(--muted)', maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {Object.entries(node.properties).map(([k, v]) => `${k}:${v}`).join(', ')}
+                        {Object.entries(node.properties || {}).map(([k, v]) => `${k}:${v}`).join(', ')}
                       </td>
                     </tr>
                   ))}
@@ -180,9 +204,9 @@ export function DashboardPage({
           {activeNav === 'redes' && (
             <div style={{ padding: '24px', overflowY: 'auto', height: '100%', fontFamily: 'Share Tech Mono, monospace' }}>
               <h2 className="eyebrow" style={{ fontSize: '1.2rem', marginBottom: '16px' }}>Auditoría de Subredes</h2>
-              {graphData.nodes.filter(n => n.primaryLabel === 'Network').map(net => {
+              {(graphData?.nodes || []).filter(n => n.primaryLabel === 'Network').map(net => {
                 // Encontrar endpoints conectados a esta red
-                const connectedEndpoints = graphData.relationships
+                const connectedEndpoints = (graphData?.relationships || [])
                   .filter(rel => rel.type === 'CONNECTED_TO' && (rel.source === net.id || rel.target === net.id))
                   .map(rel => {
                     const otherId = rel.source === net.id ? rel.target : rel.source;
@@ -197,7 +221,7 @@ export function DashboardPage({
                       <span className="badge" style={{ background: 'transparent', borderColor: 'var(--c300)', color: 'var(--c300)' }}>NET ID: {net.id}</span>
                     </div>
                     <div style={{ color: 'var(--muted)', marginBottom: '8px' }}>
-                      CIDR: {net.properties.cidr || 'N/A'} | ESTADO: {net.properties.status || 'ACTIVA'}
+                      CIDR: {net.properties?.cidr || 'N/A'} | ESTADO: {net.properties?.status || 'ACTIVA'}
                     </div>
                     <div style={{ fontSize: '12px' }}>
                       <p className="eyebrow" style={{ fontSize: '9px', color: 'var(--c400)', margin: '8px 0 4px 0' }}>Equipos conectados ({connectedEndpoints.length})</p>
@@ -216,8 +240,8 @@ export function DashboardPage({
                           }}
                         >
                           <span>{ep.name}</span>
-                          <span style={{ color: ep.properties.risk_tier === 'CRITICAL' ? 'red' : 'var(--muted)' }}>
-                            {ep.properties.risk_tier || 'NORMAL'}
+                          <span style={{ color: ep.properties?.risk_tier === 'CRITICAL' ? 'red' : 'var(--muted)' }}>
+                            {ep.properties?.risk_tier || 'NORMAL'}
                           </span>
                         </div>
                       ))}
