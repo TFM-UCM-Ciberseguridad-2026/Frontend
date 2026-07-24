@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { InfrastructureApiDataSource } from '../../data/datasources/InfrastructureApiDataSource';
 import { InfrastructureRepositoryImpl } from '../../data/repositories/InfrastructureRepositoryImpl';
 import { GetInfrastructureUseCase } from '../../domain/usecases/GetInfrastructureUseCase';
@@ -17,6 +17,7 @@ export function useInfrastructure() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('ALL');
   const [toastMessage, setToastMessage] = useState(null);
+  const [selectedProjectId, setSelectedProjectId] = useState(null);
 
   // Estados de APTs
   const [showAPTPanel, setShowAPTPanel] = useState(false);
@@ -87,17 +88,84 @@ export function useInfrastructure() {
     }
   }, [showDashboard]);
 
-  // Contar nodos por tipo
-  const getNodeCountByType = (type) => {
-    return graphData.nodes.filter(n => n.labels.includes(type)).length;
-  };
+  // Derivar lista de proyectos disponibles
+  const projects = useMemo(() => {
+    return (graphData.nodes || []).filter(
+      n => n.labels?.includes('Project') || n.primaryLabel === 'Project'
+    ).map(n => ({
+      id: n.id,
+      name: n.properties?.name || n.name || `Proyecto #${n.id}`
+    }));
+  }, [graphData]);
+
+  // Auto-seleccionar el primer proyecto cuando se carga la data
+  useEffect(() => {
+    if (projects.length > 0 && selectedProjectId === null) {
+      setSelectedProjectId(projects[0].id);
+    }
+    // Si el proyecto seleccionado ya no existe en la data, resetear
+    if (selectedProjectId !== null && projects.length > 0 && !projects.find(p => p.id === selectedProjectId)) {
+      setSelectedProjectId(projects[0].id);
+    }
+  }, [projects, selectedProjectId]);
+
+  // Filtrar graphData según el proyecto seleccionado usando BFS
+  const filteredGraphData = useMemo(() => {
+    if (!selectedProjectId || !graphData.nodes || graphData.nodes.length === 0) {
+      return graphData;
+    }
+
+    // Construir grafo de adyacencia bidireccional
+    const adj = {};
+    graphData.nodes.forEach(n => { adj[n.id] = []; });
+    (graphData.relationships || []).forEach(rel => {
+      if (adj[rel.source]) adj[rel.source].push(rel.target);
+      if (adj[rel.target]) adj[rel.target].push(rel.source);
+    });
+
+    // BFS desde el proyecto seleccionado
+    const reachable = new Set();
+    const queue = [selectedProjectId];
+    reachable.add(selectedProjectId);
+    let head = 0;
+    while (head < queue.length) {
+      const curr = queue[head++];
+      for (const nbr of (adj[curr] || [])) {
+        if (!reachable.has(nbr)) {
+          // No incluir nodos TTP ni ThreatActor en el filtro
+          const node = graphData.nodes.find(n => n.id === nbr);
+          if (node && !node.labels?.includes('TTP') && !node.labels?.includes('ThreatActor')) {
+            // No cruzar a otros proyectos
+            if (node.primaryLabel !== 'Project') {
+              reachable.add(nbr);
+              queue.push(nbr);
+            }
+          }
+        }
+      }
+    }
+
+    const filteredNodes = graphData.nodes.filter(n => reachable.has(n.id));
+    const nodeIds = new Set(filteredNodes.map(n => n.id));
+    const filteredRels = (graphData.relationships || []).filter(
+      rel => nodeIds.has(rel.source) && nodeIds.has(rel.target)
+    );
+
+    return { nodes: filteredNodes, relationships: filteredRels };
+  }, [graphData, selectedProjectId]);
+
+  // Contar nodos por tipo (sobre el grafo filtrado)
+  const getNodeCountByType = useCallback((type) => {
+    return filteredGraphData.nodes.filter(n => n.labels.includes(type)).length;
+  }, [filteredGraphData]);
 
   return {
     showDashboard,
     setShowDashboard,
     clicks,
     setClicks,
-    graphData,
+    graphData: filteredGraphData,
+    allGraphData: graphData,
     loading,
     error,
     selectedNode,
@@ -115,6 +183,10 @@ export function useInfrastructure() {
     fetchInfrastructure,
     handleReset,
     fetchTopAPTs,
-    getNodeCountByType
+    getNodeCountByType,
+    projects,
+    selectedProjectId,
+    setSelectedProjectId,
+    showToast
   };
 }

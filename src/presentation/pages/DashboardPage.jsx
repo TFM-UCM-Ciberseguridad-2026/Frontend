@@ -25,7 +25,10 @@ export function DashboardPage({
   fetchInfrastructure,
   handleReset,
   fetchTopAPTs,
-  getNodeCountByType
+  getNodeCountByType,
+  projects,
+  selectedProjectId,
+  setSelectedProjectId
 }) {
   const [activeNav, setActiveNav] = useState('grafo'); // 'grafo', 'inventario', 'redes'
 
@@ -52,6 +55,9 @@ export function DashboardPage({
         setActiveNav={setActiveNav}
         fetchTopAPTs={fetchTopAPTs}
         setShowDashboard={setShowDashboard}
+        projects={projects}
+        selectedProjectId={selectedProjectId}
+        setSelectedProjectId={setSelectedProjectId}
       />
 
       <div className="app">
