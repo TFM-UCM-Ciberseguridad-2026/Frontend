@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 const PHYSICS = {
-  repulsion: 2500,
-  springLength: 100,
+  repulsion: 8500,
+  springLength: 190,
   springConstant: 0.015,
   damping: 0.09,
   centralGravity: 0.02,
-  avoidOverlapPadding: 12,
+  avoidOverlapPadding: 38,
   maxSpeed: 18
 };
 
@@ -60,8 +60,10 @@ export function NetworkGraph({
   error,
   selectedNode,
   setSelectedNode,
-  fetchInfrastructure
+  fetchInfrastructure,
+  fetchTopAPTs
 }) {
+  const [layoutMode, setLayoutMode] = useState('layered'); // 'layered', 'tree', 'stix'
   const [layoutNodes, setLayoutNodes] = useState([]);
   const nodesRef = useRef([]);
   const draggedNodeIdRef = useRef(null);
@@ -90,6 +92,15 @@ export function NetworkGraph({
     viewBoxRef.current = viewBox;
   }, [viewBox]);
 
+  // Reset pinned status of all nodes when layoutMode changes
+  useEffect(() => {
+    if (nodesRef.current) {
+      nodesRef.current.forEach(node => {
+        node.pinned = false;
+      });
+    }
+  }, [layoutMode]);
+
   useEffect(() => {
     if (!graphData.nodes || graphData.nodes.length === 0) {
       nodesRef.current = [];
@@ -100,6 +111,59 @@ export function NetworkGraph({
     const visibleNodes = graphData.nodes.filter(n =>
       !n.labels.includes('TTP') && !n.labels.includes('ThreatActor')
     );
+
+    // Compute BFS depth from Project node (root)
+    const adj = {};
+    visibleNodes.forEach(n => {
+      adj[n.id] = [];
+    });
+    (graphData.relationships || []).forEach(rel => {
+      if (adj[rel.source] && adj[rel.target]) {
+        adj[rel.source].push(rel.target);
+        adj[rel.target].push(rel.source);
+      }
+    });
+
+    const rootNode = visibleNodes.find(n => n.primaryLabel === 'Project' || n.categoryId === 'proyecto');
+    const depths = {};
+    visibleNodes.forEach(n => {
+      depths[n.id] = 999;
+    });
+
+    if (rootNode) {
+      const queue = [rootNode.id];
+      depths[rootNode.id] = 0;
+      let head = 0;
+      while (head < queue.length) {
+        const currId = queue[head++];
+        const currDepth = depths[currId];
+        const neighbors = adj[currId] || [];
+        for (const nbrId of neighbors) {
+          if (depths[nbrId] === 999) {
+            depths[nbrId] = currDepth + 1;
+            queue.push(nbrId);
+          }
+        }
+      }
+    }
+
+    // Fallbacks for any nodes not reached by BFS
+    visibleNodes.forEach(n => {
+      if (depths[n.id] === 999) {
+        switch (n.categoryId) {
+          case 'proyecto': depths[n.id] = 0; break;
+          case 'red': depths[n.id] = 1; break;
+          case 'endpoint':
+          case 'hardware': depths[n.id] = 2; break;
+          case 'instalacion': depths[n.id] = 3; break;
+          case 'software': depths[n.id] = 4; break;
+          case 'hallazgo': depths[n.id] = 5; break;
+          case 'vulnerabilidad':
+          case 'remediacion': depths[n.id] = 6; break;
+          default: depths[n.id] = 3;
+        }
+      }
+    });
 
     const initial = visibleNodes.map((n, i) => {
       const angle = (i / visibleNodes.length) * 2 * Math.PI;
@@ -116,7 +180,8 @@ export function NetworkGraph({
         fy: 0,
         r: getNodeRadius(n.categoryId),
         color: getNodeColor(n.categoryId),
-        pinned: false
+        pinned: false,
+        depth: depths[n.id]
       };
     });
 
@@ -184,7 +249,30 @@ export function NetworkGraph({
             return;
           }
 
-          node.fy += (getLayerY(node.entity.categoryId) - node.y) * PHYSICS.centralGravity;
+          if (layoutMode === 'stix') {
+            const isRoot = node.entity.primaryLabel === 'Project' || node.entity.categoryId === 'proyecto';
+            if (isRoot) {
+              const cx = CANVAS_WIDTH / 2;
+              const cy = CANVAS_HEIGHT / 2;
+              node.fx += (cx - node.x) * 0.15;
+              node.fy += (cy - node.y) * 0.15;
+            } else {
+              const cx = CANVAS_WIDTH / 2;
+              const cy = CANVAS_HEIGHT / 2;
+              node.fx += (cx - node.x) * 0.005;
+              node.fy += (cy - node.y) * 0.005;
+            }
+          } else if (layoutMode === 'tree') {
+            const isRoot = node.entity.primaryLabel === 'Project' || node.entity.categoryId === 'proyecto';
+            if (isRoot) {
+              const cx = CANVAS_WIDTH / 2;
+              node.fx += (cx - node.x) * 0.2;
+            }
+            const targetY = 80 + (node.depth || 0) * 185;
+            node.fy += (targetY - node.y) * PHYSICS.centralGravity;
+          } else {
+            node.fy += (getLayerY(node.entity.categoryId) - node.y) * PHYSICS.centralGravity;
+          }
 
           node.vx = (node.vx + node.fx) * (1 - PHYSICS.damping);
           node.vy = (node.vy + node.fy) * (1 - PHYSICS.damping);
@@ -198,8 +286,13 @@ export function NetworkGraph({
           node.x += node.vx;
           node.y += node.vy;
 
-          node.x = Math.max(40, Math.min(CANVAS_WIDTH - 40, node.x));
-          node.y = Math.max(40, Math.min(CANVAS_HEIGHT - 40, node.y));
+          if (layoutMode === 'tree' || layoutMode === 'stix') {
+            node.x = Math.max(-450, Math.min(1350, node.x));
+            node.y = Math.max(40, Math.min(1200, node.y));
+          } else {
+            node.x = Math.max(40, Math.min(CANVAS_WIDTH - 40, node.x));
+            node.y = Math.max(40, Math.min(CANVAS_HEIGHT - 40, node.y));
+          }
         });
 
         setLayoutNodes([...nodes]);
@@ -215,7 +308,7 @@ export function NetworkGraph({
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [graphData]);
+  }, [graphData, layoutMode]);
 
   const screenToSvgPoint = (clientX, clientY) => {
     const svgElNode = svgRef.current;
@@ -267,8 +360,13 @@ export function NetworkGraph({
       hasMoved = true;
       const node = nodesRef.current.find(n => n.id === nodeId);
       if (node) {
-        node.x = Math.max(40, Math.min(CANVAS_WIDTH - 40, svgP.x));
-        node.y = Math.max(40, Math.min(CANVAS_HEIGHT - 40, svgP.y));
+        if (layoutMode === 'tree' || layoutMode === 'stix') {
+          node.x = Math.max(-450, Math.min(1350, svgP.x));
+          node.y = Math.max(40, Math.min(1200, svgP.y));
+        } else {
+          node.x = Math.max(40, Math.min(CANVAS_WIDTH - 40, svgP.x));
+          node.y = Math.max(40, Math.min(CANVAS_HEIGHT - 40, svgP.y));
+        }
       }
     };
 
@@ -511,6 +609,38 @@ export function NetworkGraph({
       <div className="corner-widget cw-tl">
         NODOS: <span id="nodeCount">{layoutNodes.length}</span> &nbsp;|&nbsp; ENLACES: <span id="edgeCount">{graphData.relationships.length}</span>
       </div>
+
+      <button className="cw-tr btn-hud-tr" onClick={fetchTopAPTs}>
+        <span className="ic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <path d="M12 3.5 4.5 6.5v5.4c0 4.6 3.1 7.7 7.5 8.6 4.4-.9 7.5-4 7.5-8.6V6.5L12 3.5Z" />
+            <path d="M9.5 12.2l1.8 1.8 3.4-3.6" />
+          </svg>
+        </span>
+        Top Threat Actors
+      </button>
+
+      <div className="layout-selector-widget cw-bl">
+        <button
+          className={`btn-layout ${layoutMode === 'layered' ? 'active' : ''}`}
+          onClick={() => setLayoutMode('layered')}
+        >
+          Capas
+        </button>
+        <button
+          className={`btn-layout ${layoutMode === 'tree' ? 'active' : ''}`}
+          onClick={() => setLayoutMode('tree')}
+        >
+          Árbol
+        </button>
+        <button
+          className={`btn-layout ${layoutMode === 'stix' ? 'active' : ''}`}
+          onClick={() => setLayoutMode('stix')}
+        >
+          Grafo STIX
+        </button>
+      </div>
+
       <div className="corner-widget cw-br">
         SISTEMA: <span className="status-stable">ESTABLE</span><br />
         LAT: 42MS &middot; SYNC OK
