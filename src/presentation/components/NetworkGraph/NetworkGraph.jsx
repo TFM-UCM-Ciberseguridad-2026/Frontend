@@ -610,15 +610,7 @@ export function NetworkGraph({
         NODOS: <span id="nodeCount">{layoutNodes.length}</span> &nbsp;|&nbsp; ENLACES: <span id="edgeCount">{graphData.relationships.length}</span>
       </div>
 
-      <button className="cw-tr btn-hud-tr" onClick={fetchTopAPTs}>
-        <span className="ic">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <path d="M12 3.5 4.5 6.5v5.4c0 4.6 3.1 7.7 7.5 8.6 4.4-.9 7.5-4 7.5-8.6V6.5L12 3.5Z" />
-            <path d="M9.5 12.2l1.8 1.8 3.4-3.6" />
-          </svg>
-        </span>
-        Top Threat Actors
-      </button>
+
 
       <div className="layout-selector-widget cw-bl">
         <button
