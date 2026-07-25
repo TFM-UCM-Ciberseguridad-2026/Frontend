@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, setShowDashboard }) {
+export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, setShowDashboard, projects, selectedProjectId, setSelectedProjectId }) {
   const [timeStr, setTimeStr] = useState('--:--:--');
   const [dateStr, setDateStr] = useState('-----');
   const [loadVal, setLoadVal] = useState(72);
@@ -46,6 +46,23 @@ export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, setShowDashbo
       </div>
 
       <nav className="hud-nav">
+        {projects && projects.length > 1 && (
+          <div className="project-selector">
+            <span className="ic">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M3 7h18M3 12h18M3 17h18" />
+              </svg>
+            </span>
+            <select
+              value={selectedProjectId || ''}
+              onChange={(e) => setSelectedProjectId(e.target.value)}
+            >
+              {projects.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <button
           className={`nav-btn ${activeNav === 'grafo' ? 'active' : ''}`}
           onClick={() => setActiveNav('grafo')}
