@@ -20,7 +20,11 @@ export function GraphPage({
   getNodeCountByType,
   projects,
   endpoints,
-  showToast
+  showToast,
+  createEndpoint,
+  createHardware,
+  createSoftware,
+  createNetwork
 }) {
   return (
     <>
@@ -82,6 +86,10 @@ export function GraphPage({
           endpoints={endpoints}
           onCreated={() => fetchInfrastructure(true)}
           showToast={showToast}
+          createEndpoint={createEndpoint}
+          createHardware={createHardware}
+          createSoftware={createSoftware}
+          createNetwork={createNetwork}
         />
 
         <NetworkGraph

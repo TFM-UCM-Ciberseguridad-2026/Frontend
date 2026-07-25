@@ -49,10 +49,18 @@ const INITIAL_FORMS = {
     descripcion: ''
   }
 };
-
 const cloneInitialForm = (typeKey) => JSON.parse(JSON.stringify(INITIAL_FORMS[typeKey]));
 
-export function AddAssetsButton({ projects = [], endpoints = [], onCreated, showToast }) {
+export function AddAssetButton({
+  projects = [],
+  endpoints = [],
+  onCreated,
+  showToast,
+  createEndpoint,
+  createHardware,
+  createSoftware,
+  createNetwork
+}) {
   const [showTypeSelect, setShowTypeSelect] = useState(false);
   const [activeType, setActiveType] = useState(null);
   const [forms, setForms] = useState(() => ({
@@ -98,100 +106,43 @@ export function AddAssetsButton({ projects = [], endpoints = [], onCreated, show
 
   const submitAsset = async (typeKey) => {
     const data = forms[typeKey];
-    let url = '';
-    let payload = {};
-
-    switch (typeKey) {
-      case 'endpoint': {
-        if (!data.project_id) {
-          setFormError('Selecciona un proyecto.');
-          return;
-        }
-        const { project_id, ...rest } = data;
-        url = `/api/projects/${project_id}/endpoints`;
-        payload = rest;
-        break;
-      }
-      case 'hardware': {
-        if (!data.endpoint_id) {
-          setFormError('Selecciona un endpoint.');
-          return;
-        }
-        const { endpoint_id, ram_gb, storage_gb, ...rest } = data;
-        url = `/api/endpoints/${endpoint_id}/hardware`;
-        payload = {
-          ...rest,
-          ram_gb: ram_gb === '' ? 0 : Number(ram_gb),
-          storage_gb: storage_gb === '' ? 0 : Number(storage_gb)
-        };
-        break;
-      }
-      case 'software': {
-        if (!data.endpoint_id) {
-          setFormError('Selecciona un endpoint.');
-          return;
-        }
-        const { endpoint_id, install_path, status, release_date, ...softwareFields } = data;
-
-        // FIX: el struct Go domain.Software.ReleaseDate es *time.Time.
-        // Un <input type="date"> manda "YYYY-MM-DD", que Go NO puede
-        // parsear como time.Time (necesita RFC3339 completo). Si además
-        // se manda como string vacío "", el json.Decode del backend falla
-        // igualmente. Por eso: se omite el campo si está vacío, y si tiene
-        // valor se completa a formato RFC3339 con hora a medianoche UTC.
-        const softwarePayload = { ...softwareFields };
-        if (release_date) {
-          softwarePayload.release_date = `${release_date}T00:00:00Z`;
-        }
-
-        url = `/api/endpoints/${endpoint_id}/installations`;
-        payload = {
-          software: softwarePayload,
-          installation: {
-            install_path,
-            status
-          }
-        };
-        break;
-      }
-      case 'network': {
-        if (!data.endpoint_id) {
-          setFormError('Selecciona un endpoint.');
-          return;
-        }
-        const { endpoint_id, vlan_id, ...rest } = data;
-        url = `/api/endpoints/${endpoint_id}/networks`;
-        payload = {
-          ...rest,
-          vlan_id: vlan_id === '' ? 0 : Number(vlan_id)
-        };
-        break;
-      }
-      default:
-        return;
-    }
-
     setLoading(true);
     setFormError(null);
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
 
-      if (!res.ok) {
-        let backendMessage = res.statusText;
-        try {
-          const errBody = await res.json();
-          backendMessage = errBody.error || errBody.message || JSON.stringify(errBody);
-        } catch {
-          // el cuerpo no era JSON parseable; nos quedamos con statusText
+    try {
+      switch (typeKey) {
+        case 'endpoint': {
+          const { project_id, ...rest } = data;
+          if (createEndpoint) {
+            await createEndpoint(project_id, rest);
+          }
+          break;
         }
-        throw new Error(backendMessage);
+        case 'hardware': {
+          const { endpoint_id, ...rest } = data;
+          if (createHardware) {
+            await createHardware(endpoint_id, rest);
+          }
+          break;
+        }
+        case 'software': {
+          const { endpoint_id, ...rest } = data;
+          if (createSoftware) {
+            await createSoftware(endpoint_id, rest);
+          }
+          break;
+        }
+        case 'network': {
+          const { endpoint_id, ...rest } = data;
+          if (createNetwork) {
+            await createNetwork(endpoint_id, rest);
+          }
+          break;
+        }
+        default:
+          return;
       }
 
-      showToast?.(`¡${ASSET_TYPES.find(t => t.key === typeKey)?.label} añadido correctamente!`);
       resetForm(typeKey);
       closeAll();
       await onCreated?.();
@@ -744,3 +695,5 @@ export function AddAssetsButton({ projects = [], endpoints = [], onCreated, show
     </>
   );
 }
+
+export { AddAssetButton as AddAssetsButton };

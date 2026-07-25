@@ -74,29 +74,4 @@ export class Node {
     }
   }
 
-  get colors() {
-    const cat = this.categoryId;
-    switch (cat) {
-      case 'proyecto':
-        return 'var(--c400)';
-      case 'red':
-        return 'var(--c300)';
-      case 'endpoint':
-        return 'var(--c500)';
-      case 'hardware':
-        return 'var(--c800)';
-      case 'instalacion':
-        return 'var(--c600)';
-      case 'software':
-        return 'var(--c300)';
-      case 'hallazgo':
-        return 'var(--c700)';
-      case 'vulnerabilidad':
-        return 'var(--c50)';
-      case 'remediacion':
-        return 'var(--c500)';
-      default:
-        return 'var(--c400)';
-    }
-  }
 }

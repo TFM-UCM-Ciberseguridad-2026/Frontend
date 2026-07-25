@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { getNodeColor } from '../../utils/nodeColors';
 
 const CATEGORIES = [
   { key: 'ALL', label: 'Todos' },
@@ -162,8 +163,8 @@ export function InventoryView({ nodes = [], selectedNode, setSelectedNode }) {
                   className="badge"
                   style={{
                     background: 'transparent',
-                    borderColor: node.colors || 'var(--c400)',
-                    color: node.colors || 'var(--c400)',
+                    borderColor: getNodeColor(node),
+                    color: getNodeColor(node),
                     fontSize: '9px',
                     padding: '2px 6px',
                     margin: 0

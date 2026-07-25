@@ -23,4 +23,24 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     const rawData = await this.apiDataSource.fetchTopApts();
     return (rawData || []).map(apt => new AptActor(apt));
   }
+
+  async createEndpoint(projectId, payload) {
+    const res = await this.apiDataSource.createEndpoint(projectId, payload);
+    return res ? new Node(res) : null;
+  }
+
+  async createHardware(endpointId, payload) {
+    const res = await this.apiDataSource.createHardware(endpointId, payload);
+    return res ? new Node(res) : null;
+  }
+
+  async createSoftware(endpointId, payload) {
+    const res = await this.apiDataSource.createSoftware(endpointId, payload);
+    return res ? new Node(res) : null;
+  }
+
+  async createNetwork(endpointId, payload) {
+    const res = await this.apiDataSource.createNetwork(endpointId, payload);
+    return res ? new Node(res) : null;
+  }
 }

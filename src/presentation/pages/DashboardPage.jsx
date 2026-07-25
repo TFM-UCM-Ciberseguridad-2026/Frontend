@@ -17,7 +17,7 @@ export function DashboardPage({
   filterType,
   setFilterType,
   toastMessage,
-  showToast, // Añadido de nuevo como prop recibida para el botón
+  showToast,
   showAPTPanel,
   setShowAPTPanel,
   aptData,
@@ -29,7 +29,11 @@ export function DashboardPage({
   getNodeCountByType,
   projects,
   selectedProjectId,
-  setSelectedProjectId
+  setSelectedProjectId,
+  createEndpoint,
+  createHardware,
+  createSoftware,
+  createNetwork
 }) {
   const [activeNav, setActiveNav] = useState('grafo'); // 'grafo', 'inventario', 'redes'
 
@@ -46,11 +50,10 @@ export function DashboardPage({
     { key: 'Remediation', label: 'Remediación', color: 'var(--c500)' },
   ];
 
-  // Mapeo de endpoints a partir de graphData (idéntico al del dashboard anterior)
   const endpoints = (graphData?.nodes || [])
     .filter(n => n.labels?.includes('Endpoint') || n.primaryLabel === 'Endpoint')
     .map(n => ({ 
-      id: n.properties?.id || n.id, 
+      id: n.properties?.id ?? n.id, 
       name: n.properties?.hostname || `Host #${n.properties?.id || n.id}` 
     }));
 
@@ -70,8 +73,6 @@ export function DashboardPage({
       />
 
       <div className="app">
-        {/* BOTÓN AGREGAR ACTIVOS */}
-        
         {activeNav === 'grafo' && (
           <GraphPage
             graphData={graphData}
@@ -90,6 +91,10 @@ export function DashboardPage({
             projects={projects}
             endpoints={endpoints}
             showToast={showToast}
+            createEndpoint={createEndpoint}
+            createHardware={createHardware}
+            createSoftware={createSoftware}
+            createNetwork={createNetwork}
           />
         )}
 
