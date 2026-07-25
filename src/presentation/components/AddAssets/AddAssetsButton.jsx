@@ -52,7 +52,7 @@ const INITIAL_FORMS = {
 
 const cloneInitialForm = (typeKey) => JSON.parse(JSON.stringify(INITIAL_FORMS[typeKey]));
 
-export function AddAssetButton({ projects = [], endpoints = [], onCreated, showToast }) {
+export function AddAssetsButton({ projects = [], endpoints = [], onCreated, showToast }) {
   const [showTypeSelect, setShowTypeSelect] = useState(false);
   const [activeType, setActiveType] = useState(null);
   const [forms, setForms] = useState(() => ({

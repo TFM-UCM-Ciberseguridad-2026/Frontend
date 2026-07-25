@@ -17,6 +17,7 @@ export function DashboardPage({
   filterType,
   setFilterType,
   toastMessage,
+  showToast, // Añadido de nuevo como prop recibida para el botón
   showAPTPanel,
   setShowAPTPanel,
   aptData,
@@ -45,6 +46,14 @@ export function DashboardPage({
     { key: 'Remediation', label: 'Remediación', color: 'var(--c500)' },
   ];
 
+  // Mapeo de endpoints a partir de graphData (idéntico al del dashboard anterior)
+  const endpoints = (graphData?.nodes || [])
+    .filter(n => n.labels?.includes('Endpoint') || n.primaryLabel === 'Endpoint')
+    .map(n => ({ 
+      id: n.properties?.id || n.id, 
+      name: n.properties?.hostname || `Host #${n.properties?.id || n.id}` 
+    }));
+
   return (
     <div style={{ height: '100vh', width: '100vw', overflow: 'hidden', position: 'relative' }}>
       <div className="grid-overlay"></div>
@@ -61,6 +70,8 @@ export function DashboardPage({
       />
 
       <div className="app">
+        {/* BOTÓN AGREGAR ACTIVOS */}
+        
         {activeNav === 'grafo' && (
           <GraphPage
             graphData={graphData}
@@ -76,6 +87,9 @@ export function DashboardPage({
             fetchTopAPTs={fetchTopAPTs}
             categories={categories}
             getNodeCountByType={getNodeCountByType}
+            projects={projects}
+            endpoints={endpoints}
+            showToast={showToast}
           />
         )}
 
