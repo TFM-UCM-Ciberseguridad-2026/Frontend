@@ -1,4 +1,5 @@
 import React from 'react';
+import { getNodeColor } from '../../utils/nodeColors';
 
 export function AssetTable({
   processedNodes,
@@ -55,7 +56,7 @@ export function AssetTable({
               <td style={{ padding: '10px 12px', fontFamily: 'Share Tech Mono, monospace' }}>{node.id}</td>
               <td style={{ padding: '10px 12px', fontWeight: 'bold' }}>{node.name}</td>
               <td style={{ padding: '10px 12px' }}>
-                <span className="badge" style={{ background: 'transparent', borderColor: node.colors, color: node.colors, fontSize: '9px', padding: '2px 6px', margin: 0 }}>
+                <span className="badge" style={{ background: 'transparent', borderColor: getNodeColor(node), color: getNodeColor(node), fontSize: '9px', padding: '2px 6px', margin: 0 }}>
                    {node.primaryLabel.toUpperCase()}
                 </span>
               </td>

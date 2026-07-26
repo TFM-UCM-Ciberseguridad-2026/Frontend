@@ -10,21 +10,39 @@ const PHYSICS = {
   maxSpeed: 18
 };
 
-const CANVAS_WIDTH = 900;
-const CANVAS_HEIGHT = 640;
+// Mundo fijo: de -5000 a 5000 en ambos ejes (10.000 x 10.000 de espacio total).
+// Reemplaza al antiguo CANVAS_WIDTH=900 / CANVAS_HEIGHT=640, que se quedaba
+// corto con grafos grandes.
+const CANVAS_MIN = -5000;
+const CANVAS_MAX = 5000;
+const CANVAS_WIDTH = CANVAS_MAX - CANVAS_MIN;  // 10000
+const CANVAS_HEIGHT = CANVAS_MAX - CANVAS_MIN; // 10000
+
+// Centro del mundo, usado por los modos 'tree' y 'stix' para centrar la raíz
+// (antes usaban CANVAS_WIDTH/2, CANVAS_HEIGHT/2, que ahora sería (5000,5000)
+// — la esquina del mundo, no su centro real, que es (0,0)).
+const WORLD_CENTER_X = (CANVAS_MIN + CANVAS_MAX) / 2; // 0
+const WORLD_CENTER_Y = (CANVAS_MIN + CANVAS_MAX) / 2; // 0
+
+// Tamaño del viewBox inicial: lo que se ve nada más entrar, centrado en el
+// origen (0,0) del mundo.
+const INITIAL_VIEW_W = 900;
+const INITIAL_VIEW_H = 640;
 
 const getLayerY = (categoryId) => {
+  // Capas distribuidas simétricamente alrededor del centro del mundo (y=0),
+  // usado por el modo 'layered'
   switch (categoryId) {
-    case 'proyecto': return 80;
-    case 'red': return 160;
+    case 'proyecto': return -220;
+    case 'red': return -140;
     case 'endpoint':
-    case 'hardware': return 250;
-    case 'instalacion': return 360;
-    case 'software': return 440;
-    case 'hallazgo': return 510;
+    case 'hardware': return -40;
+    case 'instalacion': return 60;
+    case 'software': return 160;
+    case 'hallazgo': return 240;
     case 'vulnerabilidad':
-    case 'remediacion': return 570;
-    default: return CANVAS_HEIGHT / 2;
+    case 'remediacion': return 300;
+    default: return 0;
   }
 };
 
@@ -70,20 +88,20 @@ export function NetworkGraph({
   const svgRef = useRef(null);
   const animationFrameRef = useRef(null);
 
-  // FIX: además de la ref normal, guardamos el nodo <svg> en estado a través
-  // de una callback ref. Esto es lo que permite que el useEffect del wheel
-  // se re-ejecute exactamente cuando el <svg> se monta de verdad — antes,
-  // con useEffect(() => {...}, []), el efecto corría UNA sola vez durante el
-  // primer render (que muestra el spinner de loading, sin <svg> todavía),
-  // encontraba la ref en null, y nunca más volvía a intentarlo — el zoom
-  // quedaba muerto para siempre aunque el grafo ya estuviera visible.
   const [svgEl, setSvgEl] = useState(null);
   const svgCallbackRef = useCallback((node) => {
     svgRef.current = node;
     setSvgEl(node);
   }, []);
 
-  const [viewBox, setViewBox] = useState({ x: 0, y: 0, w: CANVAS_WIDTH, h: CANVAS_HEIGHT });
+  // FIX: viewBox ahora arranca centrado en (0,0) — el centro del nuevo mundo
+  // -5000..5000 — en vez de en la esquina (0,0) del mundo viejo 0..900/0..640.
+  const [viewBox, setViewBox] = useState({
+    x: -INITIAL_VIEW_W / 2,
+    y: -INITIAL_VIEW_H / 2,
+    w: INITIAL_VIEW_W,
+    h: INITIAL_VIEW_H
+  });
   const viewBoxRef = useRef(viewBox);
   const panStateRef = useRef(null);
   const panFrameRef = useRef(null);
@@ -129,7 +147,6 @@ export function NetworkGraph({
     visibleNodes.forEach(n => {
       depths[n.id] = 999;
     });
-
     if (rootNode) {
       const queue = [rootNode.id];
       depths[rootNode.id] = 0;
@@ -167,7 +184,8 @@ export function NetworkGraph({
 
     const initial = visibleNodes.map((n, i) => {
       const angle = (i / visibleNodes.length) * 2 * Math.PI;
-      const initialX = CANVAS_WIDTH / 2 + Math.cos(angle) * 200;
+      // FIX: posición inicial centrada en 0 (antes CANVAS_WIDTH/2 = 450)
+      const initialX = Math.cos(angle) * 200;
 
       return {
         id: n.id,
@@ -251,24 +269,25 @@ export function NetworkGraph({
 
           if (layoutMode === 'stix') {
             const isRoot = node.entity.primaryLabel === 'Project' || node.entity.categoryId === 'proyecto';
+            // FIX: centrado en WORLD_CENTER (0,0) en vez de CANVAS_WIDTH/2
+            // (que ahora sería 5000, la esquina del mundo, no su centro)
             if (isRoot) {
-              const cx = CANVAS_WIDTH / 2;
-              const cy = CANVAS_HEIGHT / 2;
-              node.fx += (cx - node.x) * 0.15;
-              node.fy += (cy - node.y) * 0.15;
+              node.fx += (WORLD_CENTER_X - node.x) * 0.15;
+              node.fy += (WORLD_CENTER_Y - node.y) * 0.15;
             } else {
-              const cx = CANVAS_WIDTH / 2;
-              const cy = CANVAS_HEIGHT / 2;
-              node.fx += (cx - node.x) * 0.005;
-              node.fy += (cy - node.y) * 0.005;
+              node.fx += (WORLD_CENTER_X - node.x) * 0.005;
+              node.fy += (WORLD_CENTER_Y - node.y) * 0.005;
             }
           } else if (layoutMode === 'tree') {
             const isRoot = node.entity.primaryLabel === 'Project' || node.entity.categoryId === 'proyecto';
+            // FIX: centrado en WORLD_CENTER_X (0) en vez de CANVAS_WIDTH/2
             if (isRoot) {
-              const cx = CANVAS_WIDTH / 2;
-              node.fx += (cx - node.x) * 0.2;
+              node.fx += (WORLD_CENTER_X - node.x) * 0.2;
             }
-            const targetY = 80 + (node.depth || 0) * 185;
+            // FIX: targetY ahora arranca en negativo (-300) y crece hacia
+            // abajo con la misma separación entre niveles (185), centrado
+            // igual que el resto de layouts alrededor de y=0
+            const targetY = -300 + (node.depth || 0) * 185;
             node.fy += (targetY - node.y) * PHYSICS.centralGravity;
           } else {
             node.fy += (getLayerY(node.entity.categoryId) - node.y) * PHYSICS.centralGravity;
@@ -286,13 +305,12 @@ export function NetworkGraph({
           node.x += node.vx;
           node.y += node.vy;
 
-          if (layoutMode === 'tree' || layoutMode === 'stix') {
-            node.x = Math.max(-450, Math.min(1350, node.x));
-            node.y = Math.max(40, Math.min(1200, node.y));
-          } else {
-            node.x = Math.max(40, Math.min(CANVAS_WIDTH - 40, node.x));
-            node.y = Math.max(40, Math.min(CANVAS_HEIGHT - 40, node.y));
-          }
+          // FIX: se unifica el clamp para los tres modos de layout, usando
+          // los límites del mundo -5000/5000 en vez de los rangos fijos y
+          // pequeños que 'tree'/'stix' tenían antes ([-450,1350]x[40,1200],
+          // pensados para el mundo viejo de 900x640).
+          node.x = Math.max(CANVAS_MIN + 40, Math.min(CANVAS_MAX - 40, node.x));
+          node.y = Math.max(CANVAS_MIN + 40, Math.min(CANVAS_MAX - 40, node.y));
         });
 
         setLayoutNodes([...nodes]);
@@ -319,10 +337,6 @@ export function NetworkGraph({
     return pt.matrixTransform(svgElNode.getScreenCTM().inverse());
   };
 
-  // FIX: ahora depende de [svgEl] en vez de []. Se re-ejecuta cada vez que
-  // el <svg id="graph"> realmente se monta o desmonta (por ejemplo al salir
-  // del estado de loading), garantizando que el listener de wheel se
-  // enganche cuando el elemento existe de verdad.
   useEffect(() => {
     if (!svgEl) return;
 
@@ -332,8 +346,10 @@ export function NetworkGraph({
       const zoomFactor = e.deltaY > 0 ? 1.1 : 0.9;
 
       setViewBox(vb => {
-        const newW = Math.max(200, Math.min(3000, vb.w * zoomFactor));
-        const newH = Math.max(150, Math.min(2200, vb.h * zoomFactor));
+        // FIX: límite máximo de zoom-out ahora es el tamaño real del mundo
+        // (10000), antes topaba en 3000/2200 mucho antes de llegar al borde.
+        const newW = Math.max(150, Math.min(CANVAS_WIDTH, vb.w * zoomFactor));
+        const newH = Math.max(110, Math.min(CANVAS_HEIGHT, vb.h * zoomFactor));
         const ratioX = (svgP.x - vb.x) / vb.w;
         const ratioY = (svgP.y - vb.y) / vb.h;
         return {
@@ -360,13 +376,11 @@ export function NetworkGraph({
       hasMoved = true;
       const node = nodesRef.current.find(n => n.id === nodeId);
       if (node) {
-        if (layoutMode === 'tree' || layoutMode === 'stix') {
-          node.x = Math.max(-450, Math.min(1350, svgP.x));
-          node.y = Math.max(40, Math.min(1200, svgP.y));
-        } else {
-          node.x = Math.max(40, Math.min(CANVAS_WIDTH - 40, svgP.x));
-          node.y = Math.max(40, Math.min(CANVAS_HEIGHT - 40, svgP.y));
-        }
+        // FIX: mismo límite -5000/5000 para los tres modos al arrastrar
+        // manualmente (antes 'tree'/'stix' usaban un rango distinto y más
+        // pequeño que 'layered')
+        node.x = Math.max(CANVAS_MIN + 40, Math.min(CANVAS_MAX - 40, svgP.x));
+        node.y = Math.max(CANVAS_MIN + 40, Math.min(CANVAS_MAX - 40, svgP.y));
       }
     };
 
@@ -609,8 +623,6 @@ export function NetworkGraph({
       <div className="corner-widget cw-tl">
         NODOS: <span id="nodeCount">{layoutNodes.length}</span> &nbsp;|&nbsp; ENLACES: <span id="edgeCount">{graphData.relationships.length}</span>
       </div>
-
-
 
       <div className="layout-selector-widget cw-bl">
         <button

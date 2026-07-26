@@ -1,6 +1,8 @@
 import React from 'react';
 import { NetworkGraph } from '../components/NetworkGraph/NetworkGraph';
 import { NodeInspector } from '../components/NodeInspector/NodeInspector';
+import { AddAssetsButton } from '../components/AddAssets/AddAssetsButton';
+import '../components/AddAssets/AddAssetsButton.css';
 
 export function GraphPage({
   graphData,
@@ -15,7 +17,14 @@ export function GraphPage({
   fetchInfrastructure,
   fetchTopAPTs,
   categories,
-  getNodeCountByType
+  getNodeCountByType,
+  projects,
+  endpoints,
+  showToast,
+  createEndpoint,
+  createHardware,
+  createSoftware,
+  createNetwork
 }) {
   return (
     <>
@@ -71,6 +80,18 @@ export function GraphPage({
 
       {/* VISTA CENTRAL: GRAFO — grid column 2 (1fr) */}
       <main className="graph-stage">
+
+        <AddAssetsButton
+          projects={projects}
+          endpoints={endpoints}
+          onCreated={() => fetchInfrastructure(true)}
+          showToast={showToast}
+          createEndpoint={createEndpoint}
+          createHardware={createHardware}
+          createSoftware={createSoftware}
+          createNetwork={createNetwork}
+        />
+
         <NetworkGraph
           graphData={graphData}
           filterType={filterType}

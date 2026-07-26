@@ -4,6 +4,10 @@ import { InfrastructureRepositoryImpl } from '../../data/repositories/Infrastruc
 import { GetInfrastructureUseCase } from '../../domain/usecases/GetInfrastructureUseCase';
 import { PopulateInfrastructureUseCase } from '../../domain/usecases/PopulateInfrastructureUseCase';
 import { GetTopAptsUseCase } from '../../domain/usecases/GetTopAptsUseCase';
+import { CreateEndpointUseCase } from '../../domain/usecases/CreateEndpointUseCase';
+import { CreateHardwareUseCase } from '../../domain/usecases/CreateHardwareUseCase';
+import { CreateSoftwareUseCase } from '../../domain/usecases/CreateSoftwareUseCase';
+import { CreateNetworkUseCase } from '../../domain/usecases/CreateNetworkUseCase';
 
 export function useInfrastructure() {
   const [showDashboard, setShowDashboard] = useState(false);
@@ -31,6 +35,11 @@ export function useInfrastructure() {
   const getInfrastructureUseCase = useMemo(() => new GetInfrastructureUseCase(repository), [repository]);
   const populateInfrastructureUseCase = useMemo(() => new PopulateInfrastructureUseCase(repository), [repository]);
   const getTopAptsUseCase = useMemo(() => new GetTopAptsUseCase(repository), [repository]);
+
+  const createEndpointUseCase = useMemo(() => new CreateEndpointUseCase(repository), [repository]);
+  const createHardwareUseCase = useMemo(() => new CreateHardwareUseCase(repository), [repository]);
+  const createSoftwareUseCase = useMemo(() => new CreateSoftwareUseCase(repository), [repository]);
+  const createNetworkUseCase = useMemo(() => new CreateNetworkUseCase(repository), [repository]);
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -81,6 +90,34 @@ export function useInfrastructure() {
     }
   };
 
+  const createEndpoint = async (projectId, data) => {
+    const res = await createEndpointUseCase.execute(projectId, data);
+    showToast('¡Endpoint añadido correctamente!');
+    await fetchInfrastructure(true);
+    return res;
+  };
+
+  const createHardware = async (endpointId, data) => {
+    const res = await createHardwareUseCase.execute(endpointId, data);
+    showToast('¡Hardware añadido correctamente!');
+    await fetchInfrastructure(true);
+    return res;
+  };
+
+  const createSoftware = async (endpointId, data) => {
+    const res = await createSoftwareUseCase.execute(endpointId, data);
+    showToast('¡Software añadido correctamente!');
+    await fetchInfrastructure(true);
+    return res;
+  };
+
+  const createNetwork = async (endpointId, data) => {
+    const res = await createNetworkUseCase.execute(endpointId, data);
+    showToast('¡Red añadida correctamente!');
+    await fetchInfrastructure(true);
+    return res;
+  };
+
   // Cargar datos al activar el Dashboard
   useEffect(() => {
     if (showDashboard) {
@@ -93,8 +130,8 @@ export function useInfrastructure() {
     return (graphData.nodes || []).filter(
       n => n.labels?.includes('Project') || n.primaryLabel === 'Project'
     ).map(n => ({
-      id: n.id,
-      name: n.properties?.name || n.name || `Proyecto #${n.id}`
+      id: n.properties?.id ?? n.id,
+      name: n.properties?.name || n.properties?.nombre || n.name || `Proyecto #${n.id}`
     }));
   }, [graphData]);
 
@@ -103,7 +140,6 @@ export function useInfrastructure() {
     if (projects.length > 0 && selectedProjectId === null) {
       setSelectedProjectId(projects[0].id);
     }
-    // Si el proyecto seleccionado ya no existe en la data, resetear
     if (selectedProjectId !== null && projects.length > 0 && !projects.find(p => p.id === selectedProjectId)) {
       setSelectedProjectId(projects[0].id);
     }
@@ -115,7 +151,16 @@ export function useInfrastructure() {
       return graphData;
     }
 
-    // Construir grafo de adyacencia bidireccional
+    // Encontrar el elementId (n.id) del nodo Project cuyo properties.id coincide
+    const projectNode = graphData.nodes.find(
+      n => (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
+           n.properties?.id == selectedProjectId
+    );
+    if (!projectNode) {
+      return graphData;
+    }
+    const startId = projectNode.id; // elementId de Neo4j
+
     const adj = {};
     graphData.nodes.forEach(n => { adj[n.id] = []; });
     (graphData.relationships || []).forEach(rel => {
@@ -123,19 +168,16 @@ export function useInfrastructure() {
       if (adj[rel.target]) adj[rel.target].push(rel.source);
     });
 
-    // BFS desde el proyecto seleccionado
     const reachable = new Set();
-    const queue = [selectedProjectId];
-    reachable.add(selectedProjectId);
+    const queue = [startId];
+    reachable.add(startId);
     let head = 0;
     while (head < queue.length) {
       const curr = queue[head++];
       for (const nbr of (adj[curr] || [])) {
         if (!reachable.has(nbr)) {
-          // No incluir nodos TTP ni ThreatActor en el filtro
           const node = graphData.nodes.find(n => n.id === nbr);
           if (node && !node.labels?.includes('TTP') && !node.labels?.includes('ThreatActor')) {
-            // No cruzar a otros proyectos
             if (node.primaryLabel !== 'Project') {
               reachable.add(nbr);
               queue.push(nbr);
@@ -154,7 +196,6 @@ export function useInfrastructure() {
     return { nodes: filteredNodes, relationships: filteredRels };
   }, [graphData, selectedProjectId]);
 
-  // Contar nodos por tipo (sobre el grafo filtrado)
   const getNodeCountByType = useCallback((type) => {
     return filteredGraphData.nodes.filter(n => n.labels.includes(type)).length;
   }, [filteredGraphData]);
@@ -187,6 +228,10 @@ export function useInfrastructure() {
     projects,
     selectedProjectId,
     setSelectedProjectId,
-    showToast
+    showToast,
+    createEndpoint,
+    createHardware,
+    createSoftware,
+    createNetwork
   };
 }

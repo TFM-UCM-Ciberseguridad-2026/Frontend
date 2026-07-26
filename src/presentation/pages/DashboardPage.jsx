@@ -17,6 +17,7 @@ export function DashboardPage({
   filterType,
   setFilterType,
   toastMessage,
+  showToast,
   showAPTPanel,
   setShowAPTPanel,
   aptData,
@@ -28,7 +29,11 @@ export function DashboardPage({
   getNodeCountByType,
   projects,
   selectedProjectId,
-  setSelectedProjectId
+  setSelectedProjectId,
+  createEndpoint,
+  createHardware,
+  createSoftware,
+  createNetwork
 }) {
   const [activeNav, setActiveNav] = useState('grafo'); // 'grafo', 'inventario', 'redes'
 
@@ -44,6 +49,13 @@ export function DashboardPage({
     { key: 'Vulnerability', label: 'Vulnerabilidad (CVE)', color: 'var(--c50)' },
     { key: 'Remediation', label: 'Remediación', color: 'var(--c500)' },
   ];
+
+  const endpoints = (graphData?.nodes || [])
+    .filter(n => n.labels?.includes('Endpoint') || n.primaryLabel === 'Endpoint')
+    .map(n => ({ 
+      id: n.properties?.id ?? n.id, 
+      name: n.properties?.hostname || `Host #${n.properties?.id || n.id}` 
+    }));
 
   return (
     <div style={{ height: '100vh', width: '100vw', overflow: 'hidden', position: 'relative' }}>
@@ -76,6 +88,13 @@ export function DashboardPage({
             fetchTopAPTs={fetchTopAPTs}
             categories={categories}
             getNodeCountByType={getNodeCountByType}
+            projects={projects}
+            endpoints={endpoints}
+            showToast={showToast}
+            createEndpoint={createEndpoint}
+            createHardware={createHardware}
+            createSoftware={createSoftware}
+            createNetwork={createNetwork}
           />
         )}
 
