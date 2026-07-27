@@ -163,8 +163,8 @@ export function useInfrastructure() {
     return (graphData.nodes || []).filter(
       n => n.labels?.includes('Project') || n.primaryLabel === 'Project'
     ).map(n => ({
-      id: n.properties?.id ?? n.id,
-      name: n.properties?.name || n.properties?.nombre || n.name || `Proyecto #${n.id}`
+      id: String(n.properties?.id ?? n.id),
+      name: n.properties?.name || n.properties?.nombre || n.name || `Proyecto #${n.properties?.id ?? n.id}`
     }));
   }, [graphData]);
 
@@ -178,6 +178,14 @@ export function useInfrastructure() {
     }
   }, [projects, selectedProjectId]);
 
+
+  // Limpiar selección visual al cambiar de proyecto
+  useEffect(() => {
+    setSelectedNode(null);
+    setSelectedExploitationPath(null);
+  }, [selectedProjectId]);
+
+
   // Filtrar graphData según el proyecto seleccionado usando BFS
   const filteredGraphData = useMemo(() => {
     if (!selectedProjectId || !graphData.nodes || graphData.nodes.length === 0) {
@@ -187,7 +195,7 @@ export function useInfrastructure() {
     // Encontrar el elementId (n.id) del nodo Project cuyo properties.id coincide
     const projectNode = graphData.nodes.find(
       n => (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
-           n.properties?.id == selectedProjectId
+          String(n.properties?.id ?? n.id) === selectedProjectId
     );
     if (!projectNode) {
       return graphData;
