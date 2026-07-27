@@ -11,6 +11,11 @@ export class InfrastructureRepository {
     throw new Error('Method getTopApts not implemented');
   }
 
+  async getExploitationPaths() {
+    throw new Error('Method getExploitationPaths not implemented');
+  }
+
+
   async createEndpoint(projectId, endpointData) {
     throw new Error('Method createEndpoint not implemented');
   }

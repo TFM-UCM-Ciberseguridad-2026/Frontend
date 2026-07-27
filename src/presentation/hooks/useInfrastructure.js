@@ -4,6 +4,7 @@ import { InfrastructureRepositoryImpl } from '../../data/repositories/Infrastruc
 import { GetInfrastructureUseCase } from '../../domain/usecases/GetInfrastructureUseCase';
 import { PopulateInfrastructureUseCase } from '../../domain/usecases/PopulateInfrastructureUseCase';
 import { GetTopAptsUseCase } from '../../domain/usecases/GetTopAptsUseCase';
+import { GetExploitationPathsUseCase } from '../../domain/usecases/GetExploitationPathsUseCase';
 import { CreateEndpointUseCase } from '../../domain/usecases/CreateEndpointUseCase';
 import { CreateHardwareUseCase } from '../../domain/usecases/CreateHardwareUseCase';
 import { CreateSoftwareUseCase } from '../../domain/usecases/CreateSoftwareUseCase';
@@ -29,17 +30,26 @@ export function useInfrastructure() {
   const [aptLoading, setAptLoading] = useState(false);
   const [aptError, setAptError] = useState(null);
 
+  // Estados de Exploitation Paths (Rutas de Ataque)
+  const [showPathsModal, setShowPathsModal] = useState(false);
+  const [exploitationPaths, setExploitationPaths] = useState([]);
+  const [pathsLoading, setPathsLoading] = useState(false);
+  const [pathsError, setPathsError] = useState(null);
+  const [selectedExploitationPath, setSelectedExploitationPath] = useState(null);
+
   // Inyección de dependencias (Clean Architecture)
   const apiDataSource = useMemo(() => new InfrastructureApiDataSource(), []);
   const repository = useMemo(() => new InfrastructureRepositoryImpl(apiDataSource), [apiDataSource]);
   const getInfrastructureUseCase = useMemo(() => new GetInfrastructureUseCase(repository), [repository]);
   const populateInfrastructureUseCase = useMemo(() => new PopulateInfrastructureUseCase(repository), [repository]);
   const getTopAptsUseCase = useMemo(() => new GetTopAptsUseCase(repository), [repository]);
+  const getExploitationPathsUseCase = useMemo(() => new GetExploitationPathsUseCase(repository), [repository]);
 
   const createEndpointUseCase = useMemo(() => new CreateEndpointUseCase(repository), [repository]);
   const createHardwareUseCase = useMemo(() => new CreateHardwareUseCase(repository), [repository]);
   const createSoftwareUseCase = useMemo(() => new CreateSoftwareUseCase(repository), [repository]);
   const createNetworkUseCase = useMemo(() => new CreateNetworkUseCase(repository), [repository]);
+
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -90,6 +100,29 @@ export function useInfrastructure() {
     }
   };
 
+  const fetchExploitationPaths = async () => {
+    setShowPathsModal(true);
+    setPathsLoading(true);
+    setPathsError(null);
+    try {
+      const data = await getExploitationPathsUseCase.execute();
+      setExploitationPaths(data || []);
+    } catch (err) {
+      console.error(err);
+      setPathsError(err.message);
+    } finally {
+      setPathsLoading(false);
+    }
+  };
+
+  const selectExploitationPath = (path) => {
+    setSelectedExploitationPath(path);
+  };
+
+  const clearSelectedExploitationPath = () => {
+    setSelectedExploitationPath(null);
+  };
+
   const createEndpoint = async (projectId, data) => {
     const res = await createEndpointUseCase.execute(projectId, data);
     showToast('¡Endpoint añadido correctamente!');
@@ -130,8 +163,8 @@ export function useInfrastructure() {
     return (graphData.nodes || []).filter(
       n => n.labels?.includes('Project') || n.primaryLabel === 'Project'
     ).map(n => ({
-      id: n.properties?.id ?? n.id,
-      name: n.properties?.name || n.properties?.nombre || n.name || `Proyecto #${n.id}`
+      id: String(n.properties?.id ?? n.id),
+      name: n.properties?.name || n.properties?.nombre || n.name || `Proyecto #${n.properties?.id ?? n.id}`
     }));
   }, [graphData]);
 
@@ -145,6 +178,14 @@ export function useInfrastructure() {
     }
   }, [projects, selectedProjectId]);
 
+
+  // Limpiar selección visual al cambiar de proyecto
+  useEffect(() => {
+    setSelectedNode(null);
+    setSelectedExploitationPath(null);
+  }, [selectedProjectId]);
+
+
   // Filtrar graphData según el proyecto seleccionado usando BFS
   const filteredGraphData = useMemo(() => {
     if (!selectedProjectId || !graphData.nodes || graphData.nodes.length === 0) {
@@ -154,7 +195,7 @@ export function useInfrastructure() {
     // Encontrar el elementId (n.id) del nodo Project cuyo properties.id coincide
     const projectNode = graphData.nodes.find(
       n => (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
-           n.properties?.id == selectedProjectId
+          String(n.properties?.id ?? n.id) === selectedProjectId
     );
     if (!projectNode) {
       return graphData;
@@ -221,9 +262,18 @@ export function useInfrastructure() {
     aptData,
     aptLoading,
     aptError,
+    showPathsModal,
+    setShowPathsModal,
+    exploitationPaths,
+    pathsLoading,
+    pathsError,
+    selectedExploitationPath,
+    selectExploitationPath,
+    clearSelectedExploitationPath,
     fetchInfrastructure,
     handleReset,
     fetchTopAPTs,
+    fetchExploitationPaths,
     getNodeCountByType,
     projects,
     selectedProjectId,
@@ -234,4 +284,5 @@ export function useInfrastructure() {
     createSoftware,
     createNetwork
   };
+
 }

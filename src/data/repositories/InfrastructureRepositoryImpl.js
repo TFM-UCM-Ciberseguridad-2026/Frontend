@@ -1,5 +1,6 @@
 import { Node } from '../../domain/entities/Node';
 import { AptActor } from '../../domain/entities/AptActor';
+import { ExploitationPath } from '../../domain/entities/ExploitationPath';
 import { InfrastructureRepository } from '../../domain/repositories/InfrastructureRepository';
 
 export class InfrastructureRepositoryImpl extends InfrastructureRepository {
@@ -23,6 +24,12 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     const rawData = await this.apiDataSource.fetchTopApts();
     return (rawData || []).map(apt => new AptActor(apt));
   }
+
+  async getExploitationPaths() {
+    const rawData = await this.apiDataSource.fetchExploitationPaths();
+    return (rawData || []).map(path => new ExploitationPath(path));
+  }
+
 
   async createEndpoint(projectId, payload) {
     const res = await this.apiDataSource.createEndpoint(projectId, payload);
