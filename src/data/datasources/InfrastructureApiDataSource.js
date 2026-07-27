@@ -23,6 +23,15 @@ export class InfrastructureApiDataSource {
     return await res.json();
   }
 
+  async fetchExploitationPaths() {
+    const res = await fetch('/api/infrastructure/exploitation-paths');
+    if (!res.ok) {
+      throw new Error(`Error: ${res.statusText}`);
+    }
+    return await res.json();
+  }
+
+
   async createEndpoint(projectId, payload) {
     const res = await fetch(`/api/projects/${projectId}/endpoints`, {
       method: 'POST',

@@ -1,4 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { NodeIcon } from './NodeIcon';
+
+
 
 const PHYSICS = {
   repulsion: 8500,
@@ -79,8 +82,11 @@ export function NetworkGraph({
   selectedNode,
   setSelectedNode,
   fetchInfrastructure,
-  fetchTopAPTs
+  fetchTopAPTs,
+  selectedExploitationPath,
+  clearSelectedExploitationPath
 }) {
+
   const [layoutMode, setLayoutMode] = useState('layered'); // 'layered', 'tree', 'stix'
   const [layoutNodes, setLayoutNodes] = useState([]);
   const nodesRef = useRef([]);
@@ -479,6 +485,129 @@ export function NetworkGraph({
     return `M${sourceNode.x},${sourceNode.y} Q${mx},${my} ${targetNode.x},${targetNode.y}`;
   };
 
+  const { pathEdgeIdSet, pathConnectorNodeIdSet, pathNodeStepMap } = useMemo(() => {
+    const edgeIdSet = new Set();
+    const connectorNodeIdSet = new Set();
+    const nodeStepMap = new Map();
+
+    if (!selectedExploitationPath || !graphData?.nodes) {
+      return { pathEdgeIdSet: edgeIdSet, pathConnectorNodeIdSet: connectorNodeIdSet, pathNodeStepMap: nodeStepMap };
+    }
+
+    const findNodeForHostOrId = (hostName, endpointId) => {
+      const hLower = (hostName || '').toLowerCase();
+      const idStr = String(endpointId || '');
+
+      return graphData.nodes.find(n => {
+        const nHost = (n.properties?.hostname || n.name || '').toLowerCase();
+        const nIdStr = String(n.id);
+        const nPropIdStr = String(n.properties?.id || '');
+
+        return (hLower && nHost === hLower) || (idStr && (nIdStr === idStr || nPropIdStr === idStr));
+      });
+    };
+
+    const orderedPathNodes = [];
+
+    const entryNode = findNodeForHostOrId(selectedExploitationPath.initialEndpoint, null) ||
+      (selectedExploitationPath.steps?.[0] && findNodeForHostOrId(selectedExploitationPath.steps[0].sourceEndpoint, null));
+
+    if (entryNode) {
+      orderedPathNodes.push(entryNode);
+      nodeStepMap.set(String(entryNode.id), 1);
+    }
+
+    (selectedExploitationPath.steps || []).forEach((step) => {
+      const stepNode = findNodeForHostOrId(step.targetEndpoint, step.targetEndpointId);
+      if (stepNode) {
+        if (!orderedPathNodes.some(n => String(n.id) === String(stepNode.id))) {
+          orderedPathNodes.push(stepNode);
+        }
+        nodeStepMap.set(String(stepNode.id), orderedPathNodes.length);
+      }
+    });
+
+    const rels = graphData.relationships || [];
+    const adjMap = new Map();
+    rels.forEach(rel => {
+      const s = String(rel.source);
+      const t = String(rel.target);
+      if (!adjMap.has(s)) adjMap.set(s, []);
+      if (!adjMap.has(t)) adjMap.set(t, []);
+      adjMap.get(s).push({ neighborId: t, relId: rel.id });
+      adjMap.get(t).push({ neighborId: s, relId: rel.id });
+    });
+
+    for (let i = 0; i < orderedPathNodes.length - 1; i++) {
+      const srcId = String(orderedPathNodes[i].id);
+      const tgtId = String(orderedPathNodes[i + 1].id);
+
+      const directEdge = rels.find(r =>
+        (String(r.source) === srcId && String(r.target) === tgtId) ||
+        (String(r.source) === tgtId && String(r.target) === srcId)
+      );
+
+      if (directEdge) {
+        edgeIdSet.add(directEdge.id);
+        continue;
+      }
+
+      const srcNeighbors = adjMap.get(srcId) || [];
+      const tgtNeighbors = adjMap.get(tgtId) || [];
+      const tgtNeighborSet = new Map(tgtNeighbors.map(item => [item.neighborId, item.relId]));
+
+      let foundHop = false;
+      for (const srcItem of srcNeighbors) {
+        if (tgtNeighborSet.has(srcItem.neighborId)) {
+          const midId = srcItem.neighborId;
+          const relId1 = srcItem.relId;
+          const relId2 = tgtNeighborSet.get(midId);
+
+          edgeIdSet.add(relId1);
+          edgeIdSet.add(relId2);
+          connectorNodeIdSet.add(midId);
+          foundHop = true;
+          break;
+        }
+      }
+
+      if (!foundHop) {
+        const queue = [[srcId, []]];
+        const visited = new Set([srcId]);
+        let pathRels = null;
+        let pathNodes = null;
+
+        while (queue.length > 0) {
+          const [curr, pathInfo] = queue.shift();
+          if (pathInfo.length > 3) break;
+
+          if (curr === tgtId) {
+            pathRels = pathInfo.map(p => p.relId);
+            pathNodes = pathInfo.map(p => p.neighborId);
+            break;
+          }
+
+          const nbrs = adjMap.get(curr) || [];
+          for (const item of nbrs) {
+            if (!visited.has(item.neighborId)) {
+              visited.add(item.neighborId);
+              queue.push([item.neighborId, [...pathInfo, item]]);
+            }
+          }
+        }
+
+        if (pathRels) {
+          pathRels.forEach(id => edgeIdSet.add(id));
+          pathNodes.forEach(id => {
+            if (id !== srcId && id !== tgtId) connectorNodeIdSet.add(id);
+          });
+        }
+      }
+    }
+
+    return { pathEdgeIdSet: edgeIdSet, pathConnectorNodeIdSet: connectorNodeIdSet, pathNodeStepMap: nodeStepMap };
+  }, [selectedExploitationPath, graphData]);
+
   if (loading) {
     return (
       <div className="loader-container">
@@ -491,7 +620,7 @@ export function NetworkGraph({
   if (error) {
     return (
       <div className="graph-error-box">
-        <h3 className="graph-error-title">⚠️ Conexión fallida</h3>
+        <h3 className="graph-error-title">Conexión fallida</h3>
         <p className="graph-error-text">{error}</p>
         <button className="btn btn-secondary graph-error-retry-btn" onClick={() => fetchInfrastructure()}>
           Reintentar Conexión
@@ -500,8 +629,41 @@ export function NetworkGraph({
     );
   }
 
+  const pathActive = Boolean(selectedExploitationPath);
+
   return (
     <div className="graph-stage" style={{ width: '100%', height: '100%' }}>
+      {selectedExploitationPath && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '16px',
+            right: '16px',
+            zIndex: 20,
+            background: 'rgba(10, 12, 35, 0.92)',
+            border: '1px solid rgba(239, 68, 68, 0.6)',
+            borderRadius: '6px',
+            padding: '8px 14px',
+            boxShadow: '0 0 20px rgba(0, 0, 0, 0.8), 0 0 10px rgba(239, 68, 68, 0.2)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '14px',
+            backdropFilter: 'blur(8px)'
+          }}
+        >
+          <div style={{ fontFamily: 'Share Tech Mono, monospace', fontSize: '11.5px', color: '#f87171', letterSpacing: '0.5px' }}>
+            RUTA DESTACADA: <strong>{selectedExploitationPath.initialEndpoint}</strong> &middot; RIESGO: <strong>{selectedExploitationPath.totalRiskScore.toFixed(1)}</strong>
+          </div>
+          <button
+            className="btn btn-secondary"
+            onClick={clearSelectedExploitationPath}
+            style={{ padding: '3px 8px', fontSize: '10px', fontFamily: 'Orbitron, sans-serif', borderColor: '#ef4444', color: '#f87171' }}
+          >
+            LIMPIAR
+          </button>
+        </div>
+      )}
+
       <svg className="ring-deco r1" width="640" height="640" viewBox="0 0 640 640">
         <circle cx="320" cy="320" r="300" stroke="var(--c900)" strokeWidth="1" fill="none" strokeDasharray="2 10" />
         <circle cx="320" cy="320" r="230" stroke="var(--c900)" strokeWidth="1" fill="none" />
@@ -550,17 +712,22 @@ export function NetworkGraph({
             const sbMatches = !searchActive || nb.entity.name.toLowerCase().includes(searchQuery.toLowerCase());
             const searchDimmed = searchActive && !(saMatches || sbMatches);
 
+            const isPathEdge = pathEdgeIdSet.has(rel.id);
+            const pathDimmed = pathActive && !isPathEdge;
+
             return (
               <path
                 key={rel.id}
                 d={getEdgePath(rel.source, rel.target)}
-                className={`edge flow ${isDimmed || searchDimmed ? 'dim' : ''}`}
+                className={`edge flow ${isPathEdge ? 'path-highlighted' : ''} ${(isDimmed || searchDimmed || pathDimmed) ? 'dim' : ''}`}
                 style={{
-                  stroke: rel.type === 'OF_VULNERABILITY' || rel.type === 'TARGETS_VULN'
+                  stroke: isPathEdge
                     ? '#ef4444'
-                    : rel.type === 'CONNECTED_TO'
-                      ? 'var(--c300)'
-                      : 'var(--c700)'
+                    : rel.type === 'OF_VULNERABILITY' || rel.type === 'TARGETS_VULN'
+                      ? '#ef4444'
+                      : rel.type === 'CONNECTED_TO'
+                        ? 'var(--c300)'
+                        : 'var(--c700)'
                 }}
               />
             );
@@ -576,10 +743,16 @@ export function NetworkGraph({
             const isSelected = selectedNode && selectedNode.id === node.id;
             const isVuln = node.entity.categoryId === 'vulnerabilidad';
 
+            const stepNumber = pathNodeStepMap.get(String(node.id));
+            const isStepNode = stepNumber !== undefined;
+            const isConnectorNode = pathConnectorNodeIdSet.has(String(node.id));
+            const isNodeInPath = isStepNode || isConnectorNode;
+            const pathDimmedNode = pathActive && !isNodeInPath;
+
             return (
               <g
                 key={node.id}
-                className={`node-group ${node.pinned ? '' : 'free'} ${isDimmed ? 'dim' : ''} ${isSelected ? 'selected' : ''}`}
+                className={`node-group ${node.pinned ? '' : 'free'} ${(isDimmed || pathDimmedNode) ? 'dim' : ''} ${isSelected ? 'selected' : ''} ${isStepNode ? 'path-node' : ''}`}
                 transform={`translate(${node.x}, ${node.y})`}
                 onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
                 onDoubleClick={(e) => handleNodeDoubleClick(e, node.id)}
@@ -600,12 +773,31 @@ export function NetworkGraph({
                   className="core"
                   r={node.r}
                   fill="rgba(5, 6, 30, 0.9)"
-                  stroke={node.color}
-                  strokeWidth="2"
+                  stroke={isNodeInPath ? '#ef4444' : node.color}
+                  strokeWidth={isNodeInPath ? '3' : '2'}
                   filter="url(#glow)"
                 />
 
-                <circle r={node.r * 0.32} fill={node.color} />
+                <NodeIcon
+                  categoryId={node.entity.categoryId}
+                  primaryLabel={node.entity.primaryLabel}
+                  color={isNodeInPath ? '#ef4444' : node.color}
+                  size={node.r * 1.1}
+                />
+
+                {isStepNode && (
+                  <g transform={`translate(${node.r - 2}, ${-node.r + 2})`}>
+                    <circle r="11" className="node-step-number-bg" />
+                    <text
+                      x="0"
+                      y="3.5"
+                      textAnchor="middle"
+                      className="node-step-number-badge"
+                    >
+                      #{stepNumber}
+                    </text>
+                  </g>
+                )}
 
                 <text y={node.r + 16} textAnchor="middle">
                   {node.entity.name}

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { HudHeader } from '../components/HudHeader/HudHeader';
 import { TopAptsModal } from '../components/TopApts/TopAptsModal';
+import { ExploitationPathsModal } from '../components/ExploitationPaths/ExploitationPathsModal';
 import { GraphPage } from './GraphPage';
 import { InventoryPage } from './InventoryPage';
 import { NetworksPage } from './NetworksPage';
@@ -26,6 +27,16 @@ export function DashboardPage({
   fetchInfrastructure,
   handleReset,
   fetchTopAPTs,
+  // Rutas de explotación
+  showPathsModal,
+  setShowPathsModal,
+  exploitationPaths,
+  pathsLoading,
+  pathsError,
+  selectedExploitationPath,
+  fetchExploitationPaths,
+  selectExploitationPath,
+  clearSelectedExploitationPath,
   getNodeCountByType,
   projects,
   selectedProjectId,
@@ -66,6 +77,7 @@ export function DashboardPage({
         activeNav={activeNav}
         setActiveNav={setActiveNav}
         fetchTopAPTs={fetchTopAPTs}
+        fetchExploitationPaths={fetchExploitationPaths}
         setShowDashboard={setShowDashboard}
         projects={projects}
         selectedProjectId={selectedProjectId}
@@ -86,6 +98,9 @@ export function DashboardPage({
             error={error}
             fetchInfrastructure={fetchInfrastructure}
             fetchTopAPTs={fetchTopAPTs}
+            fetchExploitationPaths={fetchExploitationPaths}
+            selectedExploitationPath={selectedExploitationPath}
+            clearSelectedExploitationPath={clearSelectedExploitationPath}
             categories={categories}
             getNodeCountByType={getNodeCountByType}
             projects={projects}
@@ -127,6 +142,19 @@ export function DashboardPage({
         aptLoading={aptLoading}
         aptError={aptError}
         fetchTopAPTs={fetchTopAPTs}
+      />
+
+      {/* MODAL RUTAS DE EXPLOTACIÓN */}
+      <ExploitationPathsModal
+        showPathsModal={showPathsModal}
+        setShowPathsModal={setShowPathsModal}
+        exploitationPaths={exploitationPaths}
+        pathsLoading={pathsLoading}
+        pathsError={pathsError}
+        fetchExploitationPaths={fetchExploitationPaths}
+        selectedExploitationPath={selectedExploitationPath}
+        selectExploitationPath={selectExploitationPath}
+        clearSelectedExploitationPath={clearSelectedExploitationPath}
       />
     </div>
   );

@@ -4,6 +4,7 @@ import { InfrastructureRepositoryImpl } from '../../data/repositories/Infrastruc
 import { GetInfrastructureUseCase } from '../../domain/usecases/GetInfrastructureUseCase';
 import { PopulateInfrastructureUseCase } from '../../domain/usecases/PopulateInfrastructureUseCase';
 import { GetTopAptsUseCase } from '../../domain/usecases/GetTopAptsUseCase';
+import { GetExploitationPathsUseCase } from '../../domain/usecases/GetExploitationPathsUseCase';
 import { CreateEndpointUseCase } from '../../domain/usecases/CreateEndpointUseCase';
 import { CreateHardwareUseCase } from '../../domain/usecases/CreateHardwareUseCase';
 import { CreateSoftwareUseCase } from '../../domain/usecases/CreateSoftwareUseCase';
@@ -29,17 +30,26 @@ export function useInfrastructure() {
   const [aptLoading, setAptLoading] = useState(false);
   const [aptError, setAptError] = useState(null);
 
+  // Estados de Exploitation Paths (Rutas de Ataque)
+  const [showPathsModal, setShowPathsModal] = useState(false);
+  const [exploitationPaths, setExploitationPaths] = useState([]);
+  const [pathsLoading, setPathsLoading] = useState(false);
+  const [pathsError, setPathsError] = useState(null);
+  const [selectedExploitationPath, setSelectedExploitationPath] = useState(null);
+
   // Inyección de dependencias (Clean Architecture)
   const apiDataSource = useMemo(() => new InfrastructureApiDataSource(), []);
   const repository = useMemo(() => new InfrastructureRepositoryImpl(apiDataSource), [apiDataSource]);
   const getInfrastructureUseCase = useMemo(() => new GetInfrastructureUseCase(repository), [repository]);
   const populateInfrastructureUseCase = useMemo(() => new PopulateInfrastructureUseCase(repository), [repository]);
   const getTopAptsUseCase = useMemo(() => new GetTopAptsUseCase(repository), [repository]);
+  const getExploitationPathsUseCase = useMemo(() => new GetExploitationPathsUseCase(repository), [repository]);
 
   const createEndpointUseCase = useMemo(() => new CreateEndpointUseCase(repository), [repository]);
   const createHardwareUseCase = useMemo(() => new CreateHardwareUseCase(repository), [repository]);
   const createSoftwareUseCase = useMemo(() => new CreateSoftwareUseCase(repository), [repository]);
   const createNetworkUseCase = useMemo(() => new CreateNetworkUseCase(repository), [repository]);
+
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -88,6 +98,29 @@ export function useInfrastructure() {
     } finally {
       setAptLoading(false);
     }
+  };
+
+  const fetchExploitationPaths = async () => {
+    setShowPathsModal(true);
+    setPathsLoading(true);
+    setPathsError(null);
+    try {
+      const data = await getExploitationPathsUseCase.execute();
+      setExploitationPaths(data || []);
+    } catch (err) {
+      console.error(err);
+      setPathsError(err.message);
+    } finally {
+      setPathsLoading(false);
+    }
+  };
+
+  const selectExploitationPath = (path) => {
+    setSelectedExploitationPath(path);
+  };
+
+  const clearSelectedExploitationPath = () => {
+    setSelectedExploitationPath(null);
   };
 
   const createEndpoint = async (projectId, data) => {
@@ -221,9 +254,18 @@ export function useInfrastructure() {
     aptData,
     aptLoading,
     aptError,
+    showPathsModal,
+    setShowPathsModal,
+    exploitationPaths,
+    pathsLoading,
+    pathsError,
+    selectedExploitationPath,
+    selectExploitationPath,
+    clearSelectedExploitationPath,
     fetchInfrastructure,
     handleReset,
     fetchTopAPTs,
+    fetchExploitationPaths,
     getNodeCountByType,
     projects,
     selectedProjectId,
@@ -234,4 +276,5 @@ export function useInfrastructure() {
     createSoftware,
     createNetwork
   };
+
 }
