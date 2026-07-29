@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploitationPaths, setShowDashboard, projects, selectedProjectId, setSelectedProjectId }) {
+export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploitationPaths, setShowDashboard, projects, selectedProjectId, setSelectedProjectId, riskActionLoading, analyzeProjectVulnerabilities, computeSelectedProjectRisk, selectedProjectNode }) {
   const [timeStr, setTimeStr] = useState('--:--:--');
   const [dateStr, setDateStr] = useState('-----');
   const [loadVal, setLoadVal] = useState(72);
@@ -63,6 +63,33 @@ export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploita
             </select>
           </div>
         )}
+
+        {selectedProjectNode?.properties?.risk_tier && (
+          <div className="status-pill">
+            Risk {selectedProjectNode.properties.risk_tier} · {Math.round(Number(selectedProjectNode.properties.risk_score || 0) * 100)}%
+          </div>
+        )}
+
+        {analyzeProjectVulnerabilities && (
+          <button
+            type="button"
+            disabled={riskActionLoading}
+            onClick={analyzeProjectVulnerabilities}
+          >
+            {riskActionLoading ? 'Procesando...' : 'Analizar vulnerabilidades'}
+          </button>
+        )}
+
+        {computeSelectedProjectRisk && (
+          <button
+            type="button"
+            disabled={riskActionLoading}
+            onClick={computeSelectedProjectRisk}
+          >
+            {riskActionLoading ? 'Procesando...' : 'Calcular riesgo'}
+          </button>
+        )}
+
         <button
           className={`nav-btn ${activeNav === 'grafo' ? 'active' : ''}`}
           onClick={() => setActiveNav('grafo')}

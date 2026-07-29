@@ -1,0 +1,76 @@
+.risk-summary-card {
+  margin: 1rem 0;
+  padding: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(122, 115, 255, 0.06);
+}
+
+.risk-gauge-row {
+  display: flex;
+  gap: 0.9rem;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.8rem;
+}
+
+.risk-gauge {
+  position: relative;
+  width: 92px;
+  height: 92px;
+  display: grid;
+  place-items: center;
+}
+
+.risk-gauge svg {
+  transform: rotate(-90deg);
+  filter: drop-shadow(0 0 8px rgba(122, 115, 255, 0.25));
+}
+
+.risk-gauge-value {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-family: 'Share Tech Mono', monospace;
+}
+
+.risk-gauge-value b {
+  font-size: 1.1rem;
+  color: var(--c50);
+}
+
+.risk-gauge-value span {
+  font-size: 0.62rem;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+}
+
+.risk-gauge-value small {
+  font-size: 0.58rem;
+  margin-top: 0.1rem;
+}
+
+.risk-fact {
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+  border-top: 1px solid rgba(122, 115, 255, 0.12);
+  font-size: 0.78rem;
+}
+
+.risk-fact span {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.risk-fact strong {
+  color: var(--c50);
+  font-weight: 600;
+  word-break: break-word;
+}

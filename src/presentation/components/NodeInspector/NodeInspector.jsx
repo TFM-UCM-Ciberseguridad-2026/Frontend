@@ -1,4 +1,6 @@
 import React from 'react';
+import { RiskSummary } from '../Risk/RiskSummary';
+
 
 export function NodeInspector({ selectedNode }) {
   if (!selectedNode) {
@@ -32,6 +34,8 @@ export function NodeInspector({ selectedNode }) {
       <div style={{ padding: '10px 0' }}>
         <span className="badge">{categoryLabel.toUpperCase()}</span>
         <h2 className="node-title">{selectedNode.name}</h2>
+
+        <RiskSummary node={selectedNode} />
 
         {isVuln && (baseScore > 0 || epssScore > 0) && (
           <div className="gauge-row">

@@ -224,6 +224,18 @@ p.landing-desc {
   box-shadow: 0 8px 25px var(--accent-glow);
 }
 
+.landing-project-form {
+  margin-top: 1.25rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(122, 115, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  text-align: left;
+}
+
 .footer {
   margin-top: 3rem;
   font-size: 0.8rem;
@@ -384,6 +396,12 @@ nav.hud-nav {
   height: 2px;
   background: var(--c300);
   box-shadow: 0 0 6px var(--c300);
+}
+
+.nav-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .clockwrap {
@@ -2112,4 +2130,4 @@ aside {
   stroke-width: 1px;
   filter: drop-shadow(0 0 6px #ef4444);
 }
-
+

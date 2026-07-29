@@ -5,10 +5,14 @@ import { GetInfrastructureUseCase } from '../../domain/usecases/GetInfrastructur
 import { PopulateInfrastructureUseCase } from '../../domain/usecases/PopulateInfrastructureUseCase';
 import { GetTopAptsUseCase } from '../../domain/usecases/GetTopAptsUseCase';
 import { GetExploitationPathsUseCase } from '../../domain/usecases/GetExploitationPathsUseCase';
+import { CreateProjectUseCase } from '../../domain/usecases/CreateProjectUseCase';
 import { CreateEndpointUseCase } from '../../domain/usecases/CreateEndpointUseCase';
 import { CreateHardwareUseCase } from '../../domain/usecases/CreateHardwareUseCase';
 import { CreateSoftwareUseCase } from '../../domain/usecases/CreateSoftwareUseCase';
 import { CreateNetworkUseCase } from '../../domain/usecases/CreateNetworkUseCase';
+import { ScanInstallationVulnerabilitiesUseCase } from '../../domain/usecases/ScanInstallationVulnerabilitiesUseCase';
+import { ComputeProjectRiskUseCase } from '../../domain/usecases/ComputeProjectRiskUseCase';
+import { ComputeAllProjectRisksUseCase } from '../../domain/usecases/ComputeAllProjectRisksUseCase';
 
 export function useInfrastructure() {
   const [showDashboard, setShowDashboard] = useState(false);
@@ -37,6 +41,10 @@ export function useInfrastructure() {
   const [pathsError, setPathsError] = useState(null);
   const [selectedExploitationPath, setSelectedExploitationPath] = useState(null);
 
+  // Estados riesgo
+  const [riskActionLoading, setRiskActionLoading] = useState(false);
+  const [riskActionError, setRiskActionError] = useState(null);
+
   // Inyección de dependencias (Clean Architecture)
   const apiDataSource = useMemo(() => new InfrastructureApiDataSource(), []);
   const repository = useMemo(() => new InfrastructureRepositoryImpl(apiDataSource), [apiDataSource]);
@@ -45,10 +53,16 @@ export function useInfrastructure() {
   const getTopAptsUseCase = useMemo(() => new GetTopAptsUseCase(repository), [repository]);
   const getExploitationPathsUseCase = useMemo(() => new GetExploitationPathsUseCase(repository), [repository]);
 
+  const createProjectUseCase = useMemo(() => new CreateProjectUseCase(repository), [repository]);
   const createEndpointUseCase = useMemo(() => new CreateEndpointUseCase(repository), [repository]);
   const createHardwareUseCase = useMemo(() => new CreateHardwareUseCase(repository), [repository]);
   const createSoftwareUseCase = useMemo(() => new CreateSoftwareUseCase(repository), [repository]);
   const createNetworkUseCase = useMemo(() => new CreateNetworkUseCase(repository), [repository]);
+
+  // Casos de uso para cálculo de riesgo
+  const scanInstallationVulnerabilitiesUseCase = useMemo(() => new ScanInstallationVulnerabilitiesUseCase(repository), [repository]);
+  const computeProjectRiskUseCase = useMemo(() => new ComputeProjectRiskUseCase(repository), [repository]);
+  const computeAllProjectRisksUseCase = useMemo(() => new ComputeAllProjectRisksUseCase(repository), [repository]);
 
 
   const showToast = (msg) => {
@@ -121,6 +135,13 @@ export function useInfrastructure() {
 
   const clearSelectedExploitationPath = () => {
     setSelectedExploitationPath(null);
+  };
+
+  const createProject = async (data) => {
+    const res = await createProjectUseCase.execute(data);
+    showToast('¡Proyecto añadido correctamente!');
+    await fetchInfrastructure(true);
+    return res;
   };
 
   const createEndpoint = async (projectId, data) => {
@@ -241,6 +262,130 @@ export function useInfrastructure() {
     return filteredGraphData.nodes.filter(n => n.labels.includes(type)).length;
   }, [filteredGraphData]);
 
+ // Derivar lista de instalaciones de software para el proyecto seleccionado
+  const getSelectedProjectSoftwareInstallations = useCallback(() => {
+    const nodes = filteredGraphData.nodes || [];
+    const relationships = filteredGraphData.relationships || [];
+
+    const softwareByElementId = new Map(
+      nodes
+        .filter(n => n.primaryLabel === 'Software')
+        .map(n => [n.id, n])
+    );
+
+    return nodes
+      .filter(n => n.primaryLabel === 'SoftwareInstallation')
+      .map(installationNode => {
+        const rel = relationships.find(r =>
+          r.type === 'INSTANCE_OF' &&
+          (r.source === installationNode.id || r.target === installationNode.id)
+        );
+
+        if (!rel) {
+          return null;
+        }
+
+        const softwareElementId = rel.source === installationNode.id ? rel.target : rel.source;
+        const softwareNode = softwareByElementId.get(softwareElementId);
+
+        if (!softwareNode) {
+          return null;
+        }
+
+        return {
+          installationId: installationNode.properties?.id || installationNode.properties?.installation_id,
+          softwareId: softwareNode.properties?.id || softwareNode.properties?.software_id,
+          installationName: installationNode.name,
+          softwareName: softwareNode.name
+        };
+      })
+      .filter(Boolean)
+      .filter(item => item.installationId && item.softwareId);
+  }, [filteredGraphData]);
+
+
+  // Función para analizar vulnerabilidades de todas las instalaciones de software del proyecto seleccionado
+  const analyzeProjectVulnerabilities = async () => {
+    if (!selectedProjectId || riskActionLoading) return;
+
+    setRiskActionLoading(true);
+    setRiskActionError(null);
+
+    try {
+      const installations = getSelectedProjectSoftwareInstallations();
+      if (installations.length === 0) {
+        showToast('No hay software instalado en el proyecto seleccionado.');
+        return;
+      }
+
+      for (const installation of installations) {
+        await scanInstallationVulnerabilitiesUseCase.execute(
+          installation.installationId,
+          installation.softwareId,
+          100
+        );
+      }
+
+      showToast(`Vulnerabilidades analizadas para ${installations.length} instalación(es).`);
+      await fetchInfrastructure(true);
+    } catch (err) {
+      console.error(err);
+      setRiskActionError(err.message);
+      showToast(`Error analizando vulnerabilidades: ${err.message}`);
+    } finally {
+      setRiskActionLoading(false);
+    }
+  };
+
+
+
+  // Función para calcular el riesgo del proyecto seleccionado
+  const computeSelectedProjectRisk = async () => {
+    if (!selectedProjectId || riskActionLoading) return;
+
+    setRiskActionLoading(true);
+    setRiskActionError(null);
+
+    try {
+      await computeProjectRiskUseCase.execute(selectedProjectId);
+      showToast('Riesgo calculado para el proyecto seleccionado.');
+      await fetchInfrastructure(true);
+    } catch (err) {
+      console.error(err);
+      setRiskActionError(err.message);
+      showToast(`Error calculando riesgo: ${err.message}`);
+    } finally {
+      setRiskActionLoading(false);
+    }
+  };
+
+
+  // Función para recalcular el riesgo de todos los proyectos
+  const computeAllProjectRisks = async () => {
+    setRiskActionLoading(true);
+    setRiskActionError(null);
+
+    try {
+      await computeAllProjectRisksUseCase.execute();
+      showToast('Riesgo recalculado para todos los proyectos.');
+      await fetchInfrastructure(true);
+    } catch (err) {
+      console.error(err);
+      setRiskActionError(err.message);
+      showToast(`Error recalculando todos los proyectos: ${err.message}`);
+    } finally {
+      setRiskActionLoading(false);
+    }
+  };
+
+  // Derivar el nodo del proyecto seleccionado para resaltar en el grafo
+  const selectedProjectNode = useMemo(() => {
+    return (graphData.nodes || []).find(n =>
+      (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
+      String(n.properties?.id ?? n.id) === selectedProjectId
+    ) || null;
+  }, [graphData, selectedProjectId]);
+
   return {
     showDashboard,
     setShowDashboard,
@@ -279,10 +424,17 @@ export function useInfrastructure() {
     selectedProjectId,
     setSelectedProjectId,
     showToast,
+    createProject,
     createEndpoint,
     createHardware,
     createSoftware,
-    createNetwork
+    createNetwork,
+    riskActionLoading,
+    riskActionError,
+    analyzeProjectVulnerabilities,
+    computeSelectedProjectRisk,
+    computeAllProjectRisks,
+    selectedProjectNode
   };
 
 }

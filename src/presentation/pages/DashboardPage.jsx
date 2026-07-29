@@ -44,7 +44,12 @@ export function DashboardPage({
   createEndpoint,
   createHardware,
   createSoftware,
-  createNetwork
+  createNetwork,
+  // Risk Analysis
+  riskActionLoading,
+  analyzeProjectVulnerabilities,
+  computeSelectedProjectRisk,
+  selectedProjectNode
 }) {
   const [activeNav, setActiveNav] = useState('grafo'); // 'grafo', 'inventario', 'redes'
 
@@ -82,6 +87,10 @@ export function DashboardPage({
         projects={projects}
         selectedProjectId={selectedProjectId}
         setSelectedProjectId={setSelectedProjectId}
+        riskActionLoading={riskActionLoading}
+        analyzeProjectVulnerabilities={analyzeProjectVulnerabilities}
+        computeSelectedProjectRisk={computeSelectedProjectRisk} 
+        selectedProjectNode={selectedProjectNode}
       />
 
       <div className="app">

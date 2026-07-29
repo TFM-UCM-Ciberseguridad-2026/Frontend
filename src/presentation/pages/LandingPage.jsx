@@ -1,6 +1,39 @@
-import React from 'react';
+import React, { useState } from 'react';
+import '../components/AddAssets/AddAssetsButton.css';
 
-export function LandingPage({ setShowDashboard, clicks, setClicks }) {
+
+export function LandingPage({ setShowDashboard, clicks, setClicks, createProject, fetchInfrastructure }) {
+
+  const [showProjectForm, setShowProjectForm] = useState(false);
+  const [projectForm, setProjectForm] = useState({ nombre: '', description: '' });
+  const [projectLoading, setProjectLoading] = useState(false);
+  const [projectError, setProjectError] = useState(null);
+
+  const updateProjectField = (field, value) => {
+    setProjectForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  const submitProject = async (e) => {
+    e.preventDefault();
+    if (!createProject) return;
+
+    setProjectLoading(true);
+    setProjectError(null);
+
+    try {
+      await createProject(projectForm);
+      setProjectForm({ nombre: '', description: '' });
+      setShowProjectForm(false);
+      await fetchInfrastructure?.(true);
+      setShowDashboard(true);
+    } catch (err) {
+      console.error(err);
+      setProjectError(err.message);
+    } finally {
+      setProjectLoading(false);
+    }
+  };
+
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', width: '100vw', position: 'relative', overflow: 'hidden' }}>
       <div className="grid-overlay"></div>
@@ -28,6 +61,9 @@ export function LandingPage({ setShowDashboard, clicks, setClicks }) {
           <button className="btn btn-accent" onClick={() => setShowDashboard(true)}>
             🔍 Ver Infraestructura
           </button>
+          <button className="btn btn-primary" onClick={() => setShowProjectForm(prev => !prev)}>
+            🧭 Crear Proyecto
+          </button>
           <button className="btn btn-primary" onClick={() => setClicks(clicks + 1)}>
             Interacciones: {clicks}
           </button>
@@ -35,6 +71,40 @@ export function LandingPage({ setShowDashboard, clicks, setClicks }) {
             Ver Repositorio
           </button>
         </div>
+
+        {showProjectForm && (
+          <form className="landing-project-form" onSubmit={submitProject}>
+            <div>
+              <div className="asset-field-label">Nombre del proyecto</div>
+              <input
+                type="text"
+                className="asset-input"
+                placeholder="Infraestructura producción"
+                value={projectForm.nombre}
+                onChange={(e) => updateProjectField('nombre', e.target.value)}
+                required
+              />
+            </div>
+
+            <div>
+              <div className="asset-field-label">Descripción</div>
+              <textarea
+                className="asset-input asset-textarea"
+                placeholder="Contexto del proyecto o auditoría..."
+                rows={3}
+                value={projectForm.description}
+                onChange={(e) => updateProjectField('description', e.target.value)}
+              />
+            </div>
+
+            {projectError && <p className="asset-error-text">⚠️ {projectError}</p>}
+
+            <button type="submit" className="btn btn-accent" disabled={projectLoading}>
+              {projectLoading ? 'Creando...' : 'Crear y abrir dashboard'}
+            </button>
+          </form>
+        )}
+
 
         <div className="footer">
           Desplegado automáticamente mediante GitHub Actions • React + Vite

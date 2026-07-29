@@ -15,6 +15,8 @@ function App() {
       setShowDashboard={infra.setShowDashboard}
       clicks={infra.clicks}
       setClicks={infra.setClicks}
+      createProject={infra.createProject}
+      fetchInfrastructure={infra.fetchInfrastructure}
     />
   );
 }
