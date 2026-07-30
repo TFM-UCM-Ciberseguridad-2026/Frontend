@@ -12,11 +12,14 @@ export function NodeIcon({ categoryId, primaryLabel, color = '#FFFFFF', size = 2
     switch (cat) {
       case 'proyecto':
       case 'project':
-        // Hexagonal Shield / Fortress Command
+        // Spiral Notebook / Libreta de apuntes
         return (
           <>
-            <path d="M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" />
-            <path d="M12 6v12M8 10h8" strokeWidth="1.5" />
+            <rect x="5" y="3" width="15" height="18" rx="2" />
+            <line x1="9" y1="7" x2="16" y2="7" strokeWidth="1.5" />
+            <line x1="9" y1="11" x2="16" y2="11" strokeWidth="1.5" />
+            <line x1="9" y1="15" x2="13" y2="15" strokeWidth="1.5" />
+            <path d="M3 6h4M3 10h4M3 14h4M3 18h4" strokeWidth="1.8" />
           </>
         );
 

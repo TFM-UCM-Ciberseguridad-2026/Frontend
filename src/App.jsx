@@ -2,8 +2,10 @@ import React from 'react';
 import { useInfrastructure } from './presentation/hooks/useInfrastructure';
 import { LandingPage } from './presentation/pages/LandingPage';
 import { DashboardPage } from './presentation/pages/DashboardPage';
+import { ToastProvider } from './presentation/context/ToastContext';
+import { ToastContainer } from './presentation/components/Toast/ToastContainer';
 
-function App() {
+function AppContent() {
   const infra = useInfrastructure();
 
   if (infra.showDashboard) {
@@ -21,4 +23,14 @@ function App() {
   );
 }
 
+function App() {
+  return (
+    <ToastProvider>
+      <AppContent />
+      <ToastContainer />
+    </ToastProvider>
+  );
+}
+
 export default App;
+

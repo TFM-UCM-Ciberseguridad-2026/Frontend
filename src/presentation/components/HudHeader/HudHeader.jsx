@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploitationPaths, setShowDashboard, projects, selectedProjectId, setSelectedProjectId, riskActionLoading, analyzeProjectVulnerabilities, computeSelectedProjectRisk, selectedProjectNode }) {
+export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, setShowDashboard, projects, selectedProjectId, setSelectedProjectId, selectedProjectNode }) {
   const [timeStr, setTimeStr] = useState('--:--:--');
   const [dateStr, setDateStr] = useState('-----');
   const [loadVal, setLoadVal] = useState(72);
@@ -70,26 +70,6 @@ export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploita
           </div>
         )}
 
-        {analyzeProjectVulnerabilities && (
-          <button
-            type="button"
-            disabled={riskActionLoading}
-            onClick={analyzeProjectVulnerabilities}
-          >
-            {riskActionLoading ? 'Procesando...' : 'Analizar vulnerabilidades'}
-          </button>
-        )}
-
-        {computeSelectedProjectRisk && (
-          <button
-            type="button"
-            disabled={riskActionLoading}
-            onClick={computeSelectedProjectRisk}
-          >
-            {riskActionLoading ? 'Procesando...' : 'Calcular riesgo'}
-          </button>
-        )}
-
         <button
           className={`nav-btn ${activeNav === 'grafo' ? 'active' : ''}`}
           onClick={() => setActiveNav('grafo')}
@@ -143,20 +123,6 @@ export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploita
           </span>
           Threat Actors
         </button>
-
-        {fetchExploitationPaths && (
-          <button
-            className="nav-btn"
-            onClick={fetchExploitationPaths}
-          >
-            <span className="ic">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-              </svg>
-            </span>
-            Rutas de Ataque
-          </button>
-        )}
       </nav>
 
 
