@@ -31,4 +31,8 @@ export class InfrastructureRepository {
   async createNetwork(endpointId, networkData) {
     throw new Error('Method createNetwork not implemented');
   }
+
+  async importInfrastructure(exportData) {
+    throw new Error('Method importInfrastructure not implemented');
+  }
 }

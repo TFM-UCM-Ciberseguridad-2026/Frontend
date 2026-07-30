@@ -5,6 +5,8 @@ import { ExploitationPathsModal } from '../components/ExploitationPaths/Exploita
 import { GraphPage } from './GraphPage';
 import { InventoryPage } from './InventoryPage';
 import { NetworksPage } from './NetworksPage';
+import { ExportModal } from '../components/Archive/ExportModal';
+import { ImportModal } from '../components/Archive/ImportModal';
 
 export function DashboardPage({
   setShowDashboard,
@@ -44,10 +46,14 @@ export function DashboardPage({
   createEndpoint,
   createHardware,
   createSoftware,
-  createNetwork
+  createNetwork,
+  exportProject,
+  exportMitreNavigator,
+  importProject
 }) {
   const [activeNav, setActiveNav] = useState('grafo'); // 'grafo', 'inventario', 'redes'
-
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const categories = [
     { key: 'ALL', label: 'Todos', color: 'var(--c400)' },
     { key: 'Network', label: 'Red / Subred', color: 'var(--c300)' },
@@ -82,6 +88,8 @@ export function DashboardPage({
         projects={projects}
         selectedProjectId={selectedProjectId}
         setSelectedProjectId={setSelectedProjectId}
+        onOpenExport={() => setShowExportModal(true)}
+        onOpenImport={() => setShowImportModal(true)}
       />
 
       <div className="app">
@@ -155,6 +163,22 @@ export function DashboardPage({
         selectedExploitationPath={selectedExploitationPath}
         selectExploitationPath={selectExploitationPath}
         clearSelectedExploitationPath={clearSelectedExploitationPath}
+      />
+      {/* MODAL EXPORTAR ARCHIVE */}
+      <ExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        projects={projects}
+        selectedProjectId={selectedProjectId}
+        onExportProject={(targetProjectId) => exportProject(targetProjectId)}
+        onExportMitre={(targetProjectId) => exportMitreNavigator(targetProjectId)}
+      />
+
+      {/* MODAL IMPORTAR ARCHIVE */}
+      <ImportModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onImport={(fileContent) => importProject(fileContent)}
       />
     </div>
   );

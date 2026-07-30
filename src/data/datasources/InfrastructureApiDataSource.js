@@ -67,6 +67,15 @@ export class InfrastructureApiDataSource {
     });
     return await this._handleResponse(res);
   }
+  
+  async importInfrastructure(payload) {
+    const res = await fetch('/api/infrastructure/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return await this._handleResponse(res);
+  }
 
   async _handleResponse(res) {
     if (!res.ok) {

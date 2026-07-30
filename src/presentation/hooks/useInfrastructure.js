@@ -9,6 +9,9 @@ import { CreateEndpointUseCase } from '../../domain/usecases/CreateEndpointUseCa
 import { CreateHardwareUseCase } from '../../domain/usecases/CreateHardwareUseCase';
 import { CreateSoftwareUseCase } from '../../domain/usecases/CreateSoftwareUseCase';
 import { CreateNetworkUseCase } from '../../domain/usecases/CreateNetworkUseCase';
+import { ExportProjectUseCase } from '../../domain/usecases/ExportProjectUseCase';
+import { ExportMitreNavigatorUseCase } from '../../domain/usecases/ExportMitreNavigatorUseCase';
+import { ImportInfrastructureUseCase } from '../../domain/usecases/ImportInfrastructureUseCase';
 
 export function useInfrastructure() {
   const [showDashboard, setShowDashboard] = useState(false);
@@ -49,6 +52,11 @@ export function useInfrastructure() {
   const createHardwareUseCase = useMemo(() => new CreateHardwareUseCase(repository), [repository]);
   const createSoftwareUseCase = useMemo(() => new CreateSoftwareUseCase(repository), [repository]);
   const createNetworkUseCase = useMemo(() => new CreateNetworkUseCase(repository), [repository]);
+
+  const exportProjectUseCase = useMemo(() => new ExportProjectUseCase(), []);
+  const exportMitreNavigatorUseCase = useMemo(() => new ExportMitreNavigatorUseCase(), []);
+  const importInfrastructureUseCase = useMemo(() => new ImportInfrastructureUseCase(repository), [repository]);
+
 
 
   const showToast = (msg) => {
@@ -150,6 +158,53 @@ export function useInfrastructure() {
     await fetchInfrastructure(true);
     return res;
   };
+
+  // Helper para desencadenar la descarga en el navegador
+  const _triggerDownload = (filename, jsonText) => {
+    const blob = new Blob([jsonText], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const exportProject = (targetProjectId) => {
+    try {
+      const { filename, content } = exportProjectUseCase.execute(filteredGraphData, targetProjectId || selectedProjectId);
+      _triggerDownload(filename, content);
+      showToast('¡Proyecto exportado a JSON con éxito!');
+    } catch (err) {
+      console.error(err);
+      showToast(`Error al exportar proyecto: ${err.message}`);
+    }
+  };
+
+  const exportMitreNavigator = (targetProjectId) => {
+    try {
+      const { filename, content } = exportMitreNavigatorUseCase.execute(filteredGraphData, aptData, targetProjectId || selectedProjectId);
+      _triggerDownload(filename, content);
+      showToast('¡Capa de MITRE ATT&CK Navigator exportada!');
+    } catch (err) {
+      console.error(err);
+      showToast(`Error al exportar capa MITRE: ${err.message}`);
+    }
+  };
+
+  const importProject = async (fileData) => {
+    try {
+      await importInfrastructureUseCase.execute(fileData);
+      showToast('¡Infraestructura cargada e importada con éxito!');
+      await fetchInfrastructure(true);
+    } catch (err) {
+      console.error(err);
+      throw err;
+    }
+  };
+
 
   // Cargar datos al activar el Dashboard
   useEffect(() => {
@@ -282,7 +337,10 @@ export function useInfrastructure() {
     createEndpoint,
     createHardware,
     createSoftware,
-    createNetwork
+    createNetwork,
+    exportProject,
+    exportMitreNavigator,
+    importProject
   };
 
 }

@@ -50,4 +50,8 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     const res = await this.apiDataSource.createNetwork(endpointId, payload);
     return res ? new Node(res) : null;
   }
+  
+  async importInfrastructure(exportData) {
+    return await this.apiDataSource.importInfrastructure(exportData);
+  }
 }

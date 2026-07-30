@@ -235,7 +235,8 @@ p.landing-desc {
    ========================================== */
 header.hud-header {
   position: relative;
-  z-index: 2;
+  z-index: 500;
+  overflow: visible;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2112,4 +2113,4 @@ aside {
   stroke-width: 1px;
   filter: drop-shadow(0 0 6px #ef4444);
 }
-
+
