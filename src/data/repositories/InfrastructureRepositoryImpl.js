@@ -30,6 +30,9 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     return (rawData || []).map(path => new ExploitationPath(path));
   }
 
+  async createProject(payload) {
+    return await this.apiDataSource.createProject(payload);
+  }
 
   async createEndpoint(projectId, payload) {
     const res = await this.apiDataSource.createEndpoint(projectId, payload);
@@ -50,4 +53,17 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     const res = await this.apiDataSource.createNetwork(endpointId, payload);
     return res ? new Node(res) : null;
   }
+
+  async scanInstallationVulnerabilities(installationId, softwareId, limit) {
+    return await this.apiDataSource.scanInstallationVulnerabilities(installationId, softwareId, limit);
+  }
+
+  async computeProjectRisk(projectId) {
+    return await this.apiDataSource.computeProjectRisk(projectId);
+  }
+
+  async computeAllProjectRisks() {
+    return await this.apiDataSource.computeAllProjectRisks();
+  }
+
 }

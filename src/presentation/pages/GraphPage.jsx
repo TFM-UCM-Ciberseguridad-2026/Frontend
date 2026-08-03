@@ -28,7 +28,10 @@ export function GraphPage({
   createEndpoint,
   createHardware,
   createSoftware,
-  createNetwork
+  createNetwork,
+  riskActionLoading,
+  analyzeProjectVulnerabilities,
+  computeSelectedProjectRisk
 }) {
   return (
     <>
@@ -44,6 +47,9 @@ export function GraphPage({
         fetchExploitationPaths={fetchExploitationPaths}
         selectedExploitationPath={selectedExploitationPath}
         clearSelectedExploitationPath={clearSelectedExploitationPath}
+        riskActionLoading={riskActionLoading}
+        analyzeProjectVulnerabilities={analyzeProjectVulnerabilities}
+        computeSelectedProjectRisk={computeSelectedProjectRisk}
       />
 
       {/* VISTA CENTRAL: GRAFO — grid column 2 (1fr) */}

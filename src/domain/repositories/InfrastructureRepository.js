@@ -15,7 +15,9 @@ export class InfrastructureRepository {
     throw new Error('Method getExploitationPaths not implemented');
   }
 
-
+  async createProject(projectData) {
+    throw new Error('Method createProject not implemented');
+  }
   async createEndpoint(projectId, endpointData) {
     throw new Error('Method createEndpoint not implemented');
   }
@@ -30,5 +32,17 @@ export class InfrastructureRepository {
 
   async createNetwork(endpointId, networkData) {
     throw new Error('Method createNetwork not implemented');
+  }
+
+  async scanInstallationVulnerabilities(installationId, softwareId, limit) {
+    throw new Error('Method scanInstallationVulnerabilities not implemented');
+  }
+
+  async computeProjectRisk(projectId) {
+    throw new Error('Method computeProjectRisk not implemented');
+  }
+
+  async computeAllProjectRisks() {
+    throw new Error('Method computeAllProjectRisks not implemented');
   }
 }

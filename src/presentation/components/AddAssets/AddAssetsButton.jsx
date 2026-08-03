@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useToast } from '../../context/ToastContext';
 
 const ASSET_TYPES = [
   { key: 'endpoint', label: 'Endpoint', icon: '💻', description: 'Equipo, servidor o dispositivo de red' },
@@ -11,7 +12,7 @@ const INITIAL_FORMS = {
   endpoint: {
     project_id: '',
     hostname: '',
-    tipo: 'o',
+    tipo: 'Server',
     status: 'active',
     internet_exposed: false,
     environment: '',
@@ -33,7 +34,7 @@ const INITIAL_FORMS = {
     endpoint_id: '',
     name: '',
     version: '',
-    type: '',
+    type: 'a',
     cpe: '',
     vendor: '',
     release_date: '',
@@ -55,12 +56,12 @@ export function AddAssetButton({
   projects = [],
   endpoints = [],
   onCreated,
-  showToast,
   createEndpoint,
   createHardware,
   createSoftware,
   createNetwork
 }) {
+  const toast = useToast();
   const [showTypeSelect, setShowTypeSelect] = useState(false);
   const [activeType, setActiveType] = useState(null);
   const [forms, setForms] = useState(() => ({
@@ -149,6 +150,7 @@ export function AddAssetButton({
     } catch (err) {
       console.error(err);
       setFormError(err.message);
+      toast.error(err.message, `Error registrando ${typeKey}`);
     } finally {
       setLoading(false);
     }
@@ -230,15 +232,17 @@ export function AddAssetButton({
               </div>
 
               <div>
-                <div className="asset-field-label">Tipo (convención CPE)</div>
+                <div className="asset-field-label">Tipo de Equipo</div>
                 <select
                   className="asset-input"
                   value={forms.endpoint.tipo}
                   onChange={(e) => updateField('endpoint', 'tipo', e.target.value)}
                 >
-                  <option value="a">Aplicación / Servicio (a)</option>
-                  <option value="o">Sistema Operativo (o)</option>
-                  <option value="h">Hardware / Dispositivo (h)</option>
+                  <option value="Server">Servidor (Server)</option>
+                  <option value="Workstation">Estación de Trabajo (Workstation)</option>
+                  <option value="Domain Controller">Controlador de Dominio (Domain Controller)</option>
+                  <option value="Firewall">Firewall</option>
+                  <option value="Router">Router</option>
                 </select>
               </div>
 
@@ -508,14 +512,19 @@ export function AddAssetButton({
               </div>
 
               <div>
-                <div className="asset-field-label">Tipo</div>
-                <input
-                  type="text"
+                <div className="asset-field-label">Tipo (convención CPE)</div>
+                <select
                   className="asset-input"
-                  placeholder="web server, database, runtime..."
                   value={forms.software.type}
                   onChange={(e) => updateField('software', 'type', e.target.value)}
-                />
+                >
+                  <option value="a">Aplicación / Servicio (a)</option>
+                  <option value="o">Sistema Operativo (o)</option>
+                  <option value="h">Hardware / Firmware (h)</option>
+                </select>
+                <div className="asset-field-help">
+                  Clasificación CPE 2.3 para la búsqueda automatizada de vulnerabilidades en NIST NVD.
+                </div>
               </div>
 
               <div>
@@ -527,6 +536,9 @@ export function AddAssetButton({
                   value={forms.software.cpe}
                   onChange={(e) => updateField('software', 'cpe', e.target.value)}
                 />
+                <div className="asset-field-help">
+                  * Si no se especifica este campo, se calculará automáticamente con los datos introducidos.
+                </div>
               </div>
 
               <div>
@@ -534,10 +546,14 @@ export function AddAssetButton({
                 <input
                   type="text"
                   className="asset-input"
-                  placeholder="F5, Inc."
+                  placeholder="f5, nginx, apache..."
                   value={forms.software.vendor}
                   onChange={(e) => updateField('software', 'vendor', e.target.value)}
+                  required
                 />
+                <div className="asset-field-help">
+                  * Obligatorio para la búsqueda precisa de vulnerabilidades en la API de NIST NVD.
+                </div>
               </div>
 
               <div>

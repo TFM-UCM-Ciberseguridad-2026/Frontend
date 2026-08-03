@@ -42,8 +42,9 @@ export function NetworksView({ graphData, setSelectedNode }) {
                   }}
                 >
                   <span>{ep.name}</span>
-                  <span style={{ color: ep.properties?.risk_tier === 'CRITICAL' ? 'red' : 'var(--muted)' }}>
-                    {ep.properties?.risk_tier || 'NORMAL'}
+                  <span style={{ color: ep.properties?.priority_tier === 'CRITICAL' ? '#74050e' : 'var(--muted)' }}>
+                    P: {ep.properties?.priority_tier || 'N/A'}
+                    {ep.properties?.priority_score !== undefined ? ` · ${Math.round(Number(ep.properties.priority_score) * 100)}%` : ''}
                   </span>
                 </div>
               ))}
