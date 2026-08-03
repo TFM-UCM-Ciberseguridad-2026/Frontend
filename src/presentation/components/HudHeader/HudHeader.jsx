@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploitationPaths, setShowDashboard, projects, selectedProjectId, setSelectedProjectId, onOpenExport, onOpenImport }) {
+export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploitationPaths, setShowDashboard, projects, selectedProjectId, setSelectedProjectId, selectedProjectNode, onOpenExport, onOpenImport }) {
   const [timeStr, setTimeStr] = useState('--:--:--');
   const [dateStr, setDateStr] = useState('-----');
   const [loadVal, setLoadVal] = useState(72);
@@ -63,6 +63,13 @@ export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploita
             </select>
           </div>
         )}
+
+        {selectedProjectNode?.properties?.risk_tier && (
+          <div className="status-pill">
+            Risk {selectedProjectNode.properties.risk_tier} · {Math.round(Number(selectedProjectNode.properties.risk_score || 0) * 100)}%
+          </div>
+        )}
+
         <button
           className={`nav-btn ${activeNav === 'grafo' ? 'active' : ''}`}
           onClick={() => setActiveNav('grafo')}
@@ -116,7 +123,6 @@ export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploita
           </span>
           Threat Actors
         </button>
-
         {fetchExploitationPaths && (
           <button
             className="nav-btn"

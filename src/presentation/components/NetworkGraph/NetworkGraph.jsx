@@ -73,6 +73,18 @@ const getNodeRadius = (categoryId) => {
   }
 };
 
+
+const getTierColor = (tier) => {
+  switch ((tier || '').toUpperCase()) {
+    case 'CRITICAL': return '#74050e';
+    case 'HIGH': return '#eb250f';
+    case 'MEDIUM': return '#ea6a08';
+    case 'LOW': return '#e7ee17';
+    default: return null;
+  }
+};
+
+
 export function NetworkGraph({
   graphData,
   filterType,
@@ -743,6 +755,9 @@ export function NetworkGraph({
             const isSelected = selectedNode && selectedNode.id === node.id;
             const isVuln = node.entity.categoryId === 'vulnerabilidad';
 
+            const riskTierColor = getTierColor(node.entity.properties?.risk_tier);
+            const priorityTierColor = getTierColor(node.entity.properties?.priority_tier);
+
             const stepNumber = pathNodeStepMap.get(String(node.id));
             const isStepNode = stepNumber !== undefined;
             const isConnectorNode = pathConnectorNodeIdSet.has(String(node.id));
@@ -764,6 +779,27 @@ export function NetworkGraph({
                     stroke="var(--c50)"
                     strokeWidth="1.5"
                     className="vuln-ping-ring"
+                  />
+                )}
+
+                {riskTierColor && (
+                  <circle
+                    r={node.r + 9}
+                    fill="none"
+                    stroke={riskTierColor}
+                    strokeWidth="2"
+                    opacity="0.9"
+                  />
+                )}
+
+                {priorityTierColor && (
+                  <circle
+                    r={node.r + 13}
+                    fill="none"
+                    stroke={priorityTierColor}
+                    strokeWidth="1.5"
+                    opacity="0.65"
+                    strokeDasharray="4 4"
                   />
                 )}
 

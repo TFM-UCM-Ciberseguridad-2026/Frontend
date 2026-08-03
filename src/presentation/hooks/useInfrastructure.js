@@ -5,6 +5,7 @@ import { GetInfrastructureUseCase } from '../../domain/usecases/GetInfrastructur
 import { PopulateInfrastructureUseCase } from '../../domain/usecases/PopulateInfrastructureUseCase';
 import { GetTopAptsUseCase } from '../../domain/usecases/GetTopAptsUseCase';
 import { GetExploitationPathsUseCase } from '../../domain/usecases/GetExploitationPathsUseCase';
+import { CreateProjectUseCase } from '../../domain/usecases/CreateProjectUseCase';
 import { CreateEndpointUseCase } from '../../domain/usecases/CreateEndpointUseCase';
 import { CreateHardwareUseCase } from '../../domain/usecases/CreateHardwareUseCase';
 import { CreateSoftwareUseCase } from '../../domain/usecases/CreateSoftwareUseCase';
@@ -12,8 +13,13 @@ import { CreateNetworkUseCase } from '../../domain/usecases/CreateNetworkUseCase
 import { ExportProjectUseCase } from '../../domain/usecases/ExportProjectUseCase';
 import { ExportMitreNavigatorUseCase } from '../../domain/usecases/ExportMitreNavigatorUseCase';
 import { ImportInfrastructureUseCase } from '../../domain/usecases/ImportInfrastructureUseCase';
+import { ScanInstallationVulnerabilitiesUseCase } from '../../domain/usecases/ScanInstallationVulnerabilitiesUseCase';
+import { ComputeProjectRiskUseCase } from '../../domain/usecases/ComputeProjectRiskUseCase';
+import { ComputeAllProjectRisksUseCase } from '../../domain/usecases/ComputeAllProjectRisksUseCase';
+import { useToast } from '../context/ToastContext';
 
 export function useInfrastructure() {
+  const toast = useToast();
   const [showDashboard, setShowDashboard] = useState(false);
   const [clicks, setClicks] = useState(0);
 
@@ -24,7 +30,6 @@ export function useInfrastructure() {
   const [selectedNode, setSelectedNode] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('ALL');
-  const [toastMessage, setToastMessage] = useState(null);
   const [selectedProjectId, setSelectedProjectId] = useState(null);
 
   // Estados de APTs
@@ -40,6 +45,10 @@ export function useInfrastructure() {
   const [pathsError, setPathsError] = useState(null);
   const [selectedExploitationPath, setSelectedExploitationPath] = useState(null);
 
+  // Estados riesgo
+  const [riskActionLoading, setRiskActionLoading] = useState(false);
+  const [riskActionError, setRiskActionError] = useState(null);
+
   // Inyección de dependencias (Clean Architecture)
   const apiDataSource = useMemo(() => new InfrastructureApiDataSource(), []);
   const repository = useMemo(() => new InfrastructureRepositoryImpl(apiDataSource), [apiDataSource]);
@@ -48,6 +57,7 @@ export function useInfrastructure() {
   const getTopAptsUseCase = useMemo(() => new GetTopAptsUseCase(repository), [repository]);
   const getExploitationPathsUseCase = useMemo(() => new GetExploitationPathsUseCase(repository), [repository]);
 
+  const createProjectUseCase = useMemo(() => new CreateProjectUseCase(repository), [repository]);
   const createEndpointUseCase = useMemo(() => new CreateEndpointUseCase(repository), [repository]);
   const createHardwareUseCase = useMemo(() => new CreateHardwareUseCase(repository), [repository]);
   const createSoftwareUseCase = useMemo(() => new CreateSoftwareUseCase(repository), [repository]);
@@ -56,12 +66,14 @@ export function useInfrastructure() {
   const exportProjectUseCase = useMemo(() => new ExportProjectUseCase(), []);
   const exportMitreNavigatorUseCase = useMemo(() => new ExportMitreNavigatorUseCase(), []);
   const importInfrastructureUseCase = useMemo(() => new ImportInfrastructureUseCase(repository), [repository]);
+  // Casos de uso para cálculo de riesgo
+  const scanInstallationVulnerabilitiesUseCase = useMemo(() => new ScanInstallationVulnerabilitiesUseCase(repository), [repository]);
+  const computeProjectRiskUseCase = useMemo(() => new ComputeProjectRiskUseCase(repository), [repository]);
+  const computeAllProjectRisksUseCase = useMemo(() => new ComputeAllProjectRisksUseCase(repository), [repository]);
 
 
-
-  const showToast = (msg) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+  const showToast = (msg, type = 'info', title = null) => {
+    toast.showToast(msg, type, title);
   };
 
   const fetchInfrastructure = async (quiet = false) => {
@@ -72,7 +84,9 @@ export function useInfrastructure() {
       setGraphData(data);
     } catch (err) {
       console.error(err);
-      setError(`No se pudo conectar a la base de datos de Neo4j. Verifica que el servidor de Backend (puerto 8080) y la base de datos de Neo4j estén activos. Detalles: ${err.message}`);
+      const errorMsg = `No se pudo conectar a la base de datos de Neo4j. Verifica que el servidor de Backend (puerto 8080) y la base de datos de Neo4j estén activos. Detalles: ${err.message}`;
+      setError(errorMsg);
+      toast.error(err.message, 'Error de Conexión');
     } finally {
       if (!quiet) setLoading(false);
     }
@@ -83,11 +97,12 @@ export function useInfrastructure() {
     setError(null);
     try {
       await populateInfrastructureUseCase.execute();
-      showToast('¡Grafo restablecido con datos de prueba!');
+      toast.success('¡Grafo restablecido con datos de prueba!', 'Restablecimiento Exitoso');
       await fetchInfrastructure(true);
     } catch (err) {
       console.error(err);
       setError(`Error al poblar la base de datos: ${err.message}`);
+      toast.error(err.message, 'Error al poblar base de datos');
     } finally {
       setLoading(false);
     }
@@ -103,6 +118,7 @@ export function useInfrastructure() {
     } catch (err) {
       console.error(err);
       setAptError(err.message);
+      toast.error(err.message, 'Error al cargar APTs');
     } finally {
       setAptLoading(false);
     }
@@ -118,6 +134,7 @@ export function useInfrastructure() {
     } catch (err) {
       console.error(err);
       setPathsError(err.message);
+      toast.error(err.message, 'Error al cargar rutas de explotación');
     } finally {
       setPathsLoading(false);
     }
@@ -131,32 +148,64 @@ export function useInfrastructure() {
     setSelectedExploitationPath(null);
   };
 
+  const createProject = async (data) => {
+    try {
+      const res = await createProjectUseCase.execute(data);
+      toast.success('¡Proyecto añadido correctamente!', 'Nuevo Proyecto');
+      await fetchInfrastructure(true);
+      return res;
+    } catch (err) {
+      toast.error(err.message, 'Error creando Proyecto');
+      throw err;
+    }
+  };
+
   const createEndpoint = async (projectId, data) => {
-    const res = await createEndpointUseCase.execute(projectId, data);
-    showToast('¡Endpoint añadido correctamente!');
-    await fetchInfrastructure(true);
-    return res;
+    try {
+      const res = await createEndpointUseCase.execute(projectId, data);
+      toast.success('¡Endpoint añadido correctamente!', 'Nuevo Endpoint');
+      await fetchInfrastructure(true);
+      return res;
+    } catch (err) {
+      toast.error(err.message, 'Error creando Endpoint');
+      throw err;
+    }
   };
 
   const createHardware = async (endpointId, data) => {
-    const res = await createHardwareUseCase.execute(endpointId, data);
-    showToast('¡Hardware añadido correctamente!');
-    await fetchInfrastructure(true);
-    return res;
+    try {
+      const res = await createHardwareUseCase.execute(endpointId, data);
+      toast.success('¡Hardware añadido correctamente!', 'Nuevo Hardware');
+      await fetchInfrastructure(true);
+      return res;
+    } catch (err) {
+      toast.error(err.message, 'Error creando Hardware');
+      throw err;
+    }
   };
 
   const createSoftware = async (endpointId, data) => {
-    const res = await createSoftwareUseCase.execute(endpointId, data);
-    showToast('¡Software añadido correctamente!');
-    await fetchInfrastructure(true);
-    return res;
+    try {
+      const res = await createSoftwareUseCase.execute(endpointId, data);
+      toast.success('¡Software añadido correctamente!', 'Nuevo Software');
+      await fetchInfrastructure(true);
+      return res;
+    } catch (err) {
+      toast.error(err.message, 'Error creando Software');
+      throw err;
+    }
   };
 
   const createNetwork = async (endpointId, data) => {
-    const res = await createNetworkUseCase.execute(endpointId, data);
-    showToast('¡Red añadida correctamente!');
-    await fetchInfrastructure(true);
-    return res;
+    try {
+      const res = await createNetworkUseCase.execute(endpointId, data);
+      toast.success('¡Red añadida correctamente!', 'Nueva Red');
+      await fetchInfrastructure(true);
+      return res;
+    } catch (err) {
+      toast.error(err.message, 'Error creando Red');
+      throw err;
+    }
   };
 
   // Helper para desencadenar la descarga en el navegador
@@ -205,7 +254,6 @@ export function useInfrastructure() {
     }
   };
 
-
   // Cargar datos al activar el Dashboard
   useEffect(() => {
     if (showDashboard) {
@@ -241,52 +289,165 @@ export function useInfrastructure() {
   }, [selectedProjectId]);
 
 
-  // Filtrar graphData según el proyecto seleccionado usando BFS
+  // Filtrar graphData según el proyecto seleccionado (estrictamente por jerarquía de pertenencia)
   const filteredGraphData = useMemo(() => {
     if (!selectedProjectId || !graphData.nodes || graphData.nodes.length === 0) {
       return graphData;
     }
 
-    // Encontrar el elementId (n.id) del nodo Project cuyo properties.id coincide
+    // 1. Nodo del proyecto seleccionado
     const projectNode = graphData.nodes.find(
       n => (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
-          String(n.properties?.id ?? n.id) === selectedProjectId
+          String(n.properties?.id ?? n.id) === String(selectedProjectId)
     );
     if (!projectNode) {
       return graphData;
     }
-    const startId = projectNode.id; // elementId de Neo4j
 
-    const adj = {};
-    graphData.nodes.forEach(n => { adj[n.id] = []; });
-    (graphData.relationships || []).forEach(rel => {
-      if (adj[rel.source]) adj[rel.source].push(rel.target);
-      if (adj[rel.target]) adj[rel.target].push(rel.source);
-    });
+    const rels = graphData.relationships || [];
+    const nodeMap = new Map(graphData.nodes.map(n => [n.id, n]));
 
-    const reachable = new Set();
-    const queue = [startId];
-    reachable.add(startId);
-    let head = 0;
-    while (head < queue.length) {
-      const curr = queue[head++];
-      for (const nbr of (adj[curr] || [])) {
-        if (!reachable.has(nbr)) {
-          const node = graphData.nodes.find(n => n.id === nbr);
-          if (node && !node.labels?.includes('TTP') && !node.labels?.includes('ThreatActor')) {
-            if (node.primaryLabel !== 'Project') {
-              reachable.add(nbr);
-              queue.push(nbr);
-            }
-          }
+    const reachableIds = new Set();
+    reachableIds.add(projectNode.id);
+
+    // 2. Endpoints pertenecientes a ESTE proyecto
+    const projectEndpointIds = new Set();
+    rels.forEach(rel => {
+      const isSourceProject = rel.source === projectNode.id;
+      const isTargetProject = rel.target === projectNode.id;
+      if (isSourceProject || isTargetProject) {
+        const otherId = isSourceProject ? rel.target : rel.source;
+        const otherNode = nodeMap.get(otherId);
+        if (otherNode && (otherNode.primaryLabel === 'Endpoint' || otherNode.labels?.includes('Endpoint'))) {
+          projectEndpointIds.add(otherId);
+          reachableIds.add(otherId);
         }
       }
-    }
+    });
 
-    const filteredNodes = graphData.nodes.filter(n => reachable.has(n.id));
-    const nodeIds = new Set(filteredNodes.map(n => n.id));
-    const filteredRels = (graphData.relationships || []).filter(
-      rel => nodeIds.has(rel.source) && nodeIds.has(rel.target)
+    // 3. Nodos directamente vinculados a los Endpoints del proyecto (Hardware, Redes, Contenedores, Instalaciones de Software)
+    const projectContainerIds = new Set();
+    const projectInstallationIds = new Set();
+
+    rels.forEach(rel => {
+      const sourceIsEndpoint = projectEndpointIds.has(rel.source);
+      const targetIsEndpoint = projectEndpointIds.has(rel.target);
+
+      if (sourceIsEndpoint || targetIsEndpoint) {
+        const otherId = sourceIsEndpoint ? rel.target : rel.source;
+        const otherNode = nodeMap.get(otherId);
+        if (!otherNode) return;
+
+        const primaryLabel = otherNode.primaryLabel || otherNode.labels?.[0];
+        const labels = otherNode.labels || [];
+
+        const isProject = primaryLabel === 'Project' || labels.includes('Project');
+        const isOtherEndpoint = primaryLabel === 'Endpoint' || labels.includes('Endpoint');
+
+        // Evitar saltar a otros proyectos u otros endpoints
+        if (isProject || isOtherEndpoint) return;
+
+        if (primaryLabel === 'Container' || labels.includes('Container') || rel.type === 'HOSTS') {
+          projectContainerIds.add(otherId);
+          reachableIds.add(otherId);
+        } else if (primaryLabel === 'SoftwareInstallation' || labels.includes('SoftwareInstallation') || rel.type === 'HAS_INSTALLATION') {
+          projectInstallationIds.add(otherId);
+          reachableIds.add(otherId);
+        } else {
+          // Hardware, Network, etc.
+          reachableIds.add(otherId);
+        }
+      }
+    });
+
+    // 4. Instalaciones de Software dentro de los Contenedores del proyecto y ContainerImage
+    rels.forEach(rel => {
+      const sourceIsCont = projectContainerIds.has(rel.source);
+      const targetIsCont = projectContainerIds.has(rel.target);
+
+      if (sourceIsCont || targetIsCont) {
+        const otherId = sourceIsCont ? rel.target : rel.source;
+        const otherNode = nodeMap.get(otherId);
+        if (!otherNode) return;
+
+        const primaryLabel = otherNode.primaryLabel || otherNode.labels?.[0];
+        const labels = otherNode.labels || [];
+
+        if (primaryLabel === 'SoftwareInstallation' || labels.includes('SoftwareInstallation') || rel.type === 'HAS_INSTALLATION') {
+          projectInstallationIds.add(otherId);
+          reachableIds.add(otherId);
+        } else if (primaryLabel === 'ContainerImage' || labels.includes('ContainerImage') || rel.type === 'USES_IMAGE') {
+          reachableIds.add(otherId);
+        }
+      }
+    });
+
+    // 5. Software (catálogo) y Findings de las Instalaciones del proyecto
+    const projectFindingIds = new Set();
+
+    rels.forEach(rel => {
+      const sourceIsInst = projectInstallationIds.has(rel.source);
+      const targetIsInst = projectInstallationIds.has(rel.target);
+
+      if (sourceIsInst || targetIsInst) {
+        const otherId = sourceIsInst ? rel.target : rel.source;
+        const otherNode = nodeMap.get(otherId);
+        if (!otherNode) return;
+
+        const primaryLabel = otherNode.primaryLabel || otherNode.labels?.[0];
+        const labels = otherNode.labels || [];
+
+        if (primaryLabel === 'Finding' || labels.includes('Finding') || rel.type === 'HAS_FINDING') {
+          projectFindingIds.add(otherId);
+          reachableIds.add(otherId);
+        } else if (primaryLabel === 'Software' || labels.includes('Software') || rel.type === 'INSTANCE_OF') {
+          reachableIds.add(otherId);
+        }
+      }
+    });
+
+    // 6. Vulnerabilidades, Exploits, Remediaciones de los Findings del proyecto
+    const projectRemediationIds = new Set();
+
+    rels.forEach(rel => {
+      const sourceIsFinding = projectFindingIds.has(rel.source);
+      const targetIsFinding = projectFindingIds.has(rel.target);
+
+      if (sourceIsFinding || targetIsFinding) {
+        const otherId = sourceIsFinding ? rel.target : rel.source;
+        const otherNode = nodeMap.get(otherId);
+        if (!otherNode) return;
+
+        const primaryLabel = otherNode.primaryLabel || otherNode.labels?.[0];
+        const labels = otherNode.labels || [];
+
+        if (primaryLabel === 'Remediation' || labels.includes('Remediation') || rel.type === 'HAS_REMEDIATION') {
+          projectRemediationIds.add(otherId);
+          reachableIds.add(otherId);
+        } else if (primaryLabel === 'Vulnerability' || labels.includes('Vulnerability') || primaryLabel === 'Exploit' || labels.includes('Exploit') || rel.type === 'OF_VULNERABILITY' || rel.type === 'HAS_EXPLOIT') {
+          reachableIds.add(otherId);
+        }
+      }
+    });
+
+    // 7. Patches de las Remediaciones
+    rels.forEach(rel => {
+      const sourceIsRem = projectRemediationIds.has(rel.source);
+      const targetIsRem = projectRemediationIds.has(rel.target);
+
+      if (sourceIsRem || targetIsRem) {
+        const otherId = sourceIsRem ? rel.target : rel.source;
+        const otherNode = nodeMap.get(otherId);
+        if (!otherNode) return;
+
+        reachableIds.add(otherId);
+      }
+    });
+
+    // 8. Filtrar nodos y relaciones
+    const filteredNodes = graphData.nodes.filter(n => reachableIds.has(n.id));
+    const filteredRels = rels.filter(
+      rel => reachableIds.has(rel.source) && reachableIds.has(rel.target)
     );
 
     return { nodes: filteredNodes, relationships: filteredRels };
@@ -295,6 +456,148 @@ export function useInfrastructure() {
   const getNodeCountByType = useCallback((type) => {
     return filteredGraphData.nodes.filter(n => n.labels.includes(type)).length;
   }, [filteredGraphData]);
+
+ // Derivar lista de instalaciones de software para el proyecto seleccionado
+  const getSelectedProjectSoftwareInstallations = useCallback(() => {
+    const nodes = filteredGraphData.nodes || [];
+    const relationships = filteredGraphData.relationships || [];
+
+    const softwareByElementId = new Map(
+      nodes
+        .filter(n => n.primaryLabel === 'Software')
+        .map(n => [n.id, n])
+    );
+
+    return nodes
+      .filter(n => n.primaryLabel === 'SoftwareInstallation')
+      .map(installationNode => {
+        const rel = relationships.find(r =>
+          r.type === 'INSTANCE_OF' &&
+          (r.source === installationNode.id || r.target === installationNode.id)
+        );
+
+        if (!rel) {
+          return null;
+        }
+
+        const softwareElementId = rel.source === installationNode.id ? rel.target : rel.source;
+        const softwareNode = softwareByElementId.get(softwareElementId);
+
+        if (!softwareNode) {
+          return null;
+        }
+
+        return {
+          installationId: installationNode.properties?.id || installationNode.properties?.installation_id,
+          softwareId: softwareNode.properties?.id || softwareNode.properties?.software_id,
+          installationName: installationNode.name,
+          softwareName: softwareNode.name
+        };
+      })
+      .filter(Boolean)
+      .filter(item => item.installationId && item.softwareId);
+  }, [filteredGraphData]);
+
+
+  // Función para analizar vulnerabilidades de todas las instalaciones de software del proyecto seleccionado
+  const analyzeProjectVulnerabilities = async () => {
+    if (!selectedProjectId || riskActionLoading) return;
+
+    setRiskActionLoading(true);
+    setRiskActionError(null);
+
+    try {
+      const installations = getSelectedProjectSoftwareInstallations();
+      if (installations.length === 0) {
+        toast.warning('No hay software instalado en el proyecto seleccionado.', 'Análisis de Vulnerabilidades');
+        return;
+      }
+
+      let successCount = 0;
+      const failedInstallations = [];
+
+      for (const installation of installations) {
+        try {
+          await scanInstallationVulnerabilitiesUseCase.execute(
+            installation.installationId,
+            installation.softwareId,
+            100
+          );
+          successCount++;
+        } catch (err) {
+          console.error(`Error analizando ${installation.softwareName || installation.installationId}:`, err);
+          failedInstallations.push(installation.softwareName || installation.installationId);
+        }
+      }
+
+      await fetchInfrastructure(true);
+
+      if (failedInstallations.length === 0) {
+        toast.success(`Vulnerabilidades analizadas con éxito para ${successCount} instalación(es).`, 'Análisis Completado');
+      } else if (successCount > 0) {
+        toast.warning(`Análisis completado para ${successCount} de ${installations.length} software(s). No se pudo analizar: ${failedInstallations.join(', ')}.`, 'Análisis Parcial');
+      } else {
+        const errorMsg = `No se pudo analizar ninguna instalación. Fallaron: ${failedInstallations.join(', ')}`;
+        setRiskActionError(errorMsg);
+        toast.error(errorMsg, 'Falló el Análisis');
+      }
+    } catch (err) {
+      console.error(err);
+      setRiskActionError(err.message);
+      toast.error(`Error inesperado analizando vulnerabilidades: ${err.message}`, 'Falló el Análisis');
+    } finally {
+      setRiskActionLoading(false);
+    }
+  };
+
+
+
+  // Función para calcular el riesgo del proyecto seleccionado
+  const computeSelectedProjectRisk = async () => {
+    if (!selectedProjectId || riskActionLoading) return;
+
+    setRiskActionLoading(true);
+    setRiskActionError(null);
+
+    try {
+      await computeProjectRiskUseCase.execute(selectedProjectId);
+      toast.success('Riesgo calculado para el proyecto seleccionado.', 'Cálculo de Riesgo');
+      await fetchInfrastructure(true);
+    } catch (err) {
+      console.error(err);
+      setRiskActionError(err.message);
+      toast.error(`Error calculando riesgo: ${err.message}`, 'Cálculo de Riesgo');
+    } finally {
+      setRiskActionLoading(false);
+    }
+  };
+
+
+  // Función para recalcular el riesgo de todos los proyectos
+  const computeAllProjectRisks = async () => {
+    setRiskActionLoading(true);
+    setRiskActionError(null);
+
+    try {
+      await computeAllProjectRisksUseCase.execute();
+      toast.success('Riesgo recalculado para todos los proyectos.', 'Cálculo Global de Riesgos');
+      await fetchInfrastructure(true);
+    } catch (err) {
+      console.error(err);
+      setRiskActionError(err.message);
+      toast.error(`Error recalculando todos los proyectos: ${err.message}`, 'Cálculo Global de Riesgos');
+    } finally {
+      setRiskActionLoading(false);
+    }
+  };
+
+  // Derivar el nodo del proyecto seleccionado para resaltar en el grafo
+  const selectedProjectNode = useMemo(() => {
+    return (graphData.nodes || []).find(n =>
+      (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
+      String(n.properties?.id ?? n.id) === selectedProjectId
+    ) || null;
+  }, [graphData, selectedProjectId]);
 
   return {
     showDashboard,
@@ -311,7 +614,6 @@ export function useInfrastructure() {
     setSearchQuery,
     filterType,
     setFilterType,
-    toastMessage,
     showAPTPanel,
     setShowAPTPanel,
     aptData,
@@ -334,13 +636,20 @@ export function useInfrastructure() {
     selectedProjectId,
     setSelectedProjectId,
     showToast,
+    createProject,
     createEndpoint,
     createHardware,
     createSoftware,
     createNetwork,
     exportProject,
     exportMitreNavigator,
-    importProject
+    importProject,
+    riskActionLoading,
+    riskActionError,
+    analyzeProjectVulnerabilities,
+    computeSelectedProjectRisk,
+    computeAllProjectRisks,
+    selectedProjectNode
   };
 
 }

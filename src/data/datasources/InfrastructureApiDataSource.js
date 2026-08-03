@@ -31,6 +31,15 @@ export class InfrastructureApiDataSource {
     return await res.json();
   }
 
+  async createProject(payload) {
+    const res = await fetch('/api/projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return await this._handleResponse(res);
+  }
+
 
   async createEndpoint(projectId, payload) {
     const res = await fetch(`/api/projects/${projectId}/endpoints`, {
@@ -73,6 +82,31 @@ export class InfrastructureApiDataSource {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
+    });
+    return await this._handleResponse(res);
+  }
+
+  async scanInstallationVulnerabilities(installationId, softwareId, limit = 100) {
+    const params = new URLSearchParams({
+      software_id: String(softwareId),
+      limit: String(limit)
+    });
+    const res = await fetch(`/api/installations/${installationId}/scan-vulns?${params.toString()}`, {
+      method: 'POST'
+    });
+    return await this._handleResponse(res);
+  }
+
+  async computeProjectRisk(projectId) {
+    const res = await fetch(`/api/projects/${projectId}/compute-risk`, {
+      method: 'POST'
+    });
+    return await this._handleResponse(res);
+  }
+
+  async computeAllProjectRisks() {
+    const res = await fetch('/api/risk/recalculate-all-projects', {
+      method: 'POST'
     });
     return await this._handleResponse(res);
   }

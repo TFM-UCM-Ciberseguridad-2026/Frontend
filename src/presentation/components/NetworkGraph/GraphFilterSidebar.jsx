@@ -10,7 +10,10 @@ export function GraphFilterSidebar({
   getNodeCountByType,
   fetchExploitationPaths,
   selectedExploitationPath,
-  clearSelectedExploitationPath
+  clearSelectedExploitationPath,
+  riskActionLoading,
+  analyzeProjectVulnerabilities,
+  computeSelectedProjectRisk
 }) {
   const [openSections, setOpenSections] = useState({
     categories: true,
@@ -84,53 +87,90 @@ export function GraphFilterSidebar({
         )}
       </div>
 
-      {/* BOTÓN DE ACCIÓN RÁPIDA: RUTAS DE EXPLOTACIÓN */}
+      {/* BOTONES DE ACCIÓN RÁPIDA EN EL SIDEBAR */}
+      <div className="sidebar-action-group">
+        <div className="sidebar-action-title">Acciones de Análisis</div>
+        <div className="sidebar-action-buttons">
+          {fetchExploitationPaths && (
+            selectedExploitationPath ? (
+              <button
+                type="button"
+                className="sidebar-action-btn path-active"
+                onClick={clearSelectedExploitationPath}
+              >
+                <span className="ic">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </span>
+                <span>Quitar Ruta Destacada</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="sidebar-action-btn path-btn"
+                onClick={fetchExploitationPaths}
+              >
+                <span className="ic">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                  </svg>
+                </span>
+                <span>Rutas de Ataque</span>
+              </button>
+            )
+          )}
 
-      {fetchExploitationPaths && (
-        <div style={{ margin: '4px 0 8px 0' }}>
-          {selectedExploitationPath ? (
+          {analyzeProjectVulnerabilities && (
             <button
-              className="btn btn-secondary"
-              onClick={clearSelectedExploitationPath}
-              style={{
-                width: '100%',
-                padding: '6px 8px',
-                fontSize: '11px',
-                fontFamily: 'Orbitron, sans-serif',
-                borderColor: '#ef4444',
-                color: '#f87171',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px'
-              }}
+              type="button"
+              className="sidebar-action-btn vuln-btn"
+              disabled={riskActionLoading}
+              onClick={analyzeProjectVulnerabilities}
             >
-              <span>QUITAR RUTA DESTACADA</span>
+              <span className="ic">
+                {riskActionLoading ? (
+                  <svg className="spin-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                    <path d="M12 8v4" />
+                    <path d="M12 16h.01" />
+                  </svg>
+                )}
+              </span>
+              <span>{riskActionLoading ? 'Procesando...' : 'Analizar vulnerabilidades'}</span>
             </button>
-          ) : (
-            <button
-              className="btn btn-primary"
-              onClick={fetchExploitationPaths}
-              style={{
-                width: '100%',
-                padding: '6px 8px',
-                fontSize: '11px',
-                fontFamily: 'Orbitron, sans-serif',
-                background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.3), rgba(220, 38, 38, 0.15))',
-                borderColor: '#ef4444',
-                color: '#fca5a5',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px'
-              }}
+          )}
 
+          {computeSelectedProjectRisk && (
+            <button
+              type="button"
+              className="sidebar-action-btn risk-btn"
+              disabled={riskActionLoading}
+              onClick={computeSelectedProjectRisk}
             >
-              <span>RUTAS DE ATAQUE</span>
+              <span className="ic">
+                {riskActionLoading ? (
+                  <svg className="spin-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M22 12A10 10 0 1 1 2 12a10 10 0 0 1 20 0z" />
+                    <path d="M12 12L16 8" />
+                    <circle cx="12" cy="12" r="2" />
+                  </svg>
+                )}
+              </span>
+              <span>{riskActionLoading ? 'Procesando...' : 'Calcular riesgo'}</span>
             </button>
           )}
         </div>
-      )}
+      </div>
 
       {/* CONTENEDOR DE SECCIONES CON SCROLL SLIM */}
 

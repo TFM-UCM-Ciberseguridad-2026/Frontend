@@ -19,7 +19,6 @@ export function DashboardPage({
   setSearchQuery,
   filterType,
   setFilterType,
-  toastMessage,
   showToast,
   showAPTPanel,
   setShowAPTPanel,
@@ -49,7 +48,12 @@ export function DashboardPage({
   createNetwork,
   exportProject,
   exportMitreNavigator,
-  importProject
+  importProject,
+  // Risk Analysis
+  riskActionLoading,
+  analyzeProjectVulnerabilities,
+  computeSelectedProjectRisk,
+  selectedProjectNode
 }) {
   const [activeNav, setActiveNav] = useState('grafo'); // 'grafo', 'inventario', 'redes'
   const [showExportModal, setShowExportModal] = useState(false);
@@ -83,13 +87,13 @@ export function DashboardPage({
         activeNav={activeNav}
         setActiveNav={setActiveNav}
         fetchTopAPTs={fetchTopAPTs}
-        fetchExploitationPaths={fetchExploitationPaths}
         setShowDashboard={setShowDashboard}
         projects={projects}
         selectedProjectId={selectedProjectId}
         setSelectedProjectId={setSelectedProjectId}
         onOpenExport={() => setShowExportModal(true)}
         onOpenImport={() => setShowImportModal(true)}
+        selectedProjectNode={selectedProjectNode}
       />
 
       <div className="app">
@@ -118,6 +122,9 @@ export function DashboardPage({
             createHardware={createHardware}
             createSoftware={createSoftware}
             createNetwork={createNetwork}
+            riskActionLoading={riskActionLoading}
+            analyzeProjectVulnerabilities={analyzeProjectVulnerabilities}
+            computeSelectedProjectRisk={computeSelectedProjectRisk}
           />
         )}
 
@@ -133,12 +140,6 @@ export function DashboardPage({
             graphData={graphData}
             categories={categories}
           />
-        )}
-
-        {toastMessage && (
-          <div className="canvas-toast" style={{ bottom: '4rem', background: 'var(--c600)', color: 'white', fontWeight: 'bold' }}>
-            {toastMessage}
-          </div>
         )}
       </div>
 
