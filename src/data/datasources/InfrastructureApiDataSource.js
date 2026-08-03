@@ -86,6 +86,13 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
+  async deleteProject(projectId) {
+    const res = await fetch(`/api/projects/${projectId}`, {
+      method: 'DELETE'
+    });
+    return await this._handleResponse(res);
+  }
+
   async scanInstallationVulnerabilities(installationId, softwareId, limit = 100) {
     const params = new URLSearchParams({
       software_id: String(softwareId),

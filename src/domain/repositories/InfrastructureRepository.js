@@ -37,6 +37,10 @@ export class InfrastructureRepository {
     throw new Error('Method importInfrastructure not implemented');
   }
 
+  async deleteProject(projectId) {
+    throw new Error('Method deleteProject not implemented');
+  }
+
   async scanInstallationVulnerabilities(installationId, softwareId, limit) {
     throw new Error('Method scanInstallationVulnerabilities not implemented');
   }

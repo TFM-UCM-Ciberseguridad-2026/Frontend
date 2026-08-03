@@ -243,16 +243,64 @@ export function useInfrastructure() {
     }
   };
 
-  const importProject = async (fileData) => {
+  const importProject = async (fileData, options = {}) => {
     try {
-      await importInfrastructureUseCase.execute(fileData);
+      let dataToImport = typeof fileData === 'string' ? JSON.parse(fileData) : JSON.parse(JSON.stringify(fileData));
+
+      // 1. Si el usuario seleccionó "Sobrescribir", eliminar el proyecto existente en Neo4j primero
+      if (options.overwrite && options.targetProjectId) {
+        try {
+          await repository.deleteProject(options.targetProjectId);
+        } catch (delErr) {
+          console.warn('Aviso limpiando proyecto anterior:', delErr);
+        }
+      }
+
+      // 2. Si el usuario seleccionó "Renombrar", actualizar el nombre y asignar nuevo ID único al proyecto en el JSON
+      if (options.renameTo) {
+        const newProjId = Date.now();
+        if (dataToImport.project) {
+          dataToImport.project.name = options.renameTo;
+          dataToImport.project.id = newProjId;
+        }
+
+        const nodes = dataToImport.nodes || dataToImport.graphData?.nodes || [];
+        const projectNode = nodes.find(n => n.labels?.includes('Project') || n.primaryLabel === 'Project');
+
+        if (projectNode) {
+          const oldNodeId = String(projectNode.id);
+          const oldPropId = projectNode.properties?.id !== undefined && projectNode.properties?.id !== null ? String(projectNode.properties.id) : null;
+
+          if (projectNode.properties) {
+            projectNode.properties.nombre = options.renameTo;
+            projectNode.properties.name = options.renameTo;
+            projectNode.properties.id = newProjId;
+          }
+          projectNode.id = String(newProjId);
+
+          const rels = dataToImport.relationships || dataToImport.graphData?.relationships || [];
+          rels.forEach(rel => {
+            const sStr = String(rel.source);
+            const tStr = String(rel.target);
+
+            if (sStr === oldNodeId || (oldPropId && sStr === oldPropId)) {
+              rel.source = String(newProjId);
+            }
+            if (tStr === oldNodeId || (oldPropId && tStr === oldPropId)) {
+              rel.target = String(newProjId);
+            }
+          });
+        }
+      }
+
+      // 3. Ejecutar caso de uso de importación
+      await importInfrastructureUseCase.execute(dataToImport);
       showToast('¡Infraestructura cargada e importada con éxito!');
       await fetchInfrastructure(true);
 
-      // Auto-seleccionar el proyecto importado si viene en la estructura JSON
+      // 4. Auto-seleccionar el proyecto importado
       try {
-        const parsed = typeof fileData === 'string' ? JSON.parse(fileData) : fileData;
-        const impProjectId = parsed?.project?.id || parsed?.nodes?.find(n => n.labels?.includes('Project') || n.primaryLabel === 'Project')?.properties?.id;
+        const impProjectId = dataToImport?.project?.id || dataToImport?.nodes?.find(n => n.labels?.includes('Project') || n.primaryLabel === 'Project')?.properties?.id;
         if (impProjectId !== undefined && impProjectId !== null) {
           setSelectedProjectId(String(impProjectId));
         }

@@ -58,6 +58,10 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     return await this.apiDataSource.importInfrastructure(exportData);
   }
 
+  async deleteProject(projectId) {
+    return await this.apiDataSource.deleteProject(projectId);
+  }
+
   async scanInstallationVulnerabilities(installationId, softwareId, limit) {
     return await this.apiDataSource.scanInstallationVulnerabilities(installationId, softwareId, limit);
   }

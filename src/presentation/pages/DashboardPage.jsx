@@ -179,7 +179,8 @@ export function DashboardPage({
       <ImportModal
         isOpen={showImportModal}
         onClose={() => setShowImportModal(false)}
-        onImport={(fileContent) => importProject(fileContent)}
+        projects={projects}
+        onImport={(fileContent, options) => importProject(fileContent, options)}
       />
     </div>
   );
