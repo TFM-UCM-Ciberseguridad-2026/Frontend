@@ -248,6 +248,17 @@ export function useInfrastructure() {
       await importInfrastructureUseCase.execute(fileData);
       showToast('¡Infraestructura cargada e importada con éxito!');
       await fetchInfrastructure(true);
+
+      // Auto-seleccionar el proyecto importado si viene en la estructura JSON
+      try {
+        const parsed = typeof fileData === 'string' ? JSON.parse(fileData) : fileData;
+        const impProjectId = parsed?.project?.id || parsed?.nodes?.find(n => n.labels?.includes('Project') || n.primaryLabel === 'Project')?.properties?.id;
+        if (impProjectId !== undefined && impProjectId !== null) {
+          setSelectedProjectId(String(impProjectId));
+        }
+      } catch (e) {
+        // Ignorar si no se puede extraer el ID del proyecto
+      }
     } catch (err) {
       console.error(err);
       throw err;
