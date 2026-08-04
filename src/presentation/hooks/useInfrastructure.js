@@ -12,6 +12,7 @@ import { CreateSoftwareUseCase } from '../../domain/usecases/CreateSoftwareUseCa
 import { CreateNetworkUseCase } from '../../domain/usecases/CreateNetworkUseCase';
 import { ExportProjectUseCase } from '../../domain/usecases/ExportProjectUseCase';
 import { ExportMitreNavigatorUseCase } from '../../domain/usecases/ExportMitreNavigatorUseCase';
+import { ExportInventoryUseCase } from '../../domain/usecases/ExportInventoryUseCase';
 import { ImportInfrastructureUseCase } from '../../domain/usecases/ImportInfrastructureUseCase';
 import { ScanInstallationVulnerabilitiesUseCase } from '../../domain/usecases/ScanInstallationVulnerabilitiesUseCase';
 import { ComputeProjectRiskUseCase } from '../../domain/usecases/ComputeProjectRiskUseCase';
@@ -65,6 +66,7 @@ export function useInfrastructure() {
 
   const exportProjectUseCase = useMemo(() => new ExportProjectUseCase(), []);
   const exportMitreNavigatorUseCase = useMemo(() => new ExportMitreNavigatorUseCase(), []);
+  const exportInventoryUseCase = useMemo(() => new ExportInventoryUseCase(), []);
   const importInfrastructureUseCase = useMemo(() => new ImportInfrastructureUseCase(repository), [repository]);
   // Casos de uso para cálculo de riesgo
   const scanInstallationVulnerabilitiesUseCase = useMemo(() => new ScanInstallationVulnerabilitiesUseCase(repository), [repository]);
@@ -240,6 +242,24 @@ export function useInfrastructure() {
     } catch (err) {
       console.error(err);
       showToast(`Error al exportar capa MITRE: ${err.message}`);
+    }
+  };
+
+  const exportInventory = (targetProjectId) => {
+    try {
+      const { filename, blob } = exportInventoryUseCase.execute(filteredGraphData, targetProjectId || selectedProjectId);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast('¡Inventario exportado a Excel (.xlsx) con éxito!');
+    } catch (err) {
+      console.error(err);
+      showToast(`Error al exportar inventario a Excel: ${err.message}`);
     }
   };
 
@@ -700,6 +720,7 @@ export function useInfrastructure() {
     createNetwork,
     exportProject,
     exportMitreNavigator,
+    exportInventory,
     importProject,
     riskActionLoading,
     riskActionError,

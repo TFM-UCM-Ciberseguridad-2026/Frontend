@@ -48,6 +48,7 @@ export function DashboardPage({
   createNetwork,
   exportProject,
   exportMitreNavigator,
+  exportInventory,
   importProject,
   // Risk Analysis
   riskActionLoading,
@@ -193,6 +194,7 @@ export function DashboardPage({
         selectedProjectId={selectedProjectId}
         onExportProject={(targetProjectId) => exportProject(targetProjectId)}
         onExportMitre={(targetProjectId) => exportMitreNavigator(targetProjectId)}
+        onExportInventory={(targetProjectId) => exportInventory(targetProjectId)}
       />
 
       {/* MODAL IMPORTAR ARCHIVE */}
