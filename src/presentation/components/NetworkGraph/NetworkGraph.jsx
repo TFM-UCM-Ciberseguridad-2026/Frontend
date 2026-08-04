@@ -642,6 +642,20 @@ export function NetworkGraph({
   }
 
   const pathActive = Boolean(selectedExploitationPath);
+  const searchActive = (searchQuery || '').trim().length > 0;
+  const searchQTerm = (searchQuery || '').toLowerCase().trim();
+
+  const checkNodeMatch = (n) => {
+    if (!searchActive) return true;
+    if (!n || !n.entity) return false;
+    const name = (n.entity.name || '').toLowerCase();
+    const cve = (n.entity.properties?.cve_id || n.entity.properties?.cve || '').toLowerCase();
+    const title = (n.entity.properties?.title || '').toLowerCase();
+    const desc = (n.entity.properties?.description || '').toLowerCase();
+    const ttps = Array.isArray(n.entity.properties?.ttps) ? n.entity.properties.ttps.join(' ').toLowerCase() : String(n.entity.properties?.ttps || '').toLowerCase();
+    const nid = String(n.id).toLowerCase();
+    return name.includes(searchQTerm) || cve.includes(searchQTerm) || title.includes(searchQTerm) || desc.includes(searchQTerm) || ttps.includes(searchQTerm) || nid.includes(searchQTerm);
+  };
 
   return (
     <div className="graph-stage" style={{ width: '100%', height: '100%' }}>
@@ -719,9 +733,8 @@ export function NetworkGraph({
             const nbMatches = filterType === 'ALL' || nb.entity.primaryLabel === filterType;
             const isDimmed = !naMatches || !nbMatches;
 
-            const searchActive = searchQuery.trim().length > 0;
-            const saMatches = !searchActive || na.entity.name.toLowerCase().includes(searchQuery.toLowerCase());
-            const sbMatches = !searchActive || nb.entity.name.toLowerCase().includes(searchQuery.toLowerCase());
+            const saMatches = checkNodeMatch(na);
+            const sbMatches = checkNodeMatch(nb);
             const searchDimmed = searchActive && !(saMatches || sbMatches);
 
             const isPathEdge = pathEdgeIdSet.has(rel.id);
@@ -749,7 +762,7 @@ export function NetworkGraph({
         <g id="nodeGroup">
           {layoutNodes.map((node) => {
             const matchesCat = filterType === 'ALL' || node.entity.primaryLabel === filterType;
-            const matchesSearch = !searchQuery || node.entity.name.toLowerCase().includes(searchQuery.toLowerCase());
+            const matchesSearch = checkNodeMatch(node);
             const isDimmed = !matchesCat || !matchesSearch;
 
             const isSelected = selectedNode && selectedNode.id === node.id;

@@ -151,6 +151,26 @@ export function DashboardPage({
         aptLoading={aptLoading}
         aptError={aptError}
         fetchTopAPTs={fetchTopAPTs}
+        onSelectTTP={(ttpId) => {
+          setShowAPTPanel(false);
+          setActiveNav('grafo');
+          setSearchQuery?.(ttpId);
+
+          const q = (ttpId || '').toLowerCase().trim();
+          const targetNode = (graphData?.nodes || []).find(n => {
+            const p = n.properties || {};
+            const ttps = Array.isArray(p.ttps) ? p.ttps.join(' ').toLowerCase() : String(p.ttps || '').toLowerCase();
+            const propsStr = JSON.stringify(p).toLowerCase();
+            return ttps.includes(q) || propsStr.includes(q) || String(n.id).toLowerCase() === q || (n.name || '').toLowerCase().includes(q);
+          });
+
+          if (targetNode) {
+            setSelectedNode(targetNode);
+            showToast?.(`TTP enfocada: ${ttpId}`, 'info');
+          } else {
+            showToast?.(`Filtrando TTP: ${ttpId}`, 'info');
+          }
+        }}
       />
 
       {/* MODAL RUTAS DE EXPLOTACIÓN */}

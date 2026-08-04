@@ -313,11 +313,9 @@ export function useInfrastructure() {
     }
   };
 
-  // Cargar datos al activar el Dashboard
+  // Cargar datos al montar el hook y al activar el Dashboard
   useEffect(() => {
-    if (showDashboard) {
-      fetchInfrastructure();
-    }
+    fetchInfrastructure();
   }, [showDashboard]);
 
   // Derivar lista de proyectos disponibles
