@@ -190,10 +190,10 @@ export function useInfrastructure() {
     }
   };
 
-  const createNetwork = async (endpointId, data) => {
+  const createNetwork = async (data) => {
     try {
-      const res = await createNetworkUseCase.execute(endpointId, data);
-      toast.success('¡Red añadida correctamente!', 'Nueva Red');
+      const res = await createNetworkUseCase.execute(data);
+      toast.success('¡Red añadida correctamente! Los endpoints compatibles se han enlazado automáticamente.', 'Nueva Red');
       await fetchInfrastructure(true);
       return res;
     } catch (err) {

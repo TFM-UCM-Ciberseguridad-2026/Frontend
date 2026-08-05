@@ -68,8 +68,10 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
-  async createNetwork(endpointId, payload) {
-    const res = await fetch(`/api/endpoints/${endpointId}/networks`, {
+  async createNetwork(payload) {
+    // Ya no cuelga de un endpoint: se crea a nivel de infraestructura y el
+    // backend enlaza los endpoints compatibles por CIDR + VLAN.
+    const res = await fetch('/api/networks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)

@@ -18,7 +18,8 @@ const INITIAL_FORMS = {
     environment: '',
     confidentiality_req: 'MEDIUM',
     integrity_req: 'MEDIUM',
-    availability_req: 'MEDIUM'
+    availability_req: 'MEDIUM',
+    ips: []
   },
   hardware: {
     endpoint_id: '',
@@ -42,7 +43,6 @@ const INITIAL_FORMS = {
     status: 'active'
   },
   network: {
-    endpoint_id: '',
     nombre: '',
     cidr: '',
     gateway: '',
@@ -105,6 +105,36 @@ export function AddAssetButton({
     setForms(prev => ({ ...prev, [typeKey]: cloneInitialForm(typeKey) }));
   };
 
+  // --- Manejo de IPs del endpoint ---
+  const addIpToEndpoint = () => {
+    setForms(prev => ({
+      ...prev,
+      endpoint: {
+        ...prev.endpoint,
+        ips: [...prev.endpoint.ips, { ip: '', vlan_id: '' }]
+      }
+    }));
+  };
+
+  const updateEndpointIp = (index, field, value) => {
+    setForms(prev => {
+      const ips = prev.endpoint.ips.map((row, i) =>
+        i === index ? { ...row, [field]: value } : row
+      );
+      return { ...prev, endpoint: { ...prev.endpoint, ips } };
+    });
+  };
+
+  const removeEndpointIp = (index) => {
+    setForms(prev => ({
+      ...prev,
+      endpoint: {
+        ...prev.endpoint,
+        ips: prev.endpoint.ips.filter((_, i) => i !== index)
+      }
+    }));
+  };
+
   const submitAsset = async (typeKey) => {
     const data = forms[typeKey];
     setLoading(true);
@@ -134,9 +164,11 @@ export function AddAssetButton({
           break;
         }
         case 'network': {
-          const { endpoint_id, ...rest } = data;
+          // Ya no depende de un endpoint concreto: se crea la red con su
+          // propio CIDR/gateway/VLAN y el backend enlaza automáticamente
+          // los endpoints cuya IP caiga bajo esa máscara y compartan VLAN.
           if (createNetwork) {
-            await createNetwork(endpoint_id, rest);
+            await createNetwork(data);
           }
           break;
         }
@@ -319,6 +351,50 @@ export function AddAssetButton({
                   <option value="MEDIUM">MEDIUM</option>
                   <option value="HIGH">HIGH</option>
                 </select>
+              </div>
+
+              <div>
+                <div className="asset-field-label">Direcciones IP</div>
+
+                {forms.endpoint.ips.length > 0 && (
+                  <div className="ip-rows">
+                    {forms.endpoint.ips.map((ipRow, idx) => (
+                      <div className="ip-row" key={idx}>
+                        <input
+                          type="text"
+                          className="asset-input"
+                          placeholder="10.0.1.25"
+                          value={ipRow.ip}
+                          onChange={(e) => updateEndpointIp(idx, 'ip', e.target.value)}
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          className="asset-input ip-row-vlan"
+                          placeholder="VLAN ID"
+                          value={ipRow.vlan_id}
+                          onChange={(e) => updateEndpointIp(idx, 'vlan_id', e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          className="ip-row-remove-btn"
+                          onClick={() => removeEndpointIp(idx)}
+                          title="Quitar IP"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <button type="button" className="btn btn-secondary asset-add-ip-btn" onClick={addIpToEndpoint}>
+                  + Añadir IP
+                </button>
+
+                <div className="asset-field-help">
+                  Cada IP puede asociarse a una VLAN. Al crear una red, los endpoints con IP dentro de su rango CIDR y misma VLAN se enlazarán automáticamente.
+                </div>
               </div>
 
               {formError && <p className="asset-error-text">⚠️ {formError}</p>}
@@ -615,27 +691,14 @@ export function AddAssetButton({
             <div className="asset-modal-header">
               <div>
                 <h2>🌐 Nueva Red</h2>
-                <div className="asset-modal-subtitle">Asocia una subred a un endpoint existente</div>
+                <div className="asset-modal-subtitle">
+                  Define una subred; los endpoints cuya IP caiga en su rango CIDR y compartan VLAN se enlazarán automáticamente
+                </div>
               </div>
               <button className="asset-modal-close" onClick={closeAll}>✕</button>
             </div>
 
             <form onSubmit={(e) => handleSubmit(e, 'network')} className="asset-form">
-              <div>
-                <div className="asset-field-label">Endpoint</div>
-                <select
-                  className="asset-input"
-                  value={forms.network.endpoint_id}
-                  onChange={(e) => updateField('network', 'endpoint_id', e.target.value)}
-                  required
-                >
-                  <option value="">-- Selecciona un endpoint --</option>
-                  {endpoints.map(ep => (
-                    <option key={ep.id} value={ep.id}>{ep.name}</option>
-                  ))}
-                </select>
-              </div>
-
               <div>
                 <div className="asset-field-label">Nombre</div>
                 <input
@@ -668,7 +731,11 @@ export function AddAssetButton({
                   placeholder="10.0.1.1"
                   value={forms.network.gateway}
                   onChange={(e) => updateField('network', 'gateway', e.target.value)}
+                  required
                 />
+                <div className="asset-field-help">
+                  Ya no es necesario seleccionar un endpoint: con la IP del gateway y el CIDR basta para crear la red.
+                </div>
               </div>
 
               <div>
@@ -681,6 +748,9 @@ export function AddAssetButton({
                   value={forms.network.vlan_id}
                   onChange={(e) => updateField('network', 'vlan_id', e.target.value)}
                 />
+                <div className="asset-field-help">
+                  Los endpoints con una IP dentro del CIDR y esta misma VLAN se enlazarán automáticamente a la red.
+                </div>
               </div>
 
               <div>
