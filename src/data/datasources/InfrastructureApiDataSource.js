@@ -76,6 +76,22 @@ export class InfrastructureApiDataSource {
     });
     return await this._handleResponse(res);
   }
+  
+  async importInfrastructure(payload) {
+    const res = await fetch('/api/infrastructure/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return await this._handleResponse(res);
+  }
+
+  async deleteProject(projectId) {
+    const res = await fetch(`/api/projects/${projectId}`, {
+      method: 'DELETE'
+    });
+    return await this._handleResponse(res);
+  }
 
   async scanInstallationVulnerabilities(installationId, softwareId, limit = 100) {
     const params = new URLSearchParams({

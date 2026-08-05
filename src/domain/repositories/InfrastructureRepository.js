@@ -33,6 +33,13 @@ export class InfrastructureRepository {
   async createNetwork(endpointId, networkData) {
     throw new Error('Method createNetwork not implemented');
   }
+  async importInfrastructure(exportData) {
+    throw new Error('Method importInfrastructure not implemented');
+  }
+
+  async deleteProject(projectId) {
+    throw new Error('Method deleteProject not implemented');
+  }
 
   async scanInstallationVulnerabilities(installationId, softwareId, limit) {
     throw new Error('Method scanInstallationVulnerabilities not implemented');

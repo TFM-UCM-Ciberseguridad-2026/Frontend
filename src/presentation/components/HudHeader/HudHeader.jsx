@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 
-export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, setShowDashboard, projects, selectedProjectId, setSelectedProjectId, selectedProjectNode }) {
+export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploitationPaths, setShowDashboard, projects, selectedProjectId, setSelectedProjectId, selectedProjectNode, onOpenExport, onOpenImport }) {
   const [timeStr, setTimeStr] = useState('--:--:--');
   const [dateStr, setDateStr] = useState('-----');
   const [loadVal, setLoadVal] = useState(72);
-
+  const [archiveOpen, setArchiveOpen] = useState(false);
   // Reloj
   useEffect(() => {
     const tick = () => {
@@ -111,6 +111,19 @@ export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, setShowDashbo
           Redes
         </button>
 
+        <button 
+          className={`nav-btn ${activeNav === 'ttps' ? 'active' : ''}`}
+          onClick={() => setActiveNav('ttps')}
+        >
+          <span className="ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 2L2 7l10 5 10-5-10-5z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2 17l10 5 10-5M2 12l10 5 10-5" />
+            </svg>
+          </span>
+          Matriz TTPs
+        </button>
+
         <button
           className="nav-btn"
           onClick={fetchTopAPTs}
@@ -123,6 +136,64 @@ export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, setShowDashbo
           </span>
           Threat Actors
         </button>
+        {fetchExploitationPaths && (
+          <button
+            className="nav-btn"
+            onClick={fetchExploitationPaths}
+          >
+            <span className="ic">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+              </svg>
+            </span>
+            Rutas de Ataque
+          </button>
+        )}
+        
+        {/* BOTÓN ARCHIVE CON DESPLEGABLE */}
+        <div className="archive-dropdown-container">
+          <button
+            className={`nav-btn ${archiveOpen ? 'active' : ''}`}
+            onClick={() => setArchiveOpen(!archiveOpen)}
+          >
+            <span className="ic">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+              </svg>
+            </span>
+            Archive
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginLeft: '4px' }}>
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </button>
+
+          {archiveOpen && (
+            <div className="archive-dropdown-menu" onMouseLeave={() => setArchiveOpen(false)}>
+              <button
+                className="archive-dropdown-item"
+                onClick={() => { setArchiveOpen(false); onOpenImport && onOpenImport(); }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+                Importar
+              </button>
+              <button
+                className="archive-dropdown-item"
+                onClick={() => { setArchiveOpen(false); onOpenExport && onOpenExport(); }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Exportar
+              </button>
+            </div>
+          )}
+        </div>
       </nav>
 
 

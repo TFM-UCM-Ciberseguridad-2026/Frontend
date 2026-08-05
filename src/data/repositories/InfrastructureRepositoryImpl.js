@@ -54,6 +54,14 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     return res ? new Node(res) : null;
   }
 
+  async importInfrastructure(exportData) {
+    return await this.apiDataSource.importInfrastructure(exportData);
+  }
+
+  async deleteProject(projectId) {
+    return await this.apiDataSource.deleteProject(projectId);
+  }
+
   async scanInstallationVulnerabilities(installationId, softwareId, limit) {
     return await this.apiDataSource.scanInstallationVulnerabilities(installationId, softwareId, limit);
   }
@@ -65,5 +73,4 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
   async computeAllProjectRisks() {
     return await this.apiDataSource.computeAllProjectRisks();
   }
-
 }
