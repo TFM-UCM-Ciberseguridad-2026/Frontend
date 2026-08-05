@@ -60,19 +60,15 @@ export function ImportModal({
         const projId = parsed?.project?.id ||
           parsed?.nodes?.find(n => n.labels?.includes('Project') || n.primaryLabel === 'Project')?.properties?.id;
 
-        // Comprobar si ya existe un proyecto registrado con el mismo nombre o ID
-        const existing = (projects || []).find(p => {
-          const matchName = projName && p.name?.toLowerCase().trim() === projName.toLowerCase().trim();
-          const matchId = projId !== undefined && projId !== null && String(p.id) === String(projId);
-          return matchName || matchId;
-        });
+        // Solo mostrar modal de conflicto si el nombre coincide exactamente
+        const existingByName = (projects || []).find(p => projName && p.name?.toLowerCase().trim() === projName.toLowerCase().trim());
 
         setFileContent(text);
 
-        if (existing) {
-          const nameToUse = projName || existing.name;
+        if (existingByName) {
+          const nameToUse = projName || existingByName.name;
           setConflictState({
-            existingProject: existing,
+            existingProject: existingByName,
             originalName: nameToUse
           });
           setNewNameInput(`${nameToUse} (Copia)`);
@@ -99,7 +95,21 @@ export function ImportModal({
     setImporting(true);
     setErrorMsg(null);
     try {
-      await onImport(fileContent, options);
+      let finalOptions = { ...options };
+      
+      // Auto-resolver conflictos de ID silenciosos (cuando el nombre es distinto pero el ID choca)
+      if (!conflictState && !finalOptions.renameTo && !finalOptions.overwrite) {
+        const parsed = JSON.parse(fileContent);
+        const projName = parsed?.project?.name || parsed?.nodes?.find(n => n.labels?.includes('Project') || n.primaryLabel === 'Project')?.properties?.nombre || parsed?.nodes?.find(n => n.labels?.includes('Project') || n.primaryLabel === 'Project')?.properties?.name || 'Proyecto Importado';
+        const projId = parsed?.project?.id || parsed?.nodes?.find(n => n.labels?.includes('Project') || n.primaryLabel === 'Project')?.properties?.id;
+        
+        const existingById = (projects || []).find(p => projId !== undefined && projId !== null && String(p.id) === String(projId));
+        if (existingById) {
+          finalOptions.renameTo = projName;
+        }
+      }
+
+      await onImport(fileContent, finalOptions);
       onClose();
     } catch (err) {
       setErrorMsg(err.message || 'Error al importar la infraestructura.');
