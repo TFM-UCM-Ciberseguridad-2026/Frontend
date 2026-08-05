@@ -5,6 +5,7 @@ import { ExploitationPathsModal } from '../components/ExploitationPaths/Exploita
 import { GraphPage } from './GraphPage';
 import { InventoryPage } from './InventoryPage';
 import { NetworksPage } from './NetworksPage';
+import { TtpsPage } from './TtpsPage';
 import { ExportModal } from '../components/Archive/ExportModal';
 import { ImportModal } from '../components/Archive/ImportModal';
 
@@ -140,6 +141,13 @@ export function DashboardPage({
           <NetworksPage
             graphData={graphData}
             categories={categories}
+          />
+        )}
+
+        {activeNav === 'ttps' && (
+          <TtpsPage
+            graphData={graphData}
+            showToast={showToast}
           />
         )}
       </div>
