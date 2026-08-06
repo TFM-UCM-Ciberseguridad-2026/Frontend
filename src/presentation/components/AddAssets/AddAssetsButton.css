@@ -258,3 +258,49 @@
   line-height: 1.3;
   font-style: italic;
 }
+
+.ip-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.ip-row {
+  display: grid;
+  grid-template-columns: 1fr 100px 32px;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.ip-row-vlan {
+  text-align: center;
+}
+
+.ip-row-remove-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #f87171;
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.ip-row-remove-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: #ef4444;
+  color: #ffffff;
+}
+
+.asset-add-ip-btn {
+  width: 100%;
+  font-size: 0.85rem;
+  padding: 0.55rem 1rem;
+}

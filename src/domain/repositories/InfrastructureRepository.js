@@ -30,7 +30,7 @@ export class InfrastructureRepository {
     throw new Error('Method createSoftware not implemented');
   }
 
-  async createNetwork(endpointId, networkData) {
+  async createNetwork(networkData) {
     throw new Error('Method createNetwork not implemented');
   }
   async importInfrastructure(exportData) {
