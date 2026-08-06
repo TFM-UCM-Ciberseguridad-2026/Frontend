@@ -6,7 +6,8 @@ export function TopAptsModal({
   aptData,
   aptLoading,
   aptError,
-  fetchTopAPTs
+  fetchTopAPTs,
+  onSelectTTP
 }) {
   if (!showAPTPanel) return null;
 
@@ -55,33 +56,43 @@ export function TopAptsModal({
           )}
 
           {!aptLoading && !aptError && aptData.map((apt, index) => (
-            <div key={apt.id} className={`apt-card ${getRankClass(index)}`}>
+            <div key={apt.id || apt.actor_id || index} className={`apt-card ${getRankClass(index)}`}>
               <div className="apt-card-top">
                 <div className="apt-card-rank">#{index + 1}</div>
                 <div className="apt-card-info">
-                  <h3 className="apt-card-name">{apt.name}</h3>
+                  <h3 className="apt-card-name">{apt.name || apt.actor_name}</h3>
                   <div className="apt-card-meta">
                     <span className="apt-origin-badge">🌍 {apt.origin}</span>
                     <span className="apt-motivation-badge">🎯 {apt.motivation}</span>
                   </div>
                 </div>
                 <div className="apt-card-coverage">
-                  <div className="apt-coverage-value">{apt.coveragePercent}%</div>
-                  <div className="apt-coverage-label">{apt.matchedTtpCount} / {apt.totalInfraTtps} TTPs</div>
+                  <div className="apt-coverage-value">{apt.coveragePercent || apt.coverage_percent}%</div>
+                  <div className="apt-coverage-label">{apt.matchedTtpCount || apt.matched_ttp_count} / {apt.totalInfraTtps || apt.total_infra_ttps} TTPs</div>
                 </div>
               </div>
 
               <div className="apt-progress-bar">
-                <div className="apt-progress-fill" style={{ width: `${apt.coveragePercent}%` }}></div>
+                <div className="apt-progress-fill" style={{ width: `${apt.coveragePercent || apt.coverage_percent}%` }}></div>
               </div>
 
               <div className="apt-ttp-chips">
-                {apt.matchedTtpIds && apt.matchedTtpIds.map((ttpId, i) => (
-                  <span key={ttpId} className="apt-ttp-chip">
-                    <span className="chip-id">{ttpId}</span>
-                    {apt.matchedTtpNames && apt.matchedTtpNames[i]}
-                  </span>
-                ))}
+                {(apt.matchedTtpIds || apt.matched_ttp_ids) && (apt.matchedTtpIds || apt.matched_ttp_ids).map((ttpId, i) => {
+                  const ttpNames = apt.matchedTtpNames || apt.matched_ttp_names || [];
+
+                  return (
+                    <span
+                      key={ttpId + i}
+                      className="apt-ttp-chip"
+                      style={{ cursor: 'pointer', transition: 'all 0.2s ease' }}
+                      title={`Filtrar TTP en el grafo: ${ttpId}`}
+                      onClick={() => onSelectTTP && onSelectTTP(ttpId)}
+                    >
+                      <span className="chip-id">{ttpId}</span>
+                      {ttpNames[i]}
+                    </span>
+                  );
+                })}
               </div>
             </div>
           ))}

@@ -1,0 +1,850 @@
+/* ---------- TTPS LAYOUT ---------- */
+main.ttps {
+  position: relative;
+  z-index: 2;
+  grid-column: 1 / -1;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 24px 28px 80px;
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.ttps .page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 22px;
+  flex-wrap: wrap;
+}
+
+.ttps .head-info {
+  flex: 1;
+  min-width: 320px;
+}
+
+.ttps .page-head .eyebrow {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: var(--c400);
+  text-transform: uppercase;
+  margin: 0 0 8px 0;
+}
+
+.ttps .page-head h2 {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  font-size: 23px;
+  letter-spacing: 1px;
+  margin: 0 0 10px 0;
+  color: var(--c50);
+  text-shadow: 0 0 22px rgba(122, 115, 255, 0.35);
+}
+
+.ttps .page-head p {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--c200);
+  max-width: 800px;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.ttps .stats-row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-top: 0;
+  flex-shrink: 0;
+}
+
+.ttps .stat-circle-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.ttps .circle-ring-container {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ttps .circle-ring-container svg {
+  transform: rotate(-90deg);
+}
+
+.ttps .circle-inner-content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.ttps .circle-val {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  font-size: 22px;
+  color: var(--c50);
+  line-height: 1;
+  letter-spacing: 0.5px;
+}
+
+.ttps .circle-sub {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--c300);
+  margin-top: 3px;
+  text-transform: uppercase;
+}
+
+.ttps .circle-label {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  color: var(--c200);
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.ttps .stat-selection-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 12px 20px;
+  border-radius: 14px;
+  border: 1px solid var(--c700);
+  background: rgba(47, 2, 255, 0.08);
+  min-height: 84px;
+  box-sizing: border-box;
+}
+
+.ttps .selection-eyebrow {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: var(--c300);
+  margin-bottom: 4px;
+}
+
+.ttps .selection-val {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--c50);
+}
+
+.ttps .workspace {
+  display: grid;
+  grid-template-columns: 330px 1fr;
+  gap: 20px;
+  margin-top: 22px;
+  align-items: start;
+  width: 100%;
+}
+
+/* ---------- LISTA TTPs ---------- */
+.ttps .list-panel {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(122, 115, 255, 0.06), rgba(5, 6, 30, 0.4));
+  padding: 18px 16px 16px;
+  position: sticky;
+  top: 0;
+  max-height: calc(100vh - 220px);
+  display: flex;
+  flex-direction: column;
+}
+
+.ttps .list-panel h3 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--c50);
+  margin: 0 0 12px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ttps .list-panel h3 svg {
+  width: 15px;
+  height: 15px;
+  stroke: var(--c400);
+}
+
+.ttps .search-wrap {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.ttps .search-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.ttps .search-input-box,
+.ttps .tactic-filter-box {
+  position: relative;
+  width: 100%;
+}
+
+.ttps .search-input-box svg,
+.ttps .tactic-filter-box svg {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  stroke: var(--c400);
+  pointer-events: none;
+}
+
+.ttps #ttpSearch,
+.ttps #tacticSelect {
+  width: 100%;
+  background: var(--panel-2);
+  border: 1px solid var(--c800);
+  color: var(--text);
+  padding: 8px 12px 8px 32px;
+  border-radius: 8px;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  box-sizing: border-box;
+}
+
+.ttps #tacticSelect option {
+  background: var(--panel-2);
+  color: var(--c50);
+}
+
+.ttps #ttpSearch:focus,
+.ttps #tacticSelect:focus {
+  border-color: var(--c400);
+  box-shadow: 0 0 0 3px rgba(122, 115, 255, 0.15);
+}
+
+.ttps .ttp-list {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-right: 2px;
+}
+
+.ttps .ttp-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 12px;
+  cursor: pointer;
+  background: rgba(122, 115, 255, 0.03);
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.15s ease;
+  animation: itemIn 0.25s ease both;
+}
+
+.ttps .ttp-item:hover {
+  border-color: var(--c700);
+  background: rgba(122, 115, 255, 0.09);
+  transform: translateX(2px);
+}
+
+.ttps .ttp-item .row1 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ttps .ttp-item .tid {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--c400);
+}
+
+.ttps .ttp-item .tactic-tag {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 8.5px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--c900);
+  background: rgba(122, 115, 255, 0.1);
+  border: 1px solid var(--c800);
+  padding: 2px 6px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.ttps .ttp-item .tname {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--c100);
+  line-height: 1.3;
+}
+
+.ttps .ttp-item .hint {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.6px;
+  color: var(--c400);
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: all 0.22s ease;
+  text-transform: uppercase;
+}
+
+.ttps .ttp-item.selected {
+  border-color: var(--c400);
+  background: linear-gradient(90deg, rgba(122, 115, 255, 0.16), rgba(122, 115, 255, 0.04));
+  box-shadow: 0 0 14px rgba(122, 115, 255, 0.25), inset 0 0 10px rgba(122, 115, 255, 0.1);
+}
+
+.ttps .ttp-item.selected .hint {
+  max-height: 20px;
+  opacity: 1;
+  margin-top: 2px;
+}
+
+.ttps .ttp-item.selected .tid {
+  color: var(--c200);
+}
+
+.ttps .ttp-item.selected::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--c400);
+  box-shadow: 0 0 8px var(--c400);
+}
+
+@keyframes itemIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.ttps .empty-list {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11.5px;
+  color: var(--c900);
+  text-align: center;
+  padding: 26px 6px;
+  letter-spacing: 0.5px;
+}
+
+/* ---------- MATRIZ MITRE ---------- */
+.ttps .matrix-panel {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(122, 115, 255, 0.05), rgba(5, 6, 30, 0.35));
+  padding: 18px 18px 20px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.ttps .matrix-panel > h3 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--c50);
+  margin: 0 0 4px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ttps .matrix-panel > h3 svg {
+  width: 15px;
+  height: 15px;
+  stroke: var(--c400);
+}
+
+.ttps .matrix-sub {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10.5px;
+  color: var(--muted);
+  letter-spacing: 0.5px;
+  margin: 0 0 16px 0;
+}
+
+.ttps .matrix-scroll {
+  overflow-x: auto;
+  padding-bottom: 6px;
+  width: 100%;
+}
+
+.ttps .matrix {
+  display: grid;
+  grid-template-columns: repeat(14, minmax(0, 1fr));
+  gap: 5px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.ttps .tactic-col {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.ttps .tactic-head {
+  font-family: 'Share Tech Mono', monospace;
+  background: linear-gradient(135deg, rgba(56, 19, 255, 0.35), rgba(56, 19, 255, 0.08));
+  border: 1px solid var(--c700);
+  border-radius: 6px;
+  padding: 6px 3px;
+  text-align: center;
+  line-height: 1.2;
+  box-shadow: inset 0 0 10px rgba(122, 115, 255, 0.12);
+  min-width: 0;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ttps .tactic-head:hover {
+  border-color: var(--c400);
+  background: rgba(122, 115, 255, 0.2);
+}
+
+.ttps .tactic-head.filtered {
+  border-color: var(--c400);
+  background: linear-gradient(135deg, rgba(77, 59, 255, 0.6), rgba(122, 115, 255, 0.3));
+  box-shadow: 0 0 14px rgba(122, 115, 255, 0.5), inset 0 0 10px rgba(255, 255, 255, 0.15);
+}
+
+.ttps .tactic-id {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  font-size: 8.5px;
+  color: var(--c50);
+  letter-spacing: 0.5px;
+}
+
+.ttps .tactic-title {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 9.5px;
+  color: var(--c100);
+  line-height: 1.1;
+  margin: 2px 0;
+  word-break: break-word;
+}
+
+.ttps .tactic-count {
+  font-size: 8px;
+  color: var(--muted);
+}
+
+.ttps .cell {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: rgba(122, 115, 255, 0.035);
+  padding: 5px 4px;
+  cursor: pointer;
+  min-width: 0;
+  overflow: hidden;
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.15s ease, box-shadow 0.25s ease;
+}
+
+.ttps .project-tag {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #ffb3c0;
+  background: rgba(255, 93, 122, 0.2);
+  border: 1px solid rgba(255, 93, 122, 0.5);
+  padding: 1px 5px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.ttps .cell.in-project {
+  border-color: rgba(255, 93, 122, 0.6);
+  background: linear-gradient(135deg, rgba(255, 93, 122, 0.18), rgba(255, 93, 122, 0.05));
+  box-shadow: 0 0 10px rgba(255, 93, 122, 0.25);
+}
+
+.ttps .cell.in-project .cid {
+  color: #ff99ab;
+  font-weight: 700;
+}
+
+.ttps .cell:hover {
+  border-color: var(--c700);
+  background: rgba(122, 115, 255, 0.1);
+  transform: translateY(-1px);
+}
+
+.ttps .cell .cid {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 8.5px;
+  color: var(--c400);
+  display: block;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ttps .cell .cname {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--c200);
+  line-height: 1.15;
+  display: block;
+  word-break: break-word;
+}
+
+.ttps .cell .cname {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c200);
+  line-height: 1.3;
+  display: block;
+}
+
+.ttps .cell.selected {
+  border-color: var(--c300);
+  background: linear-gradient(135deg, rgba(122, 115, 255, 0.32), rgba(122, 115, 255, 0.1));
+  box-shadow: 0 0 0 1px var(--c400), 0 0 22px rgba(122, 115, 255, 0.55);
+  animation: cellPulse 1.1s ease-in-out;
+}
+
+.ttps .cell.selected .cid { color: var(--c50); }
+.ttps .cell.selected .cname { color: var(--c50); }
+
+.ttps .cell.selected::after {
+  content: "◉";
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 9px;
+  color: var(--c200);
+  animation: blink 1.4s ease-in-out infinite;
+}
+
+@keyframes cellPulse {
+  0% { box-shadow: 0 0 0 1px var(--c400), 0 0 0 rgba(122, 115, 255, 0.6); }
+  35% { box-shadow: 0 0 0 1px var(--c300), 0 0 34px rgba(122, 115, 255, 0.75); }
+  100% { box-shadow: 0 0 0 1px var(--c400), 0 0 22px rgba(122, 115, 255, 0.55); }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* ---------- MODAL DETALLE TTP ---------- */
+.ttp-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2, 2, 16, 0.72);
+  backdrop-filter: blur(4px);
+  padding: 20px;
+}
+
+.ttp-modal {
+  width: 100%;
+  max-width: 560px;
+  max-height: 88vh;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--c700);
+  border-radius: 14px;
+  box-shadow: 0 0 40px rgba(56, 19, 255, 0.35), 0 20px 60px rgba(0, 0, 0, 0.5);
+  padding: 26px 26px 22px;
+  animation: modalIn 0.28s cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(14px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.ttp-modal .modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  gap: 12px;
+}
+
+.ttp-modal .modal-head .eyebrow {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--c400);
+  text-transform: uppercase;
+  margin: 0 0 6px 0;
+}
+
+.ttp-modal .modal-head h3 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 16px;
+  color: var(--c50);
+  margin: 0;
+  letter-spacing: 0.5px;
+}
+
+.ttp-modal .modal-close {
+  background: transparent;
+  border: 1px solid var(--c800);
+  color: var(--muted);
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.ttp-modal .modal-close:hover {
+  color: var(--c50);
+  border-color: var(--c400);
+}
+
+.ttp-modal .tactic-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  margin-bottom: 18px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--c200);
+  background: rgba(56, 19, 255, 0.14);
+  border: 1px solid var(--c700);
+  padding: 5px 11px;
+  border-radius: 14px;
+}
+
+.ttp-modal .tactic-badge i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--c400);
+  box-shadow: 0 0 6px var(--c400);
+}
+
+.ttp-modal .sec {
+  margin-top: 18px;
+}
+
+.ttp-modal .sec-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10.5px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--c300);
+  margin: 0 0 8px 0;
+}
+
+.ttp-modal .sec-label svg {
+  width: 14px;
+  height: 14px;
+  stroke: var(--c400);
+}
+
+.ttp-modal .sec p {
+  font-size: 14px;
+  color: var(--c100);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.ttp-modal .cve-box {
+  border: 1px solid var(--crit);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(255, 93, 122, 0.14), rgba(255, 93, 122, 0.03));
+  padding: 13px 15px;
+}
+
+.ttp-modal .cve-box .cve-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.ttp-modal .cve-id {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffb3c0;
+  letter-spacing: 0.5px;
+}
+
+.ttp-modal .cve-score {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 1px;
+  padding: 3px 9px;
+  border-radius: 10px;
+  border: 1px solid var(--crit);
+  color: #ffb3c0;
+  background: rgba(255, 93, 122, 0.12);
+}
+
+.ttp-modal .cve-box p {
+  font-size: 13.5px;
+  color: var(--c200);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.ttp-modal .remed-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.ttp-modal .remed-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(122, 115, 255, 0.04);
+  font-size: 13.5px;
+  color: var(--c100);
+  line-height: 1.5;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.ttp-modal .remed-list li:hover {
+  border-color: var(--c700);
+  background: rgba(122, 115, 255, 0.09);
+}
+
+.ttp-modal .remed-list li .chk {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  margin-top: 1px;
+  border: 1px solid var(--ok);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ok);
+  background: rgba(51, 224, 138, 0.1);
+}
+
+.ttp-modal .remed-list li .chk svg {
+  width: 11px;
+  height: 11px;
+}
+
+.ttp-modal .modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.ttp-modal .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  padding: 10px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.18s ease;
+  height: fit-content;
+}
+
+.ttp-modal .btn svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.ttp-modal .btn-primary {
+  color: var(--c50);
+  background: linear-gradient(135deg, var(--c500), var(--c700));
+  box-shadow: 0 0 16px rgba(77, 59, 255, 0.45), inset 0 0 10px rgba(255, 255, 255, 0.08);
+}
+
+.ttp-modal .btn-primary:hover {
+  filter: brightness(1.12);
+  box-shadow: 0 0 22px rgba(122, 115, 255, 0.6);
+}
+
+.ttp-modal .btn-outline {
+  color: var(--c200);
+  border-color: var(--c700);
+  background: rgba(56, 19, 255, 0.06);
+}
+
+.ttp-modal .btn-outline:hover {
+  border-color: var(--c400);
+  color: var(--c50);
+  background: rgba(122, 115, 255, 0.12);
+}
+
+@media (max-width: 980px) {
+  .ttps .workspace {
+    grid-template-columns: 1fr;
+  }
+  .ttps .list-panel {
+    position: relative;
+    top: 0;
+    max-height: 420px;
+  }
+}

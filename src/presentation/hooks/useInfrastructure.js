@@ -10,6 +10,10 @@ import { CreateEndpointUseCase } from '../../domain/usecases/CreateEndpointUseCa
 import { CreateHardwareUseCase } from '../../domain/usecases/CreateHardwareUseCase';
 import { CreateSoftwareUseCase } from '../../domain/usecases/CreateSoftwareUseCase';
 import { CreateNetworkUseCase } from '../../domain/usecases/CreateNetworkUseCase';
+import { ExportProjectUseCase } from '../../domain/usecases/ExportProjectUseCase';
+import { ExportMitreNavigatorUseCase } from '../../domain/usecases/ExportMitreNavigatorUseCase';
+import { ExportInventoryUseCase } from '../../domain/usecases/ExportInventoryUseCase';
+import { ImportInfrastructureUseCase } from '../../domain/usecases/ImportInfrastructureUseCase';
 import { ScanInstallationVulnerabilitiesUseCase } from '../../domain/usecases/ScanInstallationVulnerabilitiesUseCase';
 import { ComputeProjectRiskUseCase } from '../../domain/usecases/ComputeProjectRiskUseCase';
 import { ComputeAllProjectRisksUseCase } from '../../domain/usecases/ComputeAllProjectRisksUseCase';
@@ -60,6 +64,10 @@ export function useInfrastructure() {
   const createSoftwareUseCase = useMemo(() => new CreateSoftwareUseCase(repository), [repository]);
   const createNetworkUseCase = useMemo(() => new CreateNetworkUseCase(repository), [repository]);
 
+  const exportProjectUseCase = useMemo(() => new ExportProjectUseCase(), []);
+  const exportMitreNavigatorUseCase = useMemo(() => new ExportMitreNavigatorUseCase(), []);
+  const exportInventoryUseCase = useMemo(() => new ExportInventoryUseCase(), []);
+  const importInfrastructureUseCase = useMemo(() => new ImportInfrastructureUseCase(repository), [repository]);
   // Casos de uso para cálculo de riesgo
   const scanInstallationVulnerabilitiesUseCase = useMemo(() => new ScanInstallationVulnerabilitiesUseCase(repository), [repository]);
   const computeProjectRiskUseCase = useMemo(() => new ComputeProjectRiskUseCase(repository), [repository]);
@@ -202,12 +210,132 @@ export function useInfrastructure() {
     }
   };
 
+  // Helper para desencadenar la descarga en el navegador
+  const _triggerDownload = (filename, jsonText) => {
+    const blob = new Blob([jsonText], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
-  // Cargar datos al activar el Dashboard
-  useEffect(() => {
-    if (showDashboard) {
-      fetchInfrastructure();
+  const exportProject = (targetProjectId) => {
+    try {
+      const { filename, content } = exportProjectUseCase.execute(filteredGraphData, targetProjectId || selectedProjectId);
+      _triggerDownload(filename, content);
+      showToast('¡Proyecto exportado a JSON con éxito!');
+    } catch (err) {
+      console.error(err);
+      showToast(`Error al exportar proyecto: ${err.message}`);
     }
+  };
+
+  const exportMitreNavigator = (targetProjectId) => {
+    try {
+      const { filename, content } = exportMitreNavigatorUseCase.execute(filteredGraphData, aptData, targetProjectId || selectedProjectId);
+      _triggerDownload(filename, content);
+      showToast('¡Capa de MITRE ATT&CK Navigator exportada!');
+    } catch (err) {
+      console.error(err);
+      showToast(`Error al exportar capa MITRE: ${err.message}`);
+    }
+  };
+
+  const exportInventory = (targetProjectId) => {
+    try {
+      const { filename, blob } = exportInventoryUseCase.execute(filteredGraphData, targetProjectId || selectedProjectId);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast('¡Inventario exportado a Excel (.xlsx) con éxito!');
+    } catch (err) {
+      console.error(err);
+      showToast(`Error al exportar inventario a Excel: ${err.message}`);
+    }
+  };
+
+  const importProject = async (fileData, options = {}) => {
+    try {
+      let dataToImport = typeof fileData === 'string' ? JSON.parse(fileData) : JSON.parse(JSON.stringify(fileData));
+
+      // 1. Si el usuario seleccionó "Sobrescribir", eliminar el proyecto existente en Neo4j primero
+      if (options.overwrite && options.targetProjectId) {
+        try {
+          await repository.deleteProject(options.targetProjectId);
+        } catch (delErr) {
+          console.warn('Aviso limpiando proyecto anterior:', delErr);
+        }
+      }
+
+      // 2. Si el usuario seleccionó "Renombrar", actualizar el nombre y asignar nuevo ID único al proyecto en el JSON
+      if (options.renameTo) {
+        const newProjId = Date.now();
+        if (dataToImport.project) {
+          dataToImport.project.name = options.renameTo;
+          dataToImport.project.id = newProjId;
+        }
+
+        const nodes = dataToImport.nodes || dataToImport.graphData?.nodes || [];
+        const projectNode = nodes.find(n => n.labels?.includes('Project') || n.primaryLabel === 'Project');
+
+        if (projectNode) {
+          const oldNodeId = String(projectNode.id);
+          const oldPropId = projectNode.properties?.id !== undefined && projectNode.properties?.id !== null ? String(projectNode.properties.id) : null;
+
+          if (projectNode.properties) {
+            projectNode.properties.nombre = options.renameTo;
+            projectNode.properties.name = options.renameTo;
+            projectNode.properties.id = newProjId;
+          }
+          projectNode.id = String(newProjId);
+
+          const rels = dataToImport.relationships || dataToImport.graphData?.relationships || [];
+          rels.forEach(rel => {
+            const sStr = String(rel.source);
+            const tStr = String(rel.target);
+
+            if (sStr === oldNodeId || (oldPropId && sStr === oldPropId)) {
+              rel.source = String(newProjId);
+            }
+            if (tStr === oldNodeId || (oldPropId && tStr === oldPropId)) {
+              rel.target = String(newProjId);
+            }
+          });
+        }
+      }
+
+      // 3. Ejecutar caso de uso de importación
+      await importInfrastructureUseCase.execute(dataToImport);
+      showToast('¡Infraestructura cargada e importada con éxito!');
+      await fetchInfrastructure(true);
+
+      // 4. Auto-seleccionar el proyecto importado
+      try {
+        const impProjectId = dataToImport?.project?.id || dataToImport?.nodes?.find(n => n.labels?.includes('Project') || n.primaryLabel === 'Project')?.properties?.id;
+        if (impProjectId !== undefined && impProjectId !== null) {
+          setSelectedProjectId(String(impProjectId));
+        }
+      } catch (e) {
+        // Ignorar si no se puede extraer el ID del proyecto
+      }
+    } catch (err) {
+      console.error(err);
+      throw err;
+    }
+  };
+
+  // Cargar datos al montar el hook y al activar el Dashboard
+  useEffect(() => {
+    fetchInfrastructure();
   }, [showDashboard]);
 
   // Derivar lista de proyectos disponibles
@@ -590,6 +718,10 @@ export function useInfrastructure() {
     createHardware,
     createSoftware,
     createNetwork,
+    exportProject,
+    exportMitreNavigator,
+    exportInventory,
+    importProject,
     riskActionLoading,
     riskActionError,
     analyzeProjectVulnerabilities,

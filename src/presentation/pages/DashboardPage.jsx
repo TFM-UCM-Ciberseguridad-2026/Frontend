@@ -5,6 +5,9 @@ import { ExploitationPathsModal } from '../components/ExploitationPaths/Exploita
 import { GraphPage } from './GraphPage';
 import { InventoryPage } from './InventoryPage';
 import { NetworksPage } from './NetworksPage';
+import { TtpsPage } from './TtpsPage';
+import { ExportModal } from '../components/Archive/ExportModal';
+import { ImportModal } from '../components/Archive/ImportModal';
 
 export function DashboardPage({
   setShowDashboard,
@@ -44,6 +47,10 @@ export function DashboardPage({
   createHardware,
   createSoftware,
   createNetwork,
+  exportProject,
+  exportMitreNavigator,
+  exportInventory,
+  importProject,
   // Risk Analysis
   riskActionLoading,
   analyzeProjectVulnerabilities,
@@ -51,7 +58,8 @@ export function DashboardPage({
   selectedProjectNode
 }) {
   const [activeNav, setActiveNav] = useState('grafo'); // 'grafo', 'inventario', 'redes'
-
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const categories = [
     { key: 'ALL', label: 'Todos', color: 'var(--c400)' },
     { key: 'Network', label: 'Red / Subred', color: 'var(--c300)' },
@@ -85,6 +93,8 @@ export function DashboardPage({
         projects={projects}
         selectedProjectId={selectedProjectId}
         setSelectedProjectId={setSelectedProjectId}
+        onOpenExport={() => setShowExportModal(true)}
+        onOpenImport={() => setShowImportModal(true)}
         selectedProjectNode={selectedProjectNode}
       />
 
@@ -133,6 +143,13 @@ export function DashboardPage({
             categories={categories}
           />
         )}
+
+        {activeNav === 'ttps' && (
+          <TtpsPage
+            graphData={graphData}
+            showToast={showToast}
+          />
+        )}
       </div>
 
       {/* MODAL TOP APTs */}
@@ -143,6 +160,26 @@ export function DashboardPage({
         aptLoading={aptLoading}
         aptError={aptError}
         fetchTopAPTs={fetchTopAPTs}
+        onSelectTTP={(ttpId) => {
+          setShowAPTPanel(false);
+          setActiveNav('grafo');
+          setSearchQuery?.(ttpId);
+
+          const q = (ttpId || '').toLowerCase().trim();
+          const targetNode = (graphData?.nodes || []).find(n => {
+            const p = n.properties || {};
+            const ttps = Array.isArray(p.ttps) ? p.ttps.join(' ').toLowerCase() : String(p.ttps || '').toLowerCase();
+            const propsStr = JSON.stringify(p).toLowerCase();
+            return ttps.includes(q) || propsStr.includes(q) || String(n.id).toLowerCase() === q || (n.name || '').toLowerCase().includes(q);
+          });
+
+          if (targetNode) {
+            setSelectedNode(targetNode);
+            showToast?.(`TTP enfocada: ${ttpId}`, 'info');
+          } else {
+            showToast?.(`Filtrando TTP: ${ttpId}`, 'info');
+          }
+        }}
       />
 
       {/* MODAL RUTAS DE EXPLOTACIÓN */}
@@ -156,6 +193,24 @@ export function DashboardPage({
         selectedExploitationPath={selectedExploitationPath}
         selectExploitationPath={selectExploitationPath}
         clearSelectedExploitationPath={clearSelectedExploitationPath}
+      />
+      {/* MODAL EXPORTAR ARCHIVE */}
+      <ExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        projects={projects}
+        selectedProjectId={selectedProjectId}
+        onExportProject={(targetProjectId) => exportProject(targetProjectId)}
+        onExportMitre={(targetProjectId) => exportMitreNavigator(targetProjectId)}
+        onExportInventory={(targetProjectId) => exportInventory(targetProjectId)}
+      />
+
+      {/* MODAL IMPORTAR ARCHIVE */}
+      <ImportModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        projects={projects}
+        onImport={(fileContent, options) => importProject(fileContent, options)}
       />
     </div>
   );
