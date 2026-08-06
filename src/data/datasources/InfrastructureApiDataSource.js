@@ -120,6 +120,85 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
+  async updateEndpoint(id, payload) {
+    const res = await fetch(`/api/endpoints/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return await this._handleResponse(res);
+  }
+
+  async deleteEndpoint(id) {
+    const res = await fetch(`/api/endpoints/${id}`, { method: 'DELETE' });
+    return await this._handleResponse(res);
+  }
+
+  async updateNetwork(id, payload) {
+    const res = await fetch(`/api/networks/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return await this._handleResponse(res);
+  }
+
+  async deleteNetwork(id) {
+    const res = await fetch(`/api/networks/${id}`, { method: 'DELETE' });
+    return await this._handleResponse(res);
+  }
+
+  async updateHardware(id, payload) {
+    const res = await fetch(`/api/hardware/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return await this._handleResponse(res);
+  }
+
+  async deleteHardware(id) {
+    const res = await fetch(`/api/hardware/${id}`, { method: 'DELETE' });
+    return await this._handleResponse(res);
+  }
+
+  async updateSoftware(id, payload) {
+    const res = await fetch(`/api/software/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return await this._handleResponse(res);
+  }
+
+  async deleteSoftware(id) {
+    const res = await fetch(`/api/software/${id}`, { method: 'DELETE' });
+    return await this._handleResponse(res);
+  }
+
+  async updateSoftwareInstallation(id, payload) {
+    const res = await fetch(`/api/installations/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return await this._handleResponse(res);
+  }
+
+  async deleteSoftwareInstallation(id) {
+    const res = await fetch(`/api/installations/${id}`, { method: 'DELETE' });
+    return await this._handleResponse(res);
+  }
+
+  async deleteNode(id) {
+    const res = await fetch(`/api/nodes/${id}`, { method: 'DELETE' });
+    return await this._handleResponse(res);
+  }
+  async getEndpointIPs(id) {
+    const res = await fetch(`/api/endpoints/${id}/ips`);
+    return await this._handleResponse(res);
+  }
+
   async _handleResponse(res) {
     if (!res.ok) {
       let backendMessage = res.statusText;

@@ -17,6 +17,8 @@ import { ImportInfrastructureUseCase } from '../../domain/usecases/ImportInfrast
 import { ScanInstallationVulnerabilitiesUseCase } from '../../domain/usecases/ScanInstallationVulnerabilitiesUseCase';
 import { ComputeProjectRiskUseCase } from '../../domain/usecases/ComputeProjectRiskUseCase';
 import { ComputeAllProjectRisksUseCase } from '../../domain/usecases/ComputeAllProjectRisksUseCase';
+import { UpdateNodeUseCase } from '../../domain/usecases/UpdateNodeUseCase';
+import { DeleteNodeUseCase } from '../../domain/usecases/DeleteNodeUseCase';
 import { useToast } from '../context/ToastContext';
 
 export function useInfrastructure() {
@@ -63,6 +65,8 @@ export function useInfrastructure() {
   const createHardwareUseCase = useMemo(() => new CreateHardwareUseCase(repository), [repository]);
   const createSoftwareUseCase = useMemo(() => new CreateSoftwareUseCase(repository), [repository]);
   const createNetworkUseCase = useMemo(() => new CreateNetworkUseCase(repository), [repository]);
+  const updateNodeUseCase = useMemo(() => new UpdateNodeUseCase(repository), [repository]);
+  const deleteNodeUseCase = useMemo(() => new DeleteNodeUseCase(repository), [repository]);
 
   const exportProjectUseCase = useMemo(() => new ExportProjectUseCase(), []);
   const exportMitreNavigatorUseCase = useMemo(() => new ExportMitreNavigatorUseCase(), []);
@@ -206,6 +210,33 @@ export function useInfrastructure() {
       return res;
     } catch (err) {
       toast.error(err.message, 'Error creando Red');
+      throw err;
+    }
+  };
+
+  const updateNode = async (category, id, data) => {
+    try {
+      const res = await updateNodeUseCase.execute(category, id, data);
+      toast.success('¡Activo actualizado y re-enlazado correctamente!', 'Edición Guardada');
+      await fetchInfrastructure(true);
+      return res;
+    } catch (err) {
+      toast.error(err.message, 'Error actualizando Activo');
+      throw err;
+    }
+  };
+
+  const deleteNode = async (category, id) => {
+    try {
+      const res = await deleteNodeUseCase.execute(category, id);
+      toast.success('¡El activo fue eliminado del grafo correctamente!', 'Activo Eliminado');
+      if (selectedNode && (selectedNode.id === id || selectedNode.id === Number(id) || String(selectedNode.id) === String(id))) {
+        setSelectedNode(null);
+      }
+      await fetchInfrastructure(true);
+      return res;
+    } catch (err) {
+      toast.error(err.message, 'Error eliminando Activo');
       throw err;
     }
   };
@@ -386,6 +417,15 @@ export function useInfrastructure() {
 
     const reachableIds = new Set();
     reachableIds.add(projectNode.id);
+    
+    // 1b. Añadir TODAS las redes (Network) para que no desaparezcan si están huérfanas
+    graphData.nodes.forEach(n => {
+      const primaryLabel = n.primaryLabel || n.labels?.[0];
+      const labels = n.labels || [];
+      if (primaryLabel === 'Network' || labels.includes('Network')) {
+        reachableIds.add(n.id);
+      }
+    });
 
     // 2. Endpoints pertenecientes a ESTE proyecto
     const projectEndpointIds = new Set();
@@ -718,6 +758,8 @@ export function useInfrastructure() {
     createHardware,
     createSoftware,
     createNetwork,
+    updateNode,
+    deleteNode,
     exportProject,
     exportMitreNavigator,
     exportInventory,

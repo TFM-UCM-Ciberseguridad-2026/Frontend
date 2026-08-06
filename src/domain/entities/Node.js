@@ -5,6 +5,16 @@ export class Node {
     this.properties = properties || {};
   }
 
+  get domainId() {
+    const props = this.properties || {};
+    if (props.id !== undefined && props.id !== null) return props.id;
+    if (props.installation_id !== undefined && props.installation_id !== null) return props.installation_id;
+    if (props.cve_id !== undefined && props.cve_id !== null) return props.cve_id;
+    if (props.ttp_id !== undefined && props.ttp_id !== null) return props.ttp_id;
+    if (props.actor_id !== undefined && props.actor_id !== null) return props.actor_id;
+    return this.id;
+  }
+
   get primaryLabel() {
     if (this.labels.length === 0) return 'Unknown';
     const validLabels = this.labels.filter(l => l !== 'BaseNode' && l !== 'Persistable');
