@@ -590,7 +590,8 @@ aside {
 .compact-sidebar {
   padding: 12px 14px;
   gap: 10px;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .filter-header-bar {
@@ -671,7 +672,7 @@ aside {
   background: var(--panel-2);
   border: 1px solid var(--c800);
   color: var(--text);
-  padding: 6px 26px 6px 28px;
+  padding: 6px 26px 6px 12px;
   border-radius: 6px;
   font-family: 'Rajdhani', sans-serif;
   font-size: 13px;
@@ -819,8 +820,8 @@ aside {
 
 /* Scroll Container Slim */
 .filter-scroll-container {
-  flex: 1;
-  overflow-y: auto;
+  flex: 0 1 auto;
+  overflow: visible;
   padding-right: 4px;
   display: flex;
   flex-direction: column;
@@ -2271,19 +2272,30 @@ aside {
 /* Badge de nº de CVEs sobre nodos Finding (sustituto visual de los nodos
    Vulnerability, excluidos del grafo general) */
 .node-cve-badge-bg {
-  fill: #eab308;
+  fill: #f97316;
   stroke: #050614;
   stroke-width: 1.5px;
-  filter: drop-shadow(0 0 5px rgba(234, 179, 8, 0.7));
+  filter: drop-shadow(0 0 5px rgba(249, 115, 22, 0.7));
 }
 
-.node-cve-badge-text {
+.node-group .node-cve-badge-text {
   font-family: 'Orbitron', sans-serif;
   font-weight: 800;
   font-size: 10px;
-  fill: #050614;
+  fill: #ffffff;
 }
 
 .finding-vulns-panel {
   max-width: 720px;
+}
+
+.graph-clock-box {
+  background: rgba(5, 6, 30, 0.75);
+  border: 1px solid var(--line);
+  padding: 8px 14px;
+  border-radius: 6px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 0 15px rgba(77, 59, 255, 0.15);
+  text-align: right;
 }

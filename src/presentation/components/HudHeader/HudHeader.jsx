@@ -1,39 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
 export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploitationPaths, setShowDashboard, projects, selectedProjectId, setSelectedProjectId, selectedProjectNode, onOpenExport, onOpenImport }) {
-  const [timeStr, setTimeStr] = useState('--:--:--');
-  const [dateStr, setDateStr] = useState('-----');
-  const [loadVal, setLoadVal] = useState(72);
   const [archiveOpen, setArchiveOpen] = useState(false);
-  // Reloj
-  useEffect(() => {
-    const tick = () => {
-      const now = new Date();
-      setTimeStr(now.toLocaleTimeString('es-ES'));
-      setDateStr(now.toLocaleDateString('es-ES', {
-        weekday: 'short',
-        day: '2-digit',
-        month: 'short'
-      }).toUpperCase());
-    };
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Carga simulada
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setLoadVal(prev => {
-        const next = prev + (Math.random() * 6 - 3);
-        return Math.max(35, Math.min(96, next));
-      });
-    }, 2200);
-    return () => clearInterval(interval);
-  }, []);
-
-  const circumference = 138;
-  const strokeDashoffset = circumference - (circumference * loadVal) / 100;
 
   return (
     <header className="hud-header">
@@ -195,40 +163,6 @@ export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploita
           )}
         </div>
       </nav>
-
-
-      <div className="clockwrap">
-        <div className="status-pill">
-          <i></i> GRAFOS NEO4J
-        </div>
-
-        <div className="mini-ring">
-          <svg width="52" height="52" viewBox="0 0 52 52">
-            <circle cx="26" cy="26" r="22" stroke="var(--c900)" strokeWidth="3" fill="none" />
-            <circle
-              cx="26"
-              cy="26"
-              r="22"
-              stroke="var(--c400)"
-              strokeWidth="3"
-              fill="none"
-              strokeLinecap="round"
-              strokeDasharray={circumference}
-              strokeDashoffset={strokeDashoffset}
-              style={{ transition: 'stroke-dashoffset 0.5s ease' }}
-            />
-          </svg>
-          <div className="lbl">
-            <span>{Math.round(loadVal)}%</span>
-            <span>CARGA</span>
-          </div>
-        </div>
-
-        <div>
-          <div id="clockTime">{timeStr}</div>
-          <div id="clockDate">{dateStr}</div>
-        </div>
-      </div>
     </header>
   );
 }

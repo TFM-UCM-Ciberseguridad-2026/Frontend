@@ -73,16 +73,15 @@ export function DashboardPage({
   const [showImportModal, setShowImportModal] = useState(false);
 
   const categories = [
-    { key: 'ALL', label: 'Todos', color: 'var(--c400)' },
-    { key: 'Network', label: 'Red / Subred', color: 'var(--c300)' },
-    { key: 'Endpoint', label: 'Endpoint', color: 'var(--c500)' },
-    { key: 'Hardware', label: 'Hardware', color: 'var(--c800)' },
-    { key: 'Project', label: 'Proyecto', color: 'var(--c400)' },
-    { key: 'SoftwareInstallation', label: 'Instalación', color: 'var(--c600)' },
-    { key: 'Software', label: 'Software', color: 'var(--c300)' },
-    { key: 'Finding', label: 'Hallazgo', color: 'var(--c700)' },
-    { key: 'Vulnerability', label: 'Vulnerabilidad (CVE)', color: 'var(--c50)' },
-    { key: 'Remediation', label: 'Remediación', color: 'var(--c500)' },
+    { key: 'ALL', label: 'Todos', color: '#7973FF' },
+    { key: 'Network', label: 'Red / Subred', color: '#7973FF' },
+    { key: 'Endpoint', label: 'Endpoint', color: '#FFFFFF' },
+    { key: 'Hardware', label: 'Hardware', color: '#A5A5FF' },
+    { key: 'Project', label: 'Proyecto', color: '#4D3BFF' },
+    { key: 'SoftwareInstallation', label: 'Instalación', color: '#3813FF' },
+    { key: 'Software', label: 'Software', color: '#CDCFFF' },
+    { key: 'Finding', label: 'Hallazgo', color: '#ef4444' },
+    { key: 'Remediation', label: 'Remediación', color: '#2701D6' },
   ];
 
   const endpoints = (graphData?.nodes || [])
