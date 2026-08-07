@@ -52,4 +52,18 @@ export class InfrastructureRepository {
   async computeAllProjectRisks() {
     throw new Error('Method computeAllProjectRisks not implemented');
   }
+
+  async updateEndpoint(id, payload) { throw new Error('Not implemented'); }
+  async deleteEndpoint(id) { throw new Error('Not implemented'); }
+  async updateNetwork(id, payload) { throw new Error('Not implemented'); }
+  async deleteNetwork(id) { throw new Error('Not implemented'); }
+  async updateHardware(id, payload) { throw new Error('Not implemented'); }
+  async deleteHardware(id) { throw new Error('Not implemented'); }
+  async updateSoftware(id, payload) { throw new Error('Not implemented'); }
+  async deleteSoftware(id) { throw new Error('Not implemented'); }
+  async updateSoftwareInstallation(id, payload) { throw new Error('Not implemented'); }
+  async deleteSoftwareInstallation(id) { throw new Error('Not implemented'); }
+  async deleteNode(id) { throw new Error('Not implemented'); }
+  async exportProject(id) { throw new Error('Not implemented'); }
 }
+

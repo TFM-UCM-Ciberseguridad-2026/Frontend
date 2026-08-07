@@ -1,35 +1,37 @@
 export class ExportProjectUseCase {
+  constructor(infrastructureRepository) {
+    this.infrastructureRepository = infrastructureRepository;
+  }
+
   /**
-   * Genera la estructura JSON descargable de un proyecto para reimportar.
-   * @param {Object} graphData - Grafo de infraestructura ({ nodes: [], relationships: [] })
+   * Obtiene la estructura JSON descargable de un proyecto exportado nativamente desde Neo4j.
    * @param {string|number} selectedProjectId - ID del proyecto seleccionado
+   * @param {string} projectName - Nombre actual del proyecto (para el nombre del archivo)
    * @returns {Object} Fichero JSON con formato nativo de exportación
    */
-  execute(graphData, selectedProjectId) {
-    if (!graphData || !graphData.nodes || graphData.nodes.length === 0) {
-      throw new Error('No hay nodos de infraestructura para exportar.');
+  async execute(selectedProjectId, projectName = 'Proyecto') {
+    if (!selectedProjectId) {
+      throw new Error('No se ha seleccionado ningún proyecto para exportar.');
     }
 
-    // Buscar el nodo del proyecto
-    const projectNode = graphData.nodes.find(
-      n => (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
-          String(n.properties?.id ?? n.id) === String(selectedProjectId)
-    ) || graphData.nodes.find(n => n.labels?.includes('Project') || n.primaryLabel === 'Project');
+    // Pide al backend el grafo inmaculado sin filtros gráficos (con IPs)
+    const exportData = await this.infrastructureRepository.exportProject(selectedProjectId);
 
-    const projectName = projectNode?.properties?.nombre || projectNode?.properties?.name || 'Proyecto';
-    const projectId = projectNode?.properties?.id ?? selectedProjectId ?? '1';
+    if (!exportData || !exportData.nodes) {
+      throw new Error('El backend ha devuelto un formato de exportación inválido o vacío.');
+    }
 
-    // Construir la estructura exportable
+    // Construir la estructura exportable con los metadatos
     const exportObject = {
       format: 'orquestador_infrastructure_export',
       version: '1.0',
       exportedAt: new Date().toISOString(),
       project: {
-        id: projectId,
+        id: selectedProjectId,
         name: projectName
       },
-      nodes: graphData.nodes,
-      relationships: graphData.relationships || []
+      nodes: exportData.nodes || [],
+      relationships: exportData.relationships || []
     };
 
     return {
@@ -38,3 +40,4 @@ export class ExportProjectUseCase {
     };
   }
 }
+
