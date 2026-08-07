@@ -1,16 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { RiskSummary } from '../Risk/RiskSummary';
-import { EditNodeModal } from './EditNodeModal';
 
-export function NodeInspector({ selectedNode, updateNode, deleteNode }) {
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
 
-  useEffect(() => {
-    setConfirmDelete(false);
-    setShowEditModal(false);
-  }, [selectedNode?.id]);
-
+export function NodeInspector({ selectedNode }) {
   if (!selectedNode) {
     return (
       <aside className="detail-panel">
@@ -26,9 +18,6 @@ export function NodeInspector({ selectedNode, updateNode, deleteNode }) {
   }
 
   const categoryLabel = selectedNode.primaryLabel;
-  const isManageableAsset = ['Endpoint', 'Network', 'Hardware'].includes(categoryLabel);
-  const canEdit = isManageableAsset && typeof updateNode === 'function';
-  const canDelete = isManageableAsset && typeof deleteNode === 'function';
 
   const arcDasharray = (fraction, radius) => {
     const circumference = 2 * Math.PI * radius;
@@ -45,61 +34,6 @@ export function NodeInspector({ selectedNode, updateNode, deleteNode }) {
       <div style={{ padding: '10px 0' }}>
         <span className="badge">{categoryLabel.toUpperCase()}</span>
         <h2 className="node-title">{selectedNode.name}</h2>
-
-        {/* ACCIONES DE GESTIÓN DE NODO (EDITAR / ELIMINAR) */}
-        {(canDelete || canEdit) && (
-          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
-            {canEdit && (
-              <button
-                className="btn btn-secondary"
-                style={{ flex: 1, padding: '0.4rem 0.6rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', background: 'var(--c900)', border: '1px solid var(--line)' }}
-                onClick={() => setShowEditModal(true)}
-                title="Editar propiedades y enlaces de red de este activo"
-              >
-                ✏️ Editar Activo
-              </button>
-            )}
-
-            {canDelete && (
-              !confirmDelete ? (
-                <button
-                  className="btn btn-secondary"
-                  style={{ flex: 1, padding: '0.4rem 0.6rem', fontSize: '0.75rem', color: '#ff8585', background: 'var(--c900)', border: '1px solid rgba(255, 107, 107, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
-                  onClick={() => setConfirmDelete(true)}
-                  title="Eliminar este nodo del grafo"
-                >
-                  🗑️ Eliminar
-                </button>
-              ) : (
-                <div style={{ display: 'flex', gap: '6px', width: '100%', marginTop: '4px', background: 'rgba(224, 49, 49, 0.15)', padding: '8px', borderRadius: '6px', border: '1px dashed #e03131', flexDirection: 'column' }}>
-                  <div style={{ fontSize: '0.72rem', color: '#ffaaaa', textAlign: 'center', fontWeight: 600 }}>
-                    ⚠️ ¿Eliminar de forma permanente?
-                  </div>
-                  <div style={{ display: 'flex', gap: '4px' }}>
-                    <button
-                      className="btn"
-                      style={{ flex: 1, padding: '0.35rem', fontSize: '0.75rem', background: '#e03131', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}
-                      onClick={() => {
-                        setConfirmDelete(false);
-                        const idToDelete = selectedNode.domainId || selectedNode.properties?.id || selectedNode.id;
-                        deleteNode(selectedNode.primaryLabel, idToDelete);
-                      }}
-                    >
-                      Sí, Eliminar
-                    </button>
-                    <button
-                      className="btn btn-secondary"
-                      style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem', background: 'transparent', border: '1px solid var(--line)' }}
-                      onClick={() => setConfirmDelete(false)}
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-                </div>
-              )
-            )}
-          </div>
-        )}
 
         <RiskSummary node={selectedNode} />
 
@@ -172,15 +106,6 @@ export function NodeInspector({ selectedNode, updateNode, deleteNode }) {
           })}
         </div>
       </div>
-
-      {showEditModal && (
-        <EditNodeModal
-          node={selectedNode}
-          onClose={() => setShowEditModal(false)}
-          updateNode={updateNode}
-        />
-      )}
     </aside>
   );
 }
-

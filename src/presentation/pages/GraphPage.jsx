@@ -29,8 +29,6 @@ export function GraphPage({
   createHardware,
   createSoftware,
   createNetwork,
-  updateNode,
-  deleteNode,
   riskActionLoading,
   analyzeProjectVulnerabilities,
   computeSelectedProjectRisk
@@ -85,7 +83,7 @@ export function GraphPage({
 
 
       {/* PANEL DERECHO: INSPECTOR — grid column 3 (300px) */}
-      <NodeInspector selectedNode={selectedNode} updateNode={updateNode} deleteNode={deleteNode} />
+      <NodeInspector selectedNode={selectedNode} />
     </>
   );
 }

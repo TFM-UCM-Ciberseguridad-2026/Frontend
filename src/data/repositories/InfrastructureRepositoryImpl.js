@@ -73,19 +73,4 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
   async computeAllProjectRisks() {
     return await this.apiDataSource.computeAllProjectRisks();
   }
-
-  async updateEndpoint(id, payload) { return await this.apiDataSource.updateEndpoint(id, payload); }
-  async deleteEndpoint(id) { return await this.apiDataSource.deleteEndpoint(id); }
-  async updateNetwork(id, payload) { return await this.apiDataSource.updateNetwork(id, payload); }
-  async deleteNetwork(id) { return await this.apiDataSource.deleteNetwork(id); }
-  async updateHardware(id, payload) { return await this.apiDataSource.updateHardware(id, payload); }
-  async deleteHardware(id) { return await this.apiDataSource.deleteHardware(id); }
-  async updateSoftware(id, payload) { return await this.apiDataSource.updateSoftware(id, payload); }
-  async deleteSoftware(id) { return await this.apiDataSource.deleteSoftware(id); }
-  async updateSoftwareInstallation(id, payload) { return await this.apiDataSource.updateSoftwareInstallation(id, payload); }
-  async deleteSoftwareInstallation(id) { return await this.apiDataSource.deleteSoftwareInstallation(id); }
-  async deleteNode(id) { return await this.apiDataSource.deleteNode(id); }
-  async getEndpointIPs(id) { return await this.apiDataSource.getEndpointIPs(id); }
-  async exportProject(id) { return await this.apiDataSource.exportProject(id); }
 }
-
