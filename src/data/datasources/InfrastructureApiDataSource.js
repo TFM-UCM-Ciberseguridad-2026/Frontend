@@ -106,6 +106,14 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
+  async fetchFindingVulnerabilities(findingId) {
+    const res = await fetch(`/api/findings/${findingId}/vulnerabilities`);
+    if (!res.ok) {
+      throw new Error(`Error: ${res.statusText}`);
+    }
+    return await res.json();
+  }
+
   async computeProjectRisk(projectId) {
     const res = await fetch(`/api/projects/${projectId}/compute-risk`, {
       method: 'POST'

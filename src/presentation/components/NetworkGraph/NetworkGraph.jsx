@@ -913,6 +913,20 @@ export function NetworkGraph({
                   </g>
                 )}
 
+                {node.entity.primaryLabel === 'Finding' && Number(node.entity.properties?.vulnerability_count) > 0 && (
+                  <g transform={`translate(${node.r - 2}, ${node.r - 2})`}>
+                    <circle r="10" className="node-cve-badge-bg" />
+                    <text
+                      x="0"
+                      y="3.5"
+                      textAnchor="middle"
+                      className="node-cve-badge-text"
+                    >
+                      {node.entity.properties.vulnerability_count}
+                    </text>
+                  </g>
+                )}
+
                 <text y={node.r + 16} textAnchor="middle">
                   {node.entity.name}
                 </text>

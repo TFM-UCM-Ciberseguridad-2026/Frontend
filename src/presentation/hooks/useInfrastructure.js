@@ -15,6 +15,7 @@ import { ExportMitreNavigatorUseCase } from '../../domain/usecases/ExportMitreNa
 import { ExportInventoryUseCase } from '../../domain/usecases/ExportInventoryUseCase';
 import { ImportInfrastructureUseCase } from '../../domain/usecases/ImportInfrastructureUseCase';
 import { ScanInstallationVulnerabilitiesUseCase } from '../../domain/usecases/ScanInstallationVulnerabilitiesUseCase';
+import { GetFindingVulnerabilitiesUseCase } from '../../domain/usecases/GetFindingVulnerabilitiesUseCase';
 import { ComputeProjectRiskUseCase } from '../../domain/usecases/ComputeProjectRiskUseCase';
 import { ComputeAllProjectRisksUseCase } from '../../domain/usecases/ComputeAllProjectRisksUseCase';
 import { UpdateNodeUseCase } from '../../domain/usecases/UpdateNodeUseCase';
@@ -52,6 +53,13 @@ export function useInfrastructure() {
   const [riskActionLoading, setRiskActionLoading] = useState(false);
   const [riskActionError, setRiskActionError] = useState(null);
 
+  // Estados del modal de CVEs por Finding
+  const [showFindingVulnsModal, setShowFindingVulnsModal] = useState(false);
+  const [findingVulnsData, setFindingVulnsData] = useState([]);
+  const [findingVulnsLoading, setFindingVulnsLoading] = useState(false);
+  const [findingVulnsError, setFindingVulnsError] = useState(null);
+  const [findingVulnsSourceNode, setFindingVulnsSourceNode] = useState(null);
+
   // Inyección de dependencias (Clean Architecture)
   const apiDataSource = useMemo(() => new InfrastructureApiDataSource(), []);
   const repository = useMemo(() => new InfrastructureRepositoryImpl(apiDataSource), [apiDataSource]);
@@ -72,8 +80,10 @@ export function useInfrastructure() {
   const exportMitreNavigatorUseCase = useMemo(() => new ExportMitreNavigatorUseCase(), []);
   const exportInventoryUseCase = useMemo(() => new ExportInventoryUseCase(repository), [repository]);
   const importInfrastructureUseCase = useMemo(() => new ImportInfrastructureUseCase(repository), [repository]);
+
   // Casos de uso para cálculo de riesgo
   const scanInstallationVulnerabilitiesUseCase = useMemo(() => new ScanInstallationVulnerabilitiesUseCase(repository), [repository]);
+  const getFindingVulnerabilitiesUseCase = useMemo(() => new GetFindingVulnerabilitiesUseCase(repository), [repository]);
   const computeProjectRiskUseCase = useMemo(() => new ComputeProjectRiskUseCase(repository), [repository]);
   const computeAllProjectRisksUseCase = useMemo(() => new ComputeAllProjectRisksUseCase(repository), [repository]);
 
@@ -214,6 +224,29 @@ export function useInfrastructure() {
     }
   };
 
+  // CVEs de un Finding
+  const fetchFindingVulnerabilities = async (findingNode) => {
+    setShowFindingVulnsModal(true);
+    setFindingVulnsLoading(true);
+    setFindingVulnsError(null);
+    setFindingVulnsSourceNode(findingNode);
+    try {
+      const findingId = findingNode.properties?.id ?? findingNode.id;
+      const data = await getFindingVulnerabilitiesUseCase.execute(findingId);
+      setFindingVulnsData(data || []);
+    } catch (err) {
+      console.error(err);
+      setFindingVulnsError(err.message);
+      toast.error(err.message, 'Error al cargar CVEs');
+    } finally {
+      setFindingVulnsLoading(false);
+    }
+  };
+
+  const closeFindingVulnsModal = () => {
+    setShowFindingVulnsModal(false);
+  };
+
   const updateNode = async (category, id, data) => {
     try {
       const res = await updateNodeUseCase.execute(category, id, data);
@@ -242,6 +275,7 @@ export function useInfrastructure() {
       toast.error(err.message, 'Error eliminando Activo');
       throw err;
     }
+
   };
 
   // Helper para desencadenar la descarga en el navegador
@@ -816,7 +850,14 @@ export function useInfrastructure() {
     analyzeProjectVulnerabilities,
     computeSelectedProjectRisk,
     computeAllProjectRisks,
-    selectedProjectNode
+    selectedProjectNode,
+    fetchFindingVulnerabilities,
+    closeFindingVulnsModal,
+    showFindingVulnsModal,
+    findingVulnsData,
+    findingVulnsLoading,
+    findingVulnsError,
+    findingVulnsSourceNode
   };
 
 }

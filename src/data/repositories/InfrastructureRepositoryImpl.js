@@ -1,6 +1,7 @@
 import { Node } from '../../domain/entities/Node';
 import { AptActor } from '../../domain/entities/AptActor';
 import { ExploitationPath } from '../../domain/entities/ExploitationPath';
+import { Vulnerability } from '../../domain/entities/Vulnerability';
 import { InfrastructureRepository } from '../../domain/repositories/InfrastructureRepository';
 
 export class InfrastructureRepositoryImpl extends InfrastructureRepository {
@@ -64,6 +65,11 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
 
   async scanInstallationVulnerabilities(installationId, softwareId, limit) {
     return await this.apiDataSource.scanInstallationVulnerabilities(installationId, softwareId, limit);
+  }
+
+  async getFindingVulnerabilities(findingId) {
+    const rawData = await this.apiDataSource.fetchFindingVulnerabilities(findingId);
+    return (rawData?.vulnerabilities || []).map(v => new Vulnerability(v));
   }
 
   async computeProjectRisk(projectId) {

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { HudHeader } from '../components/HudHeader/HudHeader';
 import { TopAptsModal } from '../components/TopApts/TopAptsModal';
 import { ExploitationPathsModal } from '../components/ExploitationPaths/ExploitationPathsModal';
+import { FindingVulnerabilitiesModal } from '../components/FindingVulnerabilities/FindingVulnerabilitiesModal';
 import { GraphPage } from './GraphPage';
 import { InventoryPage } from './InventoryPage';
 import { NetworksPage } from './NetworksPage';
@@ -57,11 +58,20 @@ export function DashboardPage({
   riskActionLoading,
   analyzeProjectVulnerabilities,
   computeSelectedProjectRisk,
-  selectedProjectNode
+  selectedProjectNode,
+  // CVEs de un Finding
+  fetchFindingVulnerabilities,
+  closeFindingVulnsModal,
+  showFindingVulnsModal,
+  findingVulnsData,
+  findingVulnsLoading,
+  findingVulnsError,
+  findingVulnsSourceNode
 }) {
   const [activeNav, setActiveNav] = useState('grafo'); // 'grafo', 'inventario', 'redes'
   const [showExportModal, setShowExportModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+
   const categories = [
     { key: 'ALL', label: 'Todos', color: 'var(--c400)' },
     { key: 'Network', label: 'Red / Subred', color: 'var(--c300)' },
@@ -131,6 +141,7 @@ export function DashboardPage({
             riskActionLoading={riskActionLoading}
             analyzeProjectVulnerabilities={analyzeProjectVulnerabilities}
             computeSelectedProjectRisk={computeSelectedProjectRisk}
+            fetchFindingVulnerabilities={fetchFindingVulnerabilities}
           />
         )}
 
@@ -198,6 +209,7 @@ export function DashboardPage({
         selectExploitationPath={selectExploitationPath}
         clearSelectedExploitationPath={clearSelectedExploitationPath}
       />
+
       {/* MODAL EXPORTAR ARCHIVE */}
       <ExportModal
         isOpen={showExportModal}
@@ -215,6 +227,17 @@ export function DashboardPage({
         onClose={() => setShowImportModal(false)}
         projects={projects}
         onImport={(fileContent, options) => importProject(fileContent, options)}
+      />
+
+      {/* MODAL VER CVEs DE UN FINDING */}
+      <FindingVulnerabilitiesModal
+        showFindingVulnsModal={showFindingVulnsModal}
+        closeFindingVulnsModal={closeFindingVulnsModal}
+        findingVulnsData={findingVulnsData}
+        findingVulnsLoading={findingVulnsLoading}
+        findingVulnsError={findingVulnsError}
+        findingVulnsSourceNode={findingVulnsSourceNode}
+        fetchFindingVulnerabilities={fetchFindingVulnerabilities}
       />
     </div>
   );
