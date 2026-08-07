@@ -64,5 +64,6 @@ export class InfrastructureRepository {
   async updateSoftwareInstallation(id, payload) { throw new Error('Not implemented'); }
   async deleteSoftwareInstallation(id) { throw new Error('Not implemented'); }
   async deleteNode(id) { throw new Error('Not implemented'); }
+  async exportProject(id) { throw new Error('Not implemented'); }
 }
 

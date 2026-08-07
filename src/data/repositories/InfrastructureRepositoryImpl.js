@@ -86,5 +86,6 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
   async deleteSoftwareInstallation(id) { return await this.apiDataSource.deleteSoftwareInstallation(id); }
   async deleteNode(id) { return await this.apiDataSource.deleteNode(id); }
   async getEndpointIPs(id) { return await this.apiDataSource.getEndpointIPs(id); }
+  async exportProject(id) { return await this.apiDataSource.exportProject(id); }
 }
 

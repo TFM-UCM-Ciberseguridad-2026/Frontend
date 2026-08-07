@@ -77,11 +77,11 @@ export function EditNodeModal({ node, onClose, updateNode }) {
     } else if (label === 'Hardware') {
       setFormData({
         manufacturer: props.manufacturer || '',
-        model: props.model || '',
-        cpu_cores: props.cpu_cores ?? 4,
-        ram_gb: props.ram_gb ?? 8,
-        disk_gb: props.disk_gb ?? 100,
-        architecture: props.architecture || 'x86_64'
+        modelo: props.model || '',
+        cpu: props.cpu || '4',
+        ram_gb: props.ram ?? 8,
+        storage_gb: props.storage ?? 100,
+        tipo: props.type || 'x86_64'
       });
     } else if (label === 'SoftwareInstallation') {
       setFormData({
@@ -152,7 +152,12 @@ export function EditNodeModal({ node, onClose, updateNode }) {
         <div className="asset-modal-header">
           <div>
             <h2>EDITAR {label.toUpperCase()}</h2>
-            <div className="asset-modal-subtitle">Modifica las propiedades y enlaces de red de este activo</div>
+            <div className="asset-modal-subtitle">
+              {['Endpoint', 'Network'].includes(label)
+                ? 'Modifica las propiedades y reevalúa los enlaces de red de este activo'
+                : 'Modifica las propiedades de este activo en la topología'
+              }
+            </div>
           </div>
           <button className="asset-modal-close" onClick={onClose} disabled={loading}>×</button>
         </div>
@@ -379,35 +384,35 @@ export function EditNodeModal({ node, onClose, updateNode }) {
             {/* CAMPOS PARA HARDWARE */}
             {label === 'Hardware' && (
               <>
-                <div>
-                  <div className="asset-field-label">Fabricante</div>
-                  <input
-                    type="text"
-                    className="asset-input"
-                    value={formData.manufacturer || ''}
-                    onChange={(e) => updateField('manufacturer', e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <div className="asset-field-label">Modelo</div>
-                  <input
-                    type="text"
-                    className="asset-input"
-                    value={formData.model || ''}
-                    onChange={(e) => updateField('model', e.target.value)}
-                  />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                  <div>
+                    <div className="asset-field-label">Fabricante</div>
+                    <input
+                      type="text"
+                      className="asset-input"
+                      value={formData.manufacturer || ''}
+                      onChange={(e) => updateField('manufacturer', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <div className="asset-field-label">Modelo</div>
+                    <input
+                      type="text"
+                      className="asset-input"
+                      value={formData.modelo || ''}
+                      onChange={(e) => updateField('modelo', e.target.value)}
+                    />
+                  </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
                   <div>
                     <div className="asset-field-label">CPU Cores</div>
                     <input
-                      type="number"
-                      min="1"
+                      type="text"
                       className="asset-input"
-                      value={formData.cpu_cores ?? ''}
-                      onChange={(e) => updateField('cpu_cores', Number(e.target.value))}
+                      value={formData.cpu || ''}
+                      onChange={(e) => updateField('cpu', e.target.value)}
                     />
                   </div>
                   <div>
@@ -426,8 +431,8 @@ export function EditNodeModal({ node, onClose, updateNode }) {
                       type="number"
                       min="1"
                       className="asset-input"
-                      value={formData.disk_gb ?? ''}
-                      onChange={(e) => updateField('disk_gb', Number(e.target.value))}
+                      value={formData.storage_gb ?? ''}
+                      onChange={(e) => updateField('storage_gb', Number(e.target.value))}
                     />
                   </div>
                 </div>
@@ -436,8 +441,8 @@ export function EditNodeModal({ node, onClose, updateNode }) {
                   <div className="asset-field-label">Arquitectura</div>
                   <select
                     className="asset-input"
-                    value={formData.architecture || 'x86_64'}
-                    onChange={(e) => updateField('architecture', e.target.value)}
+                    value={formData.tipo || 'x86_64'}
+                    onChange={(e) => updateField('tipo', e.target.value)}
                   >
                     <option value="x86_64">x86_64</option>
                     <option value="arm64">arm64 (AArch64)</option>
@@ -557,7 +562,7 @@ export function EditNodeModal({ node, onClose, updateNode }) {
                 <div>
                   <div className="asset-field-label">Tipo (a: app, o: OS, h: hardware)</div>
                   <select
-                    className="asset-select"
+                    className="asset-input"
                     value={formData.type || 'a'}
                     onChange={(e) => updateField('type', e.target.value)}
                   >
@@ -587,7 +592,12 @@ export function EditNodeModal({ node, onClose, updateNode }) {
                 Cancelar
               </button>
               <button type="submit" className="btn btn-accent asset-submit-btn" disabled={loading}>
-                {loading ? 'Guardando Cambios...' : 'Guardar y Re-enlazar'}
+                {loading
+                  ? 'Guardando Cambios...'
+                  : ['Endpoint', 'Network'].includes(label)
+                    ? 'Guardar y Re-enlazar'
+                    : 'Guardar Cambios'
+                }
               </button>
             </div>
           </form>

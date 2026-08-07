@@ -199,6 +199,11 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
+  async exportProject(id) {
+    const res = await fetch(`/api/projects/${id}/export`);
+    return await this._handleResponse(res);
+  }
+
   async _handleResponse(res) {
     if (!res.ok) {
       let backendMessage = res.statusText;

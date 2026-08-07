@@ -68,9 +68,9 @@ export function useInfrastructure() {
   const updateNodeUseCase = useMemo(() => new UpdateNodeUseCase(repository), [repository]);
   const deleteNodeUseCase = useMemo(() => new DeleteNodeUseCase(repository), [repository]);
 
-  const exportProjectUseCase = useMemo(() => new ExportProjectUseCase(), []);
+  const exportProjectUseCase = useMemo(() => new ExportProjectUseCase(repository), [repository]);
   const exportMitreNavigatorUseCase = useMemo(() => new ExportMitreNavigatorUseCase(), []);
-  const exportInventoryUseCase = useMemo(() => new ExportInventoryUseCase(), []);
+  const exportInventoryUseCase = useMemo(() => new ExportInventoryUseCase(repository), [repository]);
   const importInfrastructureUseCase = useMemo(() => new ImportInfrastructureUseCase(repository), [repository]);
   // Casos de uso para cálculo de riesgo
   const scanInstallationVulnerabilitiesUseCase = useMemo(() => new ScanInstallationVulnerabilitiesUseCase(repository), [repository]);
@@ -230,9 +230,12 @@ export function useInfrastructure() {
     try {
       const res = await deleteNodeUseCase.execute(category, id);
       toast.success('¡El activo fue eliminado del grafo correctamente!', 'Activo Eliminado');
-      if (selectedNode && (selectedNode.id === id || selectedNode.id === Number(id) || String(selectedNode.id) === String(id))) {
+      
+      // Si tenemos un nodo seleccionado, lo limpiamos tras borrar para cerrar el Inspector (Punto 1 de Pablo)
+      if (selectedNode) {
         setSelectedNode(null);
       }
+      
       await fetchInfrastructure(true);
       return res;
     } catch (err) {
@@ -254,9 +257,19 @@ export function useInfrastructure() {
     URL.revokeObjectURL(url);
   };
 
-  const exportProject = (targetProjectId) => {
+  const exportProject = async (targetProjectId) => {
     try {
-      const { filename, content } = exportProjectUseCase.execute(filteredGraphData, targetProjectId || selectedProjectId);
+      showToast('Generando JSON en el servidor...', 'info');
+      // Ahora projectName podría venir del filteredGraphData o sacarlo del id.
+      // Buscamos el nombre para pasarlo al usecase (opcional)
+      const projId = targetProjectId || selectedProjectId;
+      const projectNode = filteredGraphData?.nodes?.find(
+        n => (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
+            String(n.properties?.id ?? n.id) === String(projId)
+      );
+      const projectName = projectNode?.properties?.nombre || projectNode?.properties?.name || 'Proyecto';
+      
+      const { filename, content } = await exportProjectUseCase.execute(projId, projectName);
       _triggerDownload(filename, content);
       showToast('¡Proyecto exportado a JSON con éxito!');
     } catch (err) {
@@ -276,9 +289,17 @@ export function useInfrastructure() {
     }
   };
 
-  const exportInventory = (targetProjectId) => {
+  const exportInventory = async (targetProjectId) => {
     try {
-      const { filename, blob } = exportInventoryUseCase.execute(filteredGraphData, targetProjectId || selectedProjectId);
+      showToast('Generando Excel de inventario...', 'info');
+      const projId = targetProjectId || selectedProjectId;
+      const projectNode = filteredGraphData?.nodes?.find(
+        n => (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
+            String(n.properties?.id ?? n.id) === String(projId)
+      );
+      const projectName = projectNode?.properties?.nombre || projectNode?.properties?.name || 'Proyecto';
+
+      const { filename, blob } = await exportInventoryUseCase.execute(projId, projectName);
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -287,10 +308,11 @@ export function useInfrastructure() {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      showToast('¡Inventario exportado a Excel (.xlsx) con éxito!');
+      
+      showToast('¡Inventario Excel exportado con éxito!');
     } catch (err) {
       console.error(err);
-      showToast(`Error al exportar inventario a Excel: ${err.message}`);
+      showToast(`Error al exportar inventario: ${err.message}`, 'error');
     }
   };
 
@@ -417,17 +439,7 @@ export function useInfrastructure() {
 
     const reachableIds = new Set();
     reachableIds.add(projectNode.id);
-    
-    // 1b. Añadir TODAS las redes (Network) para que no desaparezcan si están huérfanas
-    graphData.nodes.forEach(n => {
-      const primaryLabel = n.primaryLabel || n.labels?.[0];
-      const labels = n.labels || [];
-      if (primaryLabel === 'Network' || labels.includes('Network')) {
-        reachableIds.add(n.id);
-      }
-    });
-
-    // 2. Endpoints pertenecientes a ESTE proyecto
+    // 2. Endpoints y Redes pertenecientes a ESTE proyecto
     const projectEndpointIds = new Set();
     rels.forEach(rel => {
       const isSourceProject = rel.source === projectNode.id;
@@ -435,9 +447,13 @@ export function useInfrastructure() {
       if (isSourceProject || isTargetProject) {
         const otherId = isSourceProject ? rel.target : rel.source;
         const otherNode = nodeMap.get(otherId);
-        if (otherNode && (otherNode.primaryLabel === 'Endpoint' || otherNode.labels?.includes('Endpoint'))) {
-          projectEndpointIds.add(otherId);
-          reachableIds.add(otherId);
+        if (otherNode) {
+          if (otherNode.primaryLabel === 'Endpoint' || otherNode.labels?.includes('Endpoint')) {
+            projectEndpointIds.add(otherId);
+            reachableIds.add(otherId);
+          } else if (otherNode.primaryLabel === 'Network' || otherNode.labels?.includes('Network')) {
+            reachableIds.add(otherId);
+          }
         }
       }
     });
@@ -561,14 +577,45 @@ export function useInfrastructure() {
       }
     });
 
-    // 8. Filtrar nodos y relaciones
-    const filteredNodes = graphData.nodes.filter(n => reachableIds.has(n.id));
-    const filteredRels = rels.filter(
-      rel => reachableIds.has(rel.source) && reachableIds.has(rel.target)
-    );
+    // 8. Generar aristas virtuales CONTAINS_NETWORK para anclar visualmente las Redes al Proyecto
+    // en caso de que la BD antigua no tenga los enlaces explícitos.
+    const finalRelationships = rels.filter(r => reachableIds.has(r.source) && reachableIds.has(r.target));
+    const finalNodes = graphData.nodes.filter(n => reachableIds.has(n.id));
 
-    return { nodes: filteredNodes, relationships: filteredRels };
+    finalNodes.forEach(n => {
+      if (n.primaryLabel === 'Network' || (n.labels && n.labels.includes('Network'))) {
+        // Verificar si ya existe una relación de pertenencia/contención con el proyecto
+        const hasProjectRel = finalRelationships.some(r => 
+          (r.source === projectNode.id && r.target === n.id) || 
+          (r.target === projectNode.id && r.source === n.id)
+        );
+        if (!hasProjectRel) {
+          finalRelationships.push({
+            id: `virtual-net-${n.id}`,
+            source: projectNode.id,
+            target: n.id,
+            type: 'CONTAINS_NETWORK',
+            properties: { virtual: true }
+          });
+        }
+      }
+    });
+
+    return {
+      nodes: finalNodes,
+      relationships: finalRelationships
+    };
   }, [graphData, selectedProjectId]);
+
+  // Sincronizar el nodo seleccionado cuando se actualice el grafo para reflejar ediciones al momento
+  useEffect(() => {
+    if (selectedNode && filteredGraphData.nodes) {
+      const freshNode = filteredGraphData.nodes.find(n => n.id === selectedNode.id);
+      if (freshNode && JSON.stringify(freshNode) !== JSON.stringify(selectedNode)) {
+        setSelectedNode(freshNode);
+      }
+    }
+  }, [filteredGraphData, selectedNode]);
 
   const getNodeCountByType = useCallback((type) => {
     return filteredGraphData.nodes.filter(n => n.labels.includes(type)).length;

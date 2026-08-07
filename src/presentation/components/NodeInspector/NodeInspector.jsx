@@ -26,7 +26,7 @@ export function NodeInspector({ selectedNode, updateNode, deleteNode }) {
   }
 
   const categoryLabel = selectedNode.primaryLabel;
-  const isManageableAsset = ['Endpoint', 'Network', 'Hardware', 'SoftwareInstallation'].includes(categoryLabel);
+  const isManageableAsset = ['Endpoint', 'Network', 'Hardware'].includes(categoryLabel);
   const canEdit = isManageableAsset && typeof updateNode === 'function';
   const canDelete = isManageableAsset && typeof deleteNode === 'function';
 
