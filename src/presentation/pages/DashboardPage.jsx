@@ -48,6 +48,8 @@ export function DashboardPage({
   createHardware,
   createSoftware,
   createNetwork,
+  updateNode,
+  deleteNode,
   exportProject,
   exportMitreNavigator,
   exportInventory,
@@ -134,6 +136,8 @@ export function DashboardPage({
             createHardware={createHardware}
             createSoftware={createSoftware}
             createNetwork={createNetwork}
+            updateNode={updateNode}
+            deleteNode={deleteNode}
             riskActionLoading={riskActionLoading}
             analyzeProjectVulnerabilities={analyzeProjectVulnerabilities}
             computeSelectedProjectRisk={computeSelectedProjectRisk}

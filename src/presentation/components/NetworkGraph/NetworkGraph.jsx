@@ -569,18 +569,40 @@ export function NetworkGraph({
       const tgtNeighborSet = new Map(tgtNeighbors.map(item => [item.neighborId, item.relId]));
 
       let foundHop = false;
+      let bestMidId = null;
+      let bestRel1 = null;
+      let bestRel2 = null;
+
       for (const srcItem of srcNeighbors) {
         if (tgtNeighborSet.has(srcItem.neighborId)) {
           const midId = srcItem.neighborId;
-          const relId1 = srcItem.relId;
-          const relId2 = tgtNeighborSet.get(midId);
-
-          edgeIdSet.add(relId1);
-          edgeIdSet.add(relId2);
-          connectorNodeIdSet.add(midId);
-          foundHop = true;
-          break;
+          const midNode = graphData.nodes.find(n => String(n.id) === String(midId));
+          const primaryLabel = midNode?.primaryLabel || midNode?.labels?.[0] || '';
+          
+          // Si encontramos una Network, es el salto óptimo para una ruta de ataque
+          if (primaryLabel === 'Network' || (midNode?.labels || []).includes('Network')) {
+            bestMidId = midId;
+            bestRel1 = srcItem.relId;
+            bestRel2 = tgtNeighborSet.get(midId);
+            break; 
+          }
+          
+          // Si no es un proyecto, lo guardamos como candidato por si acaso
+          if (primaryLabel !== 'Project' && !(midNode?.labels || []).includes('Project')) {
+             if (!bestMidId) {
+               bestMidId = midId;
+               bestRel1 = srcItem.relId;
+               bestRel2 = tgtNeighborSet.get(midId);
+             }
+          }
         }
+      }
+
+      if (bestMidId) {
+        edgeIdSet.add(bestRel1);
+        edgeIdSet.add(bestRel2);
+        connectorNodeIdSet.add(bestMidId);
+        foundHop = true;
       }
 
       if (!foundHop) {
@@ -616,6 +638,49 @@ export function NetworkGraph({
         }
       }
     }
+
+    // --- Destacar rama hacia el Finding de cada paso ---
+    (selectedExploitationPath.steps || []).forEach((step) => {
+      const stepNode = findNodeForHostOrId(step.targetEndpoint, step.targetEndpointId);
+      if (stepNode && step.finding_id) {
+        const findingNode = graphData.nodes.find(n => String(n.id) === String(step.finding_id));
+        
+        if (findingNode) {
+          const queue = [[String(stepNode.id), []]];
+          const visited = new Set([String(stepNode.id)]);
+          let pathRels = null;
+          let pathNodes = null;
+
+          while (queue.length > 0) {
+            const [curr, pathInfo] = queue.shift();
+            if (pathInfo.length > 3) break; // Endpoint -> SoftwareInst -> Finding = 2 saltos máx
+
+            if (curr === String(findingNode.id)) {
+              pathRels = pathInfo.map(p => p.relId);
+              pathNodes = pathInfo.map(p => p.neighborId);
+              break;
+            }
+
+            const nbrs = adjMap.get(curr) || [];
+            for (const item of nbrs) {
+              if (!visited.has(item.neighborId)) {
+                visited.add(item.neighborId);
+                queue.push([item.neighborId, [...pathInfo, item]]);
+              }
+            }
+          }
+
+          if (pathRels) {
+            pathRels.forEach(id => edgeIdSet.add(id));
+            pathNodes.forEach(id => {
+              if (id !== String(stepNode.id)) {
+                connectorNodeIdSet.add(id);
+              }
+            });
+          }
+        }
+      }
+    });
 
     return { pathEdgeIdSet: edgeIdSet, pathConnectorNodeIdSet: connectorNodeIdSet, pathNodeStepMap: nodeStepMap };
   }, [selectedExploitationPath, graphData]);
