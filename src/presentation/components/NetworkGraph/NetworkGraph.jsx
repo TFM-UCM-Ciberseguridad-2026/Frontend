@@ -145,7 +145,9 @@ export function NetworkGraph({
     }
 
     const visibleNodes = graphData.nodes.filter(n =>
-      !n.labels.includes('TTP') && !n.labels.includes('ThreatActor')
+      !n.labels.includes('TTP') &&
+      !n.labels.includes('ThreatActor') &&
+      !n.labels.includes('Vulnerability')
     );
 
     // Compute BFS depth from Project node (root)
