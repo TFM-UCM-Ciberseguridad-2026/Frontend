@@ -639,16 +639,13 @@ export function NetworkGraph({
       }
     }
 
-    // --- Destacar rama hacia la Vulnerabilidad (CVE) de cada paso ---
+    // --- Destacar rama hacia el Finding de cada paso ---
     (selectedExploitationPath.steps || []).forEach((step) => {
       const stepNode = findNodeForHostOrId(step.targetEndpoint, step.targetEndpointId);
-      if (stepNode && step.vulnerability) {
-        const cveNode = graphData.nodes.find(n => 
-          n.properties?.cve_id === step.vulnerability || 
-          n.properties?.id === step.vulnerability ||
-          String(n.id) === step.vulnerability
-        );
-        if (cveNode) {
+      if (stepNode && step.finding_id) {
+        const findingNode = graphData.nodes.find(n => String(n.id) === String(step.finding_id));
+        
+        if (findingNode) {
           const queue = [[String(stepNode.id), []]];
           const visited = new Set([String(stepNode.id)]);
           let pathRels = null;
@@ -656,9 +653,9 @@ export function NetworkGraph({
 
           while (queue.length > 0) {
             const [curr, pathInfo] = queue.shift();
-            if (pathInfo.length > 4) break; // Endpoint -> SoftwareInst -> Finding -> Vuln = 3 saltos máx
+            if (pathInfo.length > 3) break; // Endpoint -> SoftwareInst -> Finding = 2 saltos máx
 
-            if (curr === String(cveNode.id)) {
+            if (curr === String(findingNode.id)) {
               pathRels = pathInfo.map(p => p.relId);
               pathNodes = pathInfo.map(p => p.neighborId);
               break;
