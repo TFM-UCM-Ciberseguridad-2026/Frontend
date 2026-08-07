@@ -31,7 +31,8 @@ export function GraphPage({
   createNetwork,
   riskActionLoading,
   analyzeProjectVulnerabilities,
-  computeSelectedProjectRisk
+  computeSelectedProjectRisk,
+  fetchFindingVulnerabilities
 }) {
   return (
     <>
@@ -83,7 +84,10 @@ export function GraphPage({
 
 
       {/* PANEL DERECHO: INSPECTOR — grid column 3 (300px) */}
-      <NodeInspector selectedNode={selectedNode} />
+      <NodeInspector
+        selectedNode={selectedNode}
+        fetchFindingVulnerabilities={fetchFindingVulnerabilities}
+      />
     </>
   );
 }

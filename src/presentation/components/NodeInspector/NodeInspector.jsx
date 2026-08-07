@@ -2,7 +2,7 @@ import React from 'react';
 import { RiskSummary } from '../Risk/RiskSummary';
 
 
-export function NodeInspector({ selectedNode }) {
+export function NodeInspector({ selectedNode, fetchFindingVulnerabilities }) {
   if (!selectedNode) {
     return (
       <aside className="detail-panel">
@@ -25,6 +25,9 @@ export function NodeInspector({ selectedNode }) {
   };
 
   const isVuln = selectedNode.categoryId === 'vulnerabilidad';
+  const isFinding = selectedNode.primaryLabel === 'Finding';
+  const vulnCount = Number(selectedNode.properties?.vulnerability_count) || 0;
+
   const baseScore = parseFloat(selectedNode.properties.base_score || selectedNode.properties.cvss_score || 0);
   const epssScore = parseFloat(selectedNode.properties.epss_score || 0);
 
@@ -37,6 +40,18 @@ export function NodeInspector({ selectedNode }) {
 
         <RiskSummary node={selectedNode} />
 
+        {isFinding && (
+          <button
+            type="button"
+            className="btn btn-accent"
+            style={{ width: '100%', marginBottom: '1rem' }}
+            disabled={vulnCount === 0}
+            onClick={() => fetchFindingVulnerabilities?.(selectedNode)}
+          >
+            {vulnCount > 0 ? `🛡️ Ver CVEs (${vulnCount})` : 'Sin CVEs asociados'}
+          </button>
+        )}
+        
         {isVuln && (baseScore > 0 || epssScore > 0) && (
           <div className="gauge-row">
             {baseScore > 0 && (

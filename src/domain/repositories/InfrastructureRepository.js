@@ -45,6 +45,10 @@ export class InfrastructureRepository {
     throw new Error('Method scanInstallationVulnerabilities not implemented');
   }
 
+  async getFindingVulnerabilities(findingId) {
+    throw new Error('Method getFindingVulnerabilities not implemented');
+  }
+
   async computeProjectRisk(projectId) {
     throw new Error('Method computeProjectRisk not implemented');
   }
