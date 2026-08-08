@@ -57,7 +57,7 @@ const getNodeColor = (categoryId) => {
     case 'hardware': return '#A5A5FF';
     case 'instalacion': return '#3813FF';
     case 'software': return '#CDCFFF';
-    case 'hallazgo': return '#2F02FF';
+    case 'hallazgo': return '#ef4444';
     case 'vulnerabilidad': return '#ef4444';
     case 'remediacion': return '#2701D6';
     case 'parche': return '#2103A9';
@@ -110,6 +110,25 @@ export function NetworkGraph({
   const svgCallbackRef = useCallback((node) => {
     svgRef.current = node;
     setSvgEl(node);
+  }, []);
+
+  // Reloj (movido desde el HudHeader a la esquina superior derecha del canvas)
+  const [timeStr, setTimeStr] = useState('--:--:--');
+  const [dateStr, setDateStr] = useState('-----');
+
+  useEffect(() => {
+    const tick = () => {
+      const now = new Date();
+      setTimeStr(now.toLocaleTimeString('es-ES'));
+      setDateStr(now.toLocaleDateString('es-ES', {
+        weekday: 'short',
+        day: '2-digit',
+        month: 'short'
+      }).toUpperCase());
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
   }, []);
 
   // FIX: viewBox ahora arranca centrado en (0,0) — el centro del nuevo mundo
@@ -726,11 +745,17 @@ export function NetworkGraph({
 
   return (
     <div className="graph-stage" style={{ width: '100%', height: '100%' }}>
+      {/* RELOJ — esquina superior derecha del canvas del grafo */}
+      <div className="cw-tr graph-clock-box">
+        <div id="clockTime">{timeStr}</div>
+        <div id="clockDate">{dateStr}</div>
+      </div>
+
       {selectedExploitationPath && (
         <div
           style={{
             position: 'absolute',
-            top: '16px',
+            top: '70px',
             right: '16px',
             zIndex: 20,
             background: 'rgba(10, 12, 35, 0.92)',

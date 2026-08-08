@@ -108,12 +108,24 @@ export function NodeInspector({ selectedNode, updateNode, deleteNode, fetchFindi
         {isFinding && (
           <button
             type="button"
-            className="btn btn-accent"
-            style={{ width: '100%', marginBottom: '1rem' }}
+            style={{
+              width: '100%',
+              marginBottom: '1rem',
+              padding: '0.6rem',
+              borderRadius: '8px',
+              fontWeight: 600,
+              fontSize: '0.85rem',
+              cursor: vulnCount === 0 ? 'not-allowed' : 'pointer',
+              border: '1px solid rgba(239, 68, 68, 0.5)',
+              background: vulnCount === 0 ? 'rgba(239, 68, 68, 0.1)' : 'linear-gradient(135deg, #ef4444, #b91c1c)',
+              color: vulnCount === 0 ? '#f87171' : '#ffffff',
+              opacity: vulnCount === 0 ? 0.6 : 1,
+              boxShadow: vulnCount === 0 ? 'none' : '0 4px 15px rgba(239, 68, 68, 0.35)'
+            }}
             disabled={vulnCount === 0}
             onClick={() => fetchFindingVulnerabilities?.(selectedNode)}
           >
-            {vulnCount > 0 ? `🛡️ Ver CVEs (${vulnCount})` : 'Sin CVEs asociados'}
+            {vulnCount > 0 ? 'Ver CVEs' : 'Sin CVEs asociados'}
           </button>
         )}
         
@@ -197,4 +209,3 @@ export function NodeInspector({ selectedNode, updateNode, deleteNode, fetchFindi
     </aside>
   );
 }
-

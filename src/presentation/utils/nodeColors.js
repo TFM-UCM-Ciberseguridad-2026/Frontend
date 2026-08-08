@@ -1,37 +1,37 @@
 export function getNodeColor(node) {
-  if (!node) return 'var(--c400)';
+  if (!node) return '#7973FF';
   const cat = typeof node === 'string' ? node : node.categoryId;
 
   switch (cat) {
     case 'proyecto':
     case 'Project':
-      return 'var(--c400)';
+      return '#4D3BFF';
     case 'red':
     case 'Network':
-      return 'var(--c300)';
+      return '#7973FF';
     case 'endpoint':
     case 'Endpoint':
-      return 'var(--c500)';
+      return '#FFFFFF';
     case 'hardware':
     case 'Hardware':
-      return 'var(--c800)';
+      return '#A5A5FF';
     case 'instalacion':
     case 'SoftwareInstallation':
-      return 'var(--c600)';
+      return '#3813FF';
     case 'software':
     case 'Software':
-      return 'var(--c300)';
+      return '#CDCFFF';
     case 'hallazgo':
     case 'Finding':
-      return 'var(--c700)';
+      return '#ef4444';
     case 'vulnerabilidad':
     case 'Vulnerability':
-      return 'var(--c50)';
+      return '#ef4444';
     case 'remediacion':
     case 'Remediation':
     case 'Patch':
-      return 'var(--c500)';
+      return '#2701D6';
     default:
-      return 'var(--c400)';
+      return '#7973FF';
   }
 }
