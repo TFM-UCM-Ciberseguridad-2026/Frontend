@@ -940,17 +940,11 @@ export function NetworkGraph({
                   </g>
                 )}
 
-                {node.entity.primaryLabel === 'Finding' && Number(node.entity.properties?.vulnerability_count) > 0 && (
-                  <g transform={`translate(${node.r - 2}, ${node.r - 2})`}>
-                    <circle r="10" className="node-cve-badge-bg" />
-                    <text
-                      x="0"
-                      y="3.5"
-                      textAnchor="middle"
-                      className="node-cve-badge-text"
-                    >
-                      {node.entity.properties.vulnerability_count}
-                    </text>
+                {node.entity.primaryLabel === 'Finding' && node.entity.properties?.has_vulnerabilities && (
+                  <g className="warning-badge" transform={`translate(${node.r - 2}, ${node.r - 2})`}>
+                    <path d="M -10 7 L -1.2 -8.2 C -0.6 -9.2 0.6 -9.2 1.2 -8.2 L 10 7 C 10.6 8 9.9 9.2 8.8 9.2 L -8.8 9.2 C -9.9 9.2 -10.6 8 -10 7 Z" />
+                    <line x1="0" y1="-3" x2="0" y2="2" />
+                    <circle cx="0" cy="5.5" r="1.2" />
                   </g>
                 )}
 

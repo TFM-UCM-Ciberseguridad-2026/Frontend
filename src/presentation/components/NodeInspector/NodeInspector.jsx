@@ -36,7 +36,7 @@ export function NodeInspector({ selectedNode, updateNode, deleteNode, fetchFindi
 
   const isVuln = selectedNode.categoryId === 'vulnerabilidad';
   const isFinding = selectedNode.primaryLabel === 'Finding';
-  const vulnCount = Number(selectedNode.properties?.vulnerability_count) || 0;
+  const hasVulns = Boolean(selectedNode.properties?.has_vulnerabilities);
 
   const baseScore = parseFloat(selectedNode.properties.base_score || selectedNode.properties.cvss_score || 0);
   const epssScore = parseFloat(selectedNode.properties.epss_score || 0);
@@ -105,29 +105,29 @@ export function NodeInspector({ selectedNode, updateNode, deleteNode, fetchFindi
 
         <RiskSummary node={selectedNode} />
 
-        {isFinding && (
-          <button
-            type="button"
-            style={{
-              width: '100%',
-              marginBottom: '1rem',
-              padding: '0.6rem',
-              borderRadius: '8px',
-              fontWeight: 600,
-              fontSize: '0.85rem',
-              cursor: vulnCount === 0 ? 'not-allowed' : 'pointer',
-              border: '1px solid rgba(239, 68, 68, 0.5)',
-              background: vulnCount === 0 ? 'rgba(239, 68, 68, 0.1)' : 'linear-gradient(135deg, #ef4444, #b91c1c)',
-              color: vulnCount === 0 ? '#f87171' : '#ffffff',
-              opacity: vulnCount === 0 ? 0.6 : 1,
-              boxShadow: vulnCount === 0 ? 'none' : '0 4px 15px rgba(239, 68, 68, 0.35)'
-            }}
-            disabled={vulnCount === 0}
-            onClick={() => fetchFindingVulnerabilities?.(selectedNode)}
-          >
-            {vulnCount > 0 ? 'Ver CVEs' : 'Sin CVEs asociados'}
-          </button>
-        )}
+      {isFinding && (
+        <button
+          type="button"
+          style={{
+            width: '100%',
+            marginBottom: '1rem',
+            padding: '0.6rem',
+            borderRadius: '8px',
+            fontWeight: 600,
+            fontSize: '0.85rem',
+            cursor: !hasVulns ? 'not-allowed' : 'pointer',
+            border: '1px solid rgba(239, 68, 68, 0.5)',
+            background: !hasVulns ? 'rgba(239, 68, 68, 0.1)' : 'linear-gradient(135deg, #ef4444, #b91c1c)',
+            color: !hasVulns ? '#f87171' : '#ffffff',
+            opacity: !hasVulns ? 0.6 : 1,
+            boxShadow: !hasVulns ? 'none' : '0 4px 15px rgba(239, 68, 68, 0.35)'
+          }}
+          disabled={!hasVulns}
+          onClick={() => fetchFindingVulnerabilities?.(selectedNode)}
+        >
+          {hasVulns ? 'Ver CVEs' : 'Sin CVEs asociados'}
+        </button>
+      )}
         
         {isVuln && (baseScore > 0 || epssScore > 0) && (
           <div className="gauge-row">
