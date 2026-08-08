@@ -668,7 +668,19 @@ export function TtpsPage({ graphData, showToast }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTtpId, setSelectedTtpId] = useState(null);
   const [modalTtp, setModalTtp] = useState(null);
+  const [totalMitreTTPs, setTotalMitreTTPs] = useState(625);
   const cellRefs = useRef({});
+
+  React.useEffect(() => {
+    fetch('/api/infrastructure/mitre-ttp-count')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.count) {
+          setTotalMitreTTPs(data.count);
+        }
+      })
+      .catch(err => console.error("Error fetching MITRE TTP count:", err));
+  }, []);
 
   // Leemos los atributos de las CVEs para extraer las TTPs
   const vulNodes = (graphData?.nodes || []).filter(n => n.labels?.includes('Vulnerability') || n.primaryLabel === 'Vulnerability');
@@ -894,11 +906,11 @@ export function TtpsPage({ graphData, showToast }) {
              
              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                 <div style={{ width: '46px', height: '46px', borderRadius: '50%', background: 'rgba(122, 115, 255, 0.1)', border: '1px solid var(--c500)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--c300)', fontSize: '18px', fontFamily: 'Orbitron, sans-serif', fontWeight: 'bold' }}>
-                   {TACTICS.length}
+                   {totalMitreTTPs}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                    <span style={{ fontSize: '10px', color: 'var(--c400)', textTransform: 'uppercase', letterSpacing: '1.5px', fontFamily: '"Share Tech Mono", monospace' }}>Catálogo</span>
-                   <span style={{ fontSize: '14px', color: 'var(--c50)', fontWeight: '600' }}>Tácticas MITRE</span>
+                   <span style={{ fontSize: '14px', color: 'var(--c50)', fontWeight: '600' }}>TTPs MITRE</span>
                 </div>
              </div>
           </div>
