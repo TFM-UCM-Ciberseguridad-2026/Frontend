@@ -61,10 +61,6 @@ export function TopAptsModal({
                 <div className="apt-card-rank">#{index + 1}</div>
                 <div className="apt-card-info">
                   <h3 className="apt-card-name">{apt.name || apt.actor_name}</h3>
-                  <div className="apt-card-meta">
-                    <span className="apt-origin-badge">🌍 {apt.origin}</span>
-                    <span className="apt-motivation-badge">🎯 {apt.motivation}</span>
-                  </div>
                 </div>
                 <div className="apt-card-coverage">
                   <div className="apt-coverage-value">{apt.coveragePercent || apt.coverage_percent}%</div>
