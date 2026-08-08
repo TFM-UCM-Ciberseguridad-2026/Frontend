@@ -679,10 +679,19 @@ export function TtpsPage({ graphData, showToast }) {
     const props = vul.properties || {};
     
     let ttps = [];
-    if (Array.isArray(props.ttps)) {
+    if (typeof props.ttps === 'string') {
+      try {
+        const parsed = JSON.parse(props.ttps);
+        if (Array.isArray(parsed)) {
+          ttps = parsed;
+        } else {
+          ttps = props.ttps.split(',').map(t => t.trim()).filter(Boolean);
+        }
+      } catch (e) {
+        ttps = props.ttps.split(',').map(t => t.trim()).filter(Boolean);
+      }
+    } else if (Array.isArray(props.ttps)) {
       ttps = props.ttps;
-    } else if (typeof props.ttps === 'string') {
-      ttps = props.ttps.split(',').map(t => t.trim()).filter(Boolean);
     }
     
     ttps.forEach(ttpItem => {
