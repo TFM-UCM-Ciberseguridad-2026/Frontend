@@ -612,6 +612,58 @@ export const TTPS_DATA = [
   }
 ];
 
+export const normalizeTacticKey = (tacticStr = '') => {
+  if (!tacticStr) return 'de';
+  const str = String(tacticStr).toLowerCase();
+  
+  if (['reco', 'resdev', 'ia', 'exec', 'pers', 'pe', 'de', 'ca', 'disc', 'lm', 'coll', 'c2', 'exfil', 'impact'].includes(str)) {
+    return str;
+  }
+  
+  if (str.includes('recon') || str === 'ta0043') return 'reco';
+  if (str.includes('resource') || str === 'ta0042') return 'resdev';
+  if (str.includes('initial') || (str.includes('access') && !str.includes('cred')) || str === 'ta0001') return 'ia';
+  if (str.includes('execution') || str === 'exec' || str === 'ta0002') return 'exec';
+  if (str.includes('persist') || str === 'ta0003') return 'pers';
+  if (str.includes('privilege') || str.includes('escalat') || str === 'ta0004') return 'pe';
+  if (str.includes('defense') || str.includes('evasion') || str.includes('stealth') || str === 'ta0005') return 'de';
+  if (str.includes('credential') || str === 'ta0006') return 'ca';
+  if (str.includes('discovery') || str === 'ta0007') return 'disc';
+  if (str.includes('lateral') || str.includes('movement') || str === 'ta0008') return 'lm';
+  if (str.includes('collection') || str === 'ta0009') return 'coll';
+  if (str.includes('command') || str.includes('control') || str === 'c2' || str === 'ta0011') return 'c2';
+  if (str.includes('exfil') || str === 'ta0010') return 'exfil';
+  if (str.includes('impact') || str === 'ta0040') return 'impact';
+
+  return 'de';
+};
+
+const INFERRED_TTP_INFO = {
+  'T1499': { name: 'Endpoint Denial of Service', tactic: 'impact' },
+  'T1499.001': { name: 'OS Exhaustion Flood', tactic: 'impact' },
+  'T1499.002': { name: 'Service Exhaustion Flood', tactic: 'impact' },
+  'T1499.003': { name: 'Application Exhaustion Flood', tactic: 'impact' },
+  'T1499.004': { name: 'Application Fault', tactic: 'impact' },
+  'T1564': { name: 'Hide Artifacts', tactic: 'de' },
+  'T1564.009': { name: 'Resource Fork', tactic: 'de' },
+  'T1027': { name: 'Obfuscated Files or Information', tactic: 'de' },
+  'T1027.006': { name: 'HTML Smuggling', tactic: 'de' },
+  'T1027.009': { name: 'Embedded Payloads', tactic: 'de' },
+  'T1574': { name: 'Hijack Execution Flow', tactic: 'pe' },
+  'T1574.005': { name: 'Executable Installer File Permissions Weakness', tactic: 'pe' },
+  'T1574.006': { name: 'Dynamic Link Library Search Order Hijacking', tactic: 'pe' },
+  'T1574.007': { name: 'Path Interception by PATH Environment Variable', tactic: 'pe' },
+  'T1574.010': { name: 'Services File Permissions Weakness', tactic: 'pe' },
+  'T1547': { name: 'Boot or Logon Autostart Execution', tactic: 'pers' },
+  'T1547.009': { name: 'Shortcut Modification', tactic: 'pers' },
+  'T1562.003': { name: 'Impair Defenses: Impair Command History Logging', tactic: 'de' },
+  'T1553.002': { name: 'Subvert Trust Controls: Code Signing', tactic: 'de' },
+  'T1036.001': { name: 'Masquerading: Invalid Code Signature', tactic: 'de' },
+  'T1539': { name: 'Steal Web Session Cookie', tactic: 'ca' },
+  'T1543': { name: 'Create or Modify System Process', tactic: 'pers' },
+  'T1553.004': { name: 'Install Root Certificate', tactic: 'de' }
+};
+
 export function TtpsPage({ graphData, showToast }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTtpId, setSelectedTtpId] = useState(null);
@@ -633,28 +685,45 @@ export function TtpsPage({ graphData, showToast }) {
       ttps = props.ttps.split(',').map(t => t.trim()).filter(Boolean);
     }
     
-    ttps.forEach(ttpId => {
+    ttps.forEach(ttpItem => {
+      const isObj = typeof ttpItem === 'object' && ttpItem !== null;
+      const ttpId = isObj ? (ttpItem.ttp_id || ttpItem.id) : ttpItem;
+      if (!ttpId) return;
+
+      const ttpNameBackend = isObj ? ttpItem.name : null;
+      const ttpTacticBackend = isObj ? ttpItem.tactic : null;
+      const ttpDescBackend = isObj ? (ttpItem.description || ttpItem.desc) : null;
+
       if (!extractedTtpsMap[ttpId]) {
-        const found = TTPS_DATA.find(t => t.id === ttpId);
-        if (found) {
-          extractedTtpsMap[ttpId] = {
-            ...found,
-            cve: props.cve_id || props.id || vul.id,
-            cvss: props.cvss_score || found.cvss,
-            cveDesc: props.description || found.cveDesc
-          };
-        } else {
-          extractedTtpsMap[ttpId] = {
-            id: ttpId,
-            name: 'TTP Detectada',
-            tactic: 'unknown',
-            desc: 'Extraída dinámicamente de ' + (props.cve_id || props.id),
-            cve: props.cve_id || props.id || vul.id,
-            cvss: props.cvss_score || '',
-            cveDesc: props.description || '',
-            remed: []
-          };
-        }
+        const foundInTTPSData = TTPS_DATA.find(t => t.id === ttpId);
+        const fallbackInfo = INFERRED_TTP_INFO[ttpId] || {};
+
+        const name = (ttpNameBackend && ttpNameBackend.trim()) || 
+                     foundInTTPSData?.name || 
+                     fallbackInfo.name || 
+                     `TTP ${ttpId}`;
+
+        const rawTactic = ttpTacticBackend || 
+                          foundInTTPSData?.tactic || 
+                          fallbackInfo.tactic || 
+                          'de';
+
+        const tactic = normalizeTacticKey(rawTactic);
+
+        const desc = ttpDescBackend || 
+                     foundInTTPSData?.desc || 
+                     `Extraída dinámicamente de ${props.cve_id || props.id || vul.id}`;
+
+        extractedTtpsMap[ttpId] = {
+          id: ttpId,
+          name: name,
+          tactic: tactic,
+          desc: desc,
+          cve: props.cve_id || props.id || vul.id,
+          cvss: props.cvss_score || foundInTTPSData?.cvss || 'N/A',
+          cveDesc: props.description || foundInTTPSData?.cveDesc || '',
+          remed: foundInTTPSData?.remed || ['Implementar filtrado y monitorización de seguridad.']
+        };
       }
     });
   });
