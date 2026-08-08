@@ -3,7 +3,7 @@ export class CreateNetworkUseCase {
     this.infrastructureRepository = infrastructureRepository;
   }
 
-  async execute(networkData) {
+  async execute(networkData, projectId) {
     if (!networkData.nombre) {
       throw new Error('El nombre de la red es obligatorio.');
     }
@@ -17,7 +17,8 @@ export class CreateNetworkUseCase {
     const { vlan_id, ...rest } = networkData;
     const payload = {
       ...rest,
-      vlan_id: vlan_id === '' || vlan_id === undefined ? 0 : Number(vlan_id)
+      vlan_id: vlan_id === '' || vlan_id === undefined ? 0 : Number(vlan_id),
+      project_id: projectId ? Number(projectId) : 0
     };
 
     return await this.infrastructureRepository.createNetwork(payload);

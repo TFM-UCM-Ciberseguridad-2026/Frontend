@@ -214,7 +214,7 @@ export function useInfrastructure() {
 
   const createNetwork = async (data) => {
     try {
-      const res = await createNetworkUseCase.execute(data);
+      const res = await createNetworkUseCase.execute(data, selectedProjectId);
       toast.success('¡Red añadida correctamente! Los endpoints compatibles se han enlazado automáticamente.', 'Nueva Red');
       await fetchInfrastructure(true);
       return res;
@@ -247,7 +247,7 @@ export function useInfrastructure() {
     setShowFindingVulnsModal(false);
   };
 
-  const updateNode = async (category, id, data) => {
+  const updateNode = async (category, id, data, selectedProjectId) => {
     try {
       const res = await updateNodeUseCase.execute(category, id, data);
       toast.success('¡Activo actualizado y re-enlazado correctamente!', 'Edición Guardada');
