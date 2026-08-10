@@ -15,8 +15,9 @@ export class InfrastructureApiDataSource {
     return await res.json();
   }
 
-  async fetchTopApts() {
-    const res = await fetch('/api/infrastructure/top-apts');
+  async fetchTopApts(projectId) {
+    const url = projectId ? `/api/infrastructure/top-apts?project_id=${projectId}` : '/api/infrastructure/top-apts';
+    const res = await fetch(url);
     if (!res.ok) {
       throw new Error(`Error: ${res.statusText}`);
     }

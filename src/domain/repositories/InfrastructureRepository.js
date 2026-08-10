@@ -7,7 +7,7 @@ export class InfrastructureRepository {
     throw new Error('Method populateInfrastructure not implemented');
   }
 
-  async getTopApts() {
+  async getTopApts(projectId) {
     throw new Error('Method getTopApts not implemented');
   }
 
