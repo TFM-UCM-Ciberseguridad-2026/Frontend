@@ -11,17 +11,14 @@ const PHYSICS = {
   maxSpeed: 18
 };
 
-// Mundo fijo: de -5000 a 5000 en ambos ejes (10.000 x 10.000 de espacio total).
 const CANVAS_MIN = -5000;
 const CANVAS_MAX = 5000;
 const CANVAS_WIDTH = CANVAS_MAX - CANVAS_MIN;  // 10000
 const CANVAS_HEIGHT = CANVAS_MAX - CANVAS_MIN; // 10000
 
-// Centro del mundo, usado por los modos 'tree' y 'stix' para centrar la raíz
 const WORLD_CENTER_X = (CANVAS_MIN + CANVAS_MAX) / 2; // 0
 const WORLD_CENTER_Y = (CANVAS_MIN + CANVAS_MAX) / 2; // 0
 
-// Tamaño del viewBox inicial: lo que se ve nada más entrar, centrado en el origen (0,0)
 const INITIAL_VIEW_W = 900;
 const INITIAL_VIEW_H = 640;
 
@@ -72,6 +69,14 @@ const getTierColor = (tier) => {
     case 'LOW': return '#e7ee17';
     default: return null;
   }
+};
+
+const isDecommissionedEndpoint = (node) => {
+  if (!node) return false;
+  const isEp = node.primaryLabel === 'Endpoint' || (node.labels || []).includes('Endpoint') || node.categoryId === 'endpoint';
+  if (!isEp) return false;
+  const estado = (node.properties?.estado || node.properties?.status || '').toString().toLowerCase().trim();
+  return estado === 'decommissioned';
 };
 
 export function NetworkGraph({
@@ -148,40 +153,101 @@ export function NetworkGraph({
       return;
     }
 
-    const visibleNodes = graphData.nodes.filter(n =>
-      !n.labels.includes('TTP') &&
-      !n.labels.includes('ThreatActor') &&
-      !n.labels.includes('Vulnerability')
-    );
+    // 1. Encontrar los IDs de endpoints decomisados
+    const decomEndpointNodes = graphData.nodes.filter(n => isDecommissionedEndpoint(n));
+    const decomEndpointIds = new Set(decomEndpointNodes.map(n => String(n.id)));
 
-    const adj = {};
-    visibleNodes.forEach(n => {
-      adj[n.id] = [];
-    });
-    (graphData.relationships || []).forEach(rel => {
-      if (adj[rel.source] && adj[rel.target]) {
-        adj[rel.source].push(rel.target);
-        adj[rel.target].push(rel.source);
+    // 2. Mapa de adyacencia para rastrear el subárbol por debajo de cada decomisado
+    const rels = graphData.relationships || [];
+    const nodeMap = new Map(graphData.nodes.map(n => [String(n.id), n]));
+    const adj = new Map();
+
+    graphData.nodes.forEach(n => adj.set(String(n.id), []));
+    rels.forEach(rel => {
+      const s = String(rel.source);
+      const t = String(rel.target);
+      if (adj.has(s) && adj.has(t)) {
+        adj.get(s).push(t);
+        adj.get(t).push(s);
       }
     });
 
-    const rootNode = visibleNodes.find(n => n.primaryLabel === 'Project' || n.categoryId === 'proyecto');
+    // 3. BFS para identificar los nodos descendientes que deben ser ocultados (excluyendo Redes y Proyectos)
+    const hiddenSubtreeNodeIds = new Set();
+    const queue = [...decomEndpointIds];
+    const visited = new Set(decomEndpointIds);
+
+    while (queue.length > 0) {
+      const currId = queue.shift();
+      const neighbors = adj.get(currId) || [];
+
+      for (const nbrId of neighbors) {
+        if (!visited.has(nbrId)) {
+          const nbrNode = nodeMap.get(nbrId);
+          if (nbrNode) {
+            const label = nbrNode.primaryLabel || nbrNode.labels?.[0] || '';
+            const labels = nbrNode.labels || [];
+            const isNet = label === 'Network' || labels.includes('Network');
+            const isProj = label === 'Project' || labels.includes('Project');
+            const isOtherEp = label === 'Endpoint' || labels.includes('Endpoint');
+
+            // No ocultamos Redes, Proyectos ni otros Endpoints
+            if (!isNet && !isProj && !isOtherEp) {
+              visited.add(nbrId);
+              hiddenSubtreeNodeIds.add(nbrId);
+              queue.push(nbrId);
+            }
+          }
+        }
+      }
+    }
+
+    // 4. Filtrar nodos visibles (excluir TTP, ThreatActor, Vulnerability y el subárbol de decomisados)
+    const visibleNodes = graphData.nodes.filter(n => {
+      const idStr = String(n.id);
+      if (
+        n.labels.includes('TTP') ||
+        n.labels.includes('ThreatActor') ||
+        n.labels.includes('Vulnerability')
+      ) {
+        return false;
+      }
+
+      // Ocultamos los nodos descendientes del subárbol
+      if (hiddenSubtreeNodeIds.has(idStr)) {
+        return false;
+      }
+
+      return true;
+    });
+
     const depths = {};
     visibleNodes.forEach(n => {
       depths[n.id] = 999;
     });
+
+    const rootNode = visibleNodes.find(n => n.primaryLabel === 'Project' || n.categoryId === 'proyecto');
     if (rootNode) {
-      const queue = [rootNode.id];
+      const bfsAdj = {};
+      visibleNodes.forEach(n => { bfsAdj[n.id] = []; });
+      rels.forEach(rel => {
+        if (bfsAdj[rel.source] && bfsAdj[rel.target]) {
+          bfsAdj[rel.source].push(rel.target);
+          bfsAdj[rel.target].push(rel.source);
+        }
+      });
+
+      const q = [rootNode.id];
       depths[rootNode.id] = 0;
       let head = 0;
-      while (head < queue.length) {
-        const currId = queue[head++];
+      while (head < q.length) {
+        const currId = q[head++];
         const currDepth = depths[currId];
-        const neighbors = adj[currId] || [];
+        const neighbors = bfsAdj[currId] || [];
         for (const nbrId of neighbors) {
           if (depths[nbrId] === 999) {
             depths[nbrId] = currDepth + 1;
-            queue.push(nbrId);
+            q.push(nbrId);
           }
         }
       }
@@ -207,6 +273,7 @@ export function NetworkGraph({
     const initial = visibleNodes.map((n, i) => {
       const angle = (i / visibleNodes.length) * 2 * Math.PI;
       const initialX = Math.cos(angle) * 200;
+      const isDecom = isDecommissionedEndpoint(n);
 
       return {
         id: n.id,
@@ -218,7 +285,8 @@ export function NetworkGraph({
         fx: 0,
         fy: 0,
         r: getNodeRadius(n.categoryId),
-        color: getNodeColor(n.categoryId),
+        color: isDecom ? '#6b7280' : getNodeColor(n.categoryId),
+        isDecom: isDecom,
         pinned: false,
         depth: depths[n.id]
       };
@@ -264,14 +332,12 @@ export function NetworkGraph({
         }
 
         graphData.relationships.forEach(rel => {
-          // 1. Ignorar atracción física de muelle para la relación CONTAINS_NETWORK
           if (rel.type === 'CONTAINS_NETWORK') return;
 
           const source = nodes.find(n => n.id === rel.source);
           const target = nodes.find(n => n.id === rel.target);
           if (!source || !target) return;
 
-          // 2. Doble seguridad: Sin atracción física entre Proyecto y Red
           const isProjectToNetwork =
             (source.entity.primaryLabel === 'Project' && target.entity.primaryLabel === 'Network') ||
             (target.entity.primaryLabel === 'Project' && source.entity.primaryLabel === 'Network');
@@ -790,14 +856,14 @@ export function NetworkGraph({
 
         <g id="edgeGroup">
           {graphData.relationships.map((rel) => {
-            // 1. Ocultar la línea si es la relación estructural CONTAINS_NETWORK
+            // Ocultar relación CONTAINS_NETWORK
             if (rel.type === 'CONTAINS_NETWORK') return null;
 
             const na = layoutNodes.find(n => n.id === rel.source);
             const nb = layoutNodes.find(n => n.id === rel.target);
             if (!na || !nb) return null;
 
-            // 2. Doble seguridad: si une directamente un nodo Proyecto y un nodo Red, no dibujar la línea
+            // Ocultar relación directa entre Proyecto y Red
             const isProjectToNetwork =
               (na.entity.primaryLabel === 'Project' && nb.entity.primaryLabel === 'Network') ||
               (nb.entity.primaryLabel === 'Project' && na.entity.primaryLabel === 'Network');
@@ -842,8 +908,11 @@ export function NetworkGraph({
             const isSelected = selectedNode && selectedNode.id === node.id;
             const isVuln = node.entity.categoryId === 'vulnerabilidad';
 
-            const riskTierColor = getTierColor(node.entity.properties?.risk_tier);
-            const priorityTierColor = getTierColor(node.entity.properties?.priority_tier);
+            // Comprobar si es un Endpoint decomisado (offline)
+            const isDecom = node.isDecom || isDecommissionedEndpoint(node.entity);
+
+            const riskTierColor = isDecom ? null : getTierColor(node.entity.properties?.risk_tier);
+            const priorityTierColor = isDecom ? null : getTierColor(node.entity.properties?.priority_tier);
 
             const stepNumber = pathNodeStepMap.get(String(node.id));
             const isStepNode = stepNumber !== undefined;
@@ -854,12 +923,13 @@ export function NetworkGraph({
             return (
               <g
                 key={node.id}
-                className={`node-group ${node.pinned ? '' : 'free'} ${(isDimmed || pathDimmedNode) ? 'dim' : ''} ${isSelected ? 'selected' : ''} ${isStepNode ? 'path-node' : ''}`}
+                className={`node-group ${node.pinned ? '' : 'free'} ${(isDimmed || pathDimmedNode) ? 'dim' : ''} ${isSelected ? 'selected' : ''} ${isStepNode ? 'path-node' : ''} ${isDecom ? 'decommissioned' : ''}`}
                 transform={`translate(${node.x}, ${node.y})`}
                 onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
                 onDoubleClick={(e) => handleNodeDoubleClick(e, node.id)}
+                style={isDecom ? { opacity: 0.65 } : undefined}
               >
-                {isVuln && (
+                {isVuln && !isDecom && (
                   <circle
                     r={node.r}
                     fill="none"
@@ -890,21 +960,22 @@ export function NetworkGraph({
                   />
                 )}
 
-                <circle r={node.r + 6} fill={node.color} opacity="0.12" />
+                <circle r={node.r + 6} fill={isDecom ? "#4b5563" : node.color} opacity={isDecom ? "0.05" : "0.12"} />
 
                 <circle
                   className="core"
                   r={node.r}
-                  fill="rgba(5, 6, 30, 0.9)"
-                  stroke={isNodeInPath ? '#ef4444' : node.color}
+                  fill={isDecom ? "#111827" : "rgba(5, 6, 30, 0.9)"}
+                  stroke={isNodeInPath ? '#ef4444' : isDecom ? '#6b7280' : node.color}
                   strokeWidth={isNodeInPath ? '3' : '2'}
-                  filter="url(#glow)"
+                  strokeDasharray={isDecom ? '3 3' : undefined}
+                  filter={isDecom ? undefined : "url(#glow)"}
                 />
 
                 <NodeIcon
                   categoryId={node.entity.categoryId}
                   primaryLabel={node.entity.primaryLabel}
-                  color={isNodeInPath ? '#ef4444' : node.color}
+                  color={isNodeInPath ? '#ef4444' : isDecom ? '#6b7280' : node.color}
                   size={node.r * 1.1}
                 />
 
@@ -930,12 +1001,12 @@ export function NetworkGraph({
                   </g>
                 )}
 
-                <text y={node.r + 16} textAnchor="middle">
+                <text y={node.r + 16} textAnchor="middle" fill={isDecom ? '#9ca3af' : undefined}>
                   {node.entity.name}
                 </text>
 
-                <text className="sub" y={node.r + 28} textAnchor="middle">
-                  {node.entity.primaryLabel.toUpperCase()}
+                <text className="sub" y={node.r + 28} textAnchor="middle" fill={isDecom ? '#6b7280' : undefined}>
+                  {isDecom ? 'DECOMMISSIONED' : node.entity.primaryLabel.toUpperCase()}
                 </text>
               </g>
             );
