@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { NodeIcon } from './NodeIcon';
 
-
-
 const PHYSICS = {
   repulsion: 8500,
   springLength: 190,
@@ -14,27 +12,20 @@ const PHYSICS = {
 };
 
 // Mundo fijo: de -5000 a 5000 en ambos ejes (10.000 x 10.000 de espacio total).
-// Reemplaza al antiguo CANVAS_WIDTH=900 / CANVAS_HEIGHT=640, que se quedaba
-// corto con grafos grandes.
 const CANVAS_MIN = -5000;
 const CANVAS_MAX = 5000;
 const CANVAS_WIDTH = CANVAS_MAX - CANVAS_MIN;  // 10000
 const CANVAS_HEIGHT = CANVAS_MAX - CANVAS_MIN; // 10000
 
 // Centro del mundo, usado por los modos 'tree' y 'stix' para centrar la raíz
-// (antes usaban CANVAS_WIDTH/2, CANVAS_HEIGHT/2, que ahora sería (5000,5000)
-// — la esquina del mundo, no su centro real, que es (0,0)).
 const WORLD_CENTER_X = (CANVAS_MIN + CANVAS_MAX) / 2; // 0
 const WORLD_CENTER_Y = (CANVAS_MIN + CANVAS_MAX) / 2; // 0
 
-// Tamaño del viewBox inicial: lo que se ve nada más entrar, centrado en el
-// origen (0,0) del mundo.
+// Tamaño del viewBox inicial: lo que se ve nada más entrar, centrado en el origen (0,0)
 const INITIAL_VIEW_W = 900;
 const INITIAL_VIEW_H = 640;
 
 const getLayerY = (categoryId) => {
-  // Capas distribuidas simétricamente alrededor del centro del mundo (y=0),
-  // usado por el modo 'layered'
   switch (categoryId) {
     case 'proyecto': return -220;
     case 'red': return -140;
@@ -73,7 +64,6 @@ const getNodeRadius = (categoryId) => {
   }
 };
 
-
 const getTierColor = (tier) => {
   switch ((tier || '').toUpperCase()) {
     case 'CRITICAL': return '#74050e';
@@ -83,7 +73,6 @@ const getTierColor = (tier) => {
     default: return null;
   }
 };
-
 
 export function NetworkGraph({
   graphData,
@@ -98,7 +87,6 @@ export function NetworkGraph({
   selectedExploitationPath,
   clearSelectedExploitationPath
 }) {
-
   const [layoutMode, setLayoutMode] = useState('layered'); // 'layered', 'tree', 'stix'
   const [layoutNodes, setLayoutNodes] = useState([]);
   const nodesRef = useRef([]);
@@ -112,7 +100,7 @@ export function NetworkGraph({
     setSvgEl(node);
   }, []);
 
-  // Reloj (movido desde el HudHeader a la esquina superior derecha del canvas)
+  // Reloj
   const [timeStr, setTimeStr] = useState('--:--:--');
   const [dateStr, setDateStr] = useState('-----');
 
@@ -131,8 +119,6 @@ export function NetworkGraph({
     return () => clearInterval(interval);
   }, []);
 
-  // FIX: viewBox ahora arranca centrado en (0,0) — el centro del nuevo mundo
-  // -5000..5000 — en vez de en la esquina (0,0) del mundo viejo 0..900/0..640.
   const [viewBox, setViewBox] = useState({
     x: -INITIAL_VIEW_W / 2,
     y: -INITIAL_VIEW_H / 2,
@@ -147,7 +133,6 @@ export function NetworkGraph({
     viewBoxRef.current = viewBox;
   }, [viewBox]);
 
-  // Reset pinned status of all nodes when layoutMode changes
   useEffect(() => {
     if (nodesRef.current) {
       nodesRef.current.forEach(node => {
@@ -169,7 +154,6 @@ export function NetworkGraph({
       !n.labels.includes('Vulnerability')
     );
 
-    // Compute BFS depth from Project node (root)
     const adj = {};
     visibleNodes.forEach(n => {
       adj[n.id] = [];
@@ -203,7 +187,6 @@ export function NetworkGraph({
       }
     }
 
-    // Fallbacks for any nodes not reached by BFS
     visibleNodes.forEach(n => {
       if (depths[n.id] === 999) {
         switch (n.categoryId) {
@@ -223,7 +206,6 @@ export function NetworkGraph({
 
     const initial = visibleNodes.map((n, i) => {
       const angle = (i / visibleNodes.length) * 2 * Math.PI;
-      // FIX: posición inicial centrada en 0 (antes CANVAS_WIDTH/2 = 450)
       const initialX = Math.cos(angle) * 200;
 
       return {
@@ -282,21 +264,30 @@ export function NetworkGraph({
         }
 
         graphData.relationships.forEach(rel => {
+          // 1. Ignorar atracción física de muelle para la relación CONTAINS_NETWORK
+          if (rel.type === 'CONTAINS_NETWORK') return;
+
           const source = nodes.find(n => n.id === rel.source);
           const target = nodes.find(n => n.id === rel.target);
-          if (source && target) {
-            const dx = target.x - source.x;
-            const dy = target.y - source.y;
-            const dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
-            const displacement = dist - PHYSICS.springLength;
-            const force = displacement * PHYSICS.springConstant;
-            const sfx = (dx / dist) * force;
-            const sfy = (dy / dist) * force;
-            source.fx += sfx;
-            source.fy += sfy;
-            target.fx -= sfx;
-            target.fy -= sfy;
-          }
+          if (!source || !target) return;
+
+          // 2. Doble seguridad: Sin atracción física entre Proyecto y Red
+          const isProjectToNetwork =
+            (source.entity.primaryLabel === 'Project' && target.entity.primaryLabel === 'Network') ||
+            (target.entity.primaryLabel === 'Project' && source.entity.primaryLabel === 'Network');
+          if (isProjectToNetwork) return;
+
+          const dx = target.x - source.x;
+          const dy = target.y - source.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
+          const displacement = dist - PHYSICS.springLength;
+          const force = displacement * PHYSICS.springConstant;
+          const sfx = (dx / dist) * force;
+          const sfy = (dy / dist) * force;
+          source.fx += sfx;
+          source.fy += sfy;
+          target.fx -= sfx;
+          target.fy -= sfy;
         });
 
         nodes.forEach(node => {
@@ -308,8 +299,6 @@ export function NetworkGraph({
 
           if (layoutMode === 'stix') {
             const isRoot = node.entity.primaryLabel === 'Project' || node.entity.categoryId === 'proyecto';
-            // FIX: centrado en WORLD_CENTER (0,0) en vez de CANVAS_WIDTH/2
-            // (que ahora sería 5000, la esquina del mundo, no su centro)
             if (isRoot) {
               node.fx += (WORLD_CENTER_X - node.x) * 0.15;
               node.fy += (WORLD_CENTER_Y - node.y) * 0.15;
@@ -319,13 +308,9 @@ export function NetworkGraph({
             }
           } else if (layoutMode === 'tree') {
             const isRoot = node.entity.primaryLabel === 'Project' || node.entity.categoryId === 'proyecto';
-            // FIX: centrado en WORLD_CENTER_X (0) en vez de CANVAS_WIDTH/2
             if (isRoot) {
               node.fx += (WORLD_CENTER_X - node.x) * 0.2;
             }
-            // FIX: targetY ahora arranca en negativo (-300) y crece hacia
-            // abajo con la misma separación entre niveles (185), centrado
-            // igual que el resto de layouts alrededor de y=0
             const targetY = -300 + (node.depth || 0) * 185;
             node.fy += (targetY - node.y) * PHYSICS.centralGravity;
           } else {
@@ -344,10 +329,6 @@ export function NetworkGraph({
           node.x += node.vx;
           node.y += node.vy;
 
-          // FIX: se unifica el clamp para los tres modos de layout, usando
-          // los límites del mundo -5000/5000 en vez de los rangos fijos y
-          // pequeños que 'tree'/'stix' tenían antes ([-450,1350]x[40,1200],
-          // pensados para el mundo viejo de 900x640).
           node.x = Math.max(CANVAS_MIN + 40, Math.min(CANVAS_MAX - 40, node.x));
           node.y = Math.max(CANVAS_MIN + 40, Math.min(CANVAS_MAX - 40, node.y));
         });
@@ -385,8 +366,6 @@ export function NetworkGraph({
       const zoomFactor = e.deltaY > 0 ? 1.1 : 0.9;
 
       setViewBox(vb => {
-        // FIX: límite máximo de zoom-out ahora es el tamaño real del mundo
-        // (10000), antes topaba en 3000/2200 mucho antes de llegar al borde.
         const newW = Math.max(150, Math.min(CANVAS_WIDTH, vb.w * zoomFactor));
         const newH = Math.max(110, Math.min(CANVAS_HEIGHT, vb.h * zoomFactor));
         const ratioX = (svgP.x - vb.x) / vb.w;
@@ -415,9 +394,6 @@ export function NetworkGraph({
       hasMoved = true;
       const node = nodesRef.current.find(n => n.id === nodeId);
       if (node) {
-        // FIX: mismo límite -5000/5000 para los tres modos al arrastrar
-        // manualmente (antes 'tree'/'stix' usaban un rango distinto y más
-        // pequeño que 'layered')
         node.x = Math.max(CANVAS_MIN + 40, Math.min(CANVAS_MAX - 40, svgP.x));
         node.y = Math.max(CANVAS_MIN + 40, Math.min(CANVAS_MAX - 40, svgP.y));
       }
@@ -600,7 +576,6 @@ export function NetworkGraph({
           const midNode = graphData.nodes.find(n => String(n.id) === String(midId));
           const primaryLabel = midNode?.primaryLabel || midNode?.labels?.[0] || '';
           
-          // Si encontramos una Network, es el salto óptimo para una ruta de ataque
           if (primaryLabel === 'Network' || (midNode?.labels || []).includes('Network')) {
             bestMidId = midId;
             bestRel1 = srcItem.relId;
@@ -608,7 +583,6 @@ export function NetworkGraph({
             break; 
           }
           
-          // Si no es un proyecto, lo guardamos como candidato por si acaso
           if (primaryLabel !== 'Project' && !(midNode?.labels || []).includes('Project')) {
              if (!bestMidId) {
                bestMidId = midId;
@@ -660,7 +634,6 @@ export function NetworkGraph({
       }
     }
 
-    // --- Destacar rama hacia el Finding de cada paso ---
     (selectedExploitationPath.steps || []).forEach((step) => {
       const stepNode = findNodeForHostOrId(step.targetEndpoint, step.targetEndpointId);
       if (stepNode && step.finding_id) {
@@ -674,7 +647,7 @@ export function NetworkGraph({
 
           while (queue.length > 0) {
             const [curr, pathInfo] = queue.shift();
-            if (pathInfo.length > 3) break; // Endpoint -> SoftwareInst -> Finding = 2 saltos máx
+            if (pathInfo.length > 3) break;
 
             if (curr === String(findingNode.id)) {
               pathRels = pathInfo.map(p => p.relId);
@@ -745,7 +718,7 @@ export function NetworkGraph({
 
   return (
     <div className="graph-stage" style={{ width: '100%', height: '100%' }}>
-      {/* RELOJ — esquina superior derecha del canvas del grafo */}
+      {/* RELOJ */}
       <div className="cw-tr graph-clock-box">
         <div id="clockTime">{timeStr}</div>
         <div id="clockDate">{dateStr}</div>
@@ -817,9 +790,18 @@ export function NetworkGraph({
 
         <g id="edgeGroup">
           {graphData.relationships.map((rel) => {
+            // 1. Ocultar la línea si es la relación estructural CONTAINS_NETWORK
+            if (rel.type === 'CONTAINS_NETWORK') return null;
+
             const na = layoutNodes.find(n => n.id === rel.source);
             const nb = layoutNodes.find(n => n.id === rel.target);
             if (!na || !nb) return null;
+
+            // 2. Doble seguridad: si une directamente un nodo Proyecto y un nodo Red, no dibujar la línea
+            const isProjectToNetwork =
+              (na.entity.primaryLabel === 'Project' && nb.entity.primaryLabel === 'Network') ||
+              (nb.entity.primaryLabel === 'Project' && na.entity.primaryLabel === 'Network');
+            if (isProjectToNetwork) return null;
 
             const naMatches = filterType === 'ALL' || na.entity.primaryLabel === filterType;
             const nbMatches = filterType === 'ALL' || nb.entity.primaryLabel === filterType;
