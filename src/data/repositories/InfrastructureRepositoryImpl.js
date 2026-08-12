@@ -21,8 +21,8 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     return await this.apiDataSource.populateInfrastructure();
   }
 
-  async getTopApts() {
-    const rawData = await this.apiDataSource.fetchTopApts();
+  async getTopApts(projectId) {
+    const rawData = await this.apiDataSource.fetchTopApts(projectId);
     return (rawData || []).map(apt => new AptActor(apt));
   }
 

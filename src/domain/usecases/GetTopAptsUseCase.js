@@ -3,7 +3,7 @@ export class GetTopAptsUseCase {
     this.infrastructureRepository = infrastructureRepository;
   }
 
-  async execute() {
-    return await this.infrastructureRepository.getTopApts();
+  async execute(projectId) {
+    return await this.infrastructureRepository.getTopApts(projectId);
   }
 }

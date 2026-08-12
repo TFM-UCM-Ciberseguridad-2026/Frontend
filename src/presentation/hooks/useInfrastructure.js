@@ -129,7 +129,7 @@ export function useInfrastructure() {
     setAptLoading(true);
     setAptError(null);
     try {
-      const data = await getTopAptsUseCase.execute();
+      const data = await getTopAptsUseCase.execute(selectedProjectId);
       setAptData(data || []);
     } catch (err) {
       console.error(err);
