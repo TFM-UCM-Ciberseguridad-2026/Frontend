@@ -734,7 +734,7 @@ export function AddAssetButton({
                   required
                 />
                 <div className="asset-field-help">
-                  Ya no es necesario seleccionar un endpoint: con la IP del gateway y el CIDR basta para crear la red.
+                  Recuerde que el gateway debe estar dentro del rango definido por el CIDR.
                 </div>
               </div>
 

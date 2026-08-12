@@ -3,7 +3,7 @@ export class UpdateNodeUseCase {
     this.infrastructureRepository = infrastructureRepository;
   }
 
-  async execute(category, id, payload) {
+  async execute(category, id, payload, projectId) {
     if (!id) {
       throw new Error('ID de activo no válido.');
     }
@@ -20,7 +20,8 @@ export class UpdateNodeUseCase {
     } else if (cat.includes('network') || cat === 'red' || cat === 'vlan') {
       const cleanPayload = {
         ...payload,
-        vlan_id: payload.vlan_id === '' || payload.vlan_id === undefined ? 0 : Number(payload.vlan_id)
+        vlan_id: payload.vlan_id === '' || payload.vlan_id === undefined ? 0 : Number(payload.vlan_id),
+        project_id: projectId ? Number(projectId) : 0
       };
       return await this.infrastructureRepository.updateNetwork(id, cleanPayload);
     } else if (cat.includes('hardware') || cat === 'hw') {
