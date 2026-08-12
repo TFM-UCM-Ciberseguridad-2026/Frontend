@@ -249,7 +249,7 @@ export function useInfrastructure() {
 
   const updateNode = async (category, id, data, selectedProjectId) => {
     try {
-      const res = await updateNodeUseCase.execute(category, id, data);
+      const res = await updateNodeUseCase.execute(category, id, data, selectedProjectId);
       toast.success('¡Activo actualizado y re-enlazado correctamente!', 'Edición Guardada');
       await fetchInfrastructure(true);
       return res;
