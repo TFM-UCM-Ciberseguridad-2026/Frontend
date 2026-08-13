@@ -211,10 +211,16 @@ export function NetworkGraph({
       const idStr = String(n.id);
       if (
         n.labels.includes('TTP') ||
-        n.labels.includes('ThreatActor') ||
-        n.labels.includes('Vulnerability')
+        n.labels.includes('ThreatActor')
       ) {
         return false;
+      }
+
+      if (n.labels.includes('Vulnerability')) {
+        const isFromContainerImage = rels.some(r => r.type === 'HAS_VULNERABILITY' && (r.source === n.id || r.target === n.id));
+        if (!isFromContainerImage) {
+          return false;
+        }
       }
 
       // Ocultamos los nodos descendientes del subárbol
@@ -716,16 +722,16 @@ export function NetworkGraph({
         if (step.finding_id) {
           findingNode = graphData.nodes.find(n => String(n.id) === String(step.finding_id));
         }
-        // Fallback: buscar Finding por coincidencia de título/CVE cuando no hay finding_id (ej. Container Escape)
         if (!findingNode && step.vulnerability) {
-          // Para LPE, buscamos en TODO el grafo por palabras clave del título
+          // Para LPE o ContainerImage (sin finding_id), buscamos en TODO el grafo por palabras clave
           const vulnWords = step.vulnerability.toLowerCase()
             .replace(/[()]/g, '').split(/\s+/).filter(w => w.length > 3);
           findingNode = graphData.nodes.find(n =>
-            n.labels?.includes('Finding') &&
+            (n.labels?.includes('Finding') || n.labels?.includes('Vulnerability')) &&
             vulnWords.some(word =>
               n.properties?.title?.toLowerCase().includes(word) ||
-              n.properties?.cve_id?.toLowerCase().includes(word)
+              n.properties?.cve_id?.toLowerCase().includes(word) ||
+              n.properties?.description?.toLowerCase().includes(word)
             )
           );
         }
