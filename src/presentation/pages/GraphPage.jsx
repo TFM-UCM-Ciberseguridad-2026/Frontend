@@ -26,8 +26,10 @@ export function GraphPage({
   endpoints,
   showToast,
   createEndpoint,
+  createContainer,
   createHardware,
   createSoftware,
+  createContainerSoftware,
   createNetwork,
   updateNode,
   deleteNode,
@@ -64,8 +66,10 @@ export function GraphPage({
           onCreated={() => fetchInfrastructure(true)}
           showToast={showToast}
           createEndpoint={createEndpoint}
+          createContainer={createContainer}
           createHardware={createHardware}
           createSoftware={createSoftware}
+          createContainerSoftware={createContainerSoftware}
           createNetwork={createNetwork}
         />
 

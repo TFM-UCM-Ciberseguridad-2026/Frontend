@@ -28,6 +28,7 @@ const getLayerY = (categoryId) => {
     case 'red': return -140;
     case 'endpoint':
     case 'hardware': return -40;
+    case 'container': return 10;
     case 'instalacion': return 60;
     case 'software': return 160;
     case 'hallazgo': return 240;
@@ -49,6 +50,7 @@ const getNodeColor = (categoryId) => {
     case 'vulnerabilidad': return '#ef4444';
     case 'remediacion': return '#2701D6';
     case 'parche': return '#2103A9';
+    case 'container': return '#0db7ed';
     default: return '#A5A5FF';
   }
 };
@@ -56,7 +58,9 @@ const getNodeColor = (categoryId) => {
 const getNodeRadius = (categoryId) => {
   switch (categoryId) {
     case 'proyecto': return 32;
+    case 'proyecto': return 32;
     case 'endpoint': return 26;
+    case 'container': return 22;
     default: return 20;
   }
 };
@@ -593,7 +597,9 @@ export function NetworkGraph({
     }
 
     (selectedExploitationPath.steps || []).forEach((step) => {
-      const stepNode = findNodeForHostOrId(step.targetEndpoint, step.targetEndpointId);
+      const tId = step.is_container ? step.container_id : step.targetEndpointId;
+      const tName = step.is_container ? step.container_name : step.targetEndpoint;
+      const stepNode = findNodeForHostOrId(tName, tId);
       if (stepNode) {
         if (!orderedPathNodes.some(n => String(n.id) === String(stepNode.id))) {
           orderedPathNodes.push(stepNode);
@@ -701,21 +707,44 @@ export function NetworkGraph({
     }
 
     (selectedExploitationPath.steps || []).forEach((step) => {
-      const stepNode = findNodeForHostOrId(step.targetEndpoint, step.targetEndpointId);
-      if (stepNode && step.finding_id) {
-        const findingNode = graphData.nodes.find(n => String(n.id) === String(step.finding_id));
+      const tId = step.is_container ? step.container_id : step.targetEndpointId;
+      const tName = step.is_container ? step.container_name : step.targetEndpoint;
+      const stepNode = findNodeForHostOrId(tName, tId);
+      if (stepNode) {
+        // Buscar el Finding por finding_id (caso normal) o por nombre de vulnerabilidad (caso LPE sin finding_id)
+        let findingNode = null;
+        if (step.finding_id) {
+          findingNode = graphData.nodes.find(n => String(n.id) === String(step.finding_id));
+        }
+        // Fallback: buscar Finding por coincidencia de título/CVE cuando no hay finding_id (ej. Container Escape)
+        if (!findingNode && step.vulnerability) {
+          // Para LPE, buscamos en TODO el grafo por palabras clave del título
+          const vulnWords = step.vulnerability.toLowerCase()
+            .replace(/[()]/g, '').split(/\s+/).filter(w => w.length > 3);
+          findingNode = graphData.nodes.find(n =>
+            n.labels?.includes('Finding') &&
+            vulnWords.some(word =>
+              n.properties?.title?.toLowerCase().includes(word) ||
+              n.properties?.cve_id?.toLowerCase().includes(word)
+            )
+          );
+        }
         
         if (findingNode) {
-          const queue = [[String(stepNode.id), []]];
-          const visited = new Set([String(stepNode.id)]);
+          // BFS desde el findingNode hacia afuera (máx 3 saltos) para iluminar
+          // la cadena: Finding <- HAS_FINDING <- SoftwareInstallation <- HAS_INSTALLATION <- Host/Container
+          const queue2 = [[String(findingNode.id), []]];
+          const visited2 = new Set([String(findingNode.id)]);
+          // Iluminar el propio findingNode
+          connectorNodeIdSet.add(String(findingNode.id));
           let pathRels = null;
           let pathNodes = null;
 
-          while (queue.length > 0) {
-            const [curr, pathInfo] = queue.shift();
-            if (pathInfo.length > 3) break;
+          while (queue2.length > 0) {
+            const [curr, pathInfo] = queue2.shift();
+            if (pathInfo.length > 4) break;
 
-            if (curr === String(findingNode.id)) {
+            if (stepNode && curr === String(stepNode.id)) {
               pathRels = pathInfo.map(p => p.relId);
               pathNodes = pathInfo.map(p => p.neighborId);
               break;
@@ -723,20 +752,16 @@ export function NetworkGraph({
 
             const nbrs = adjMap.get(curr) || [];
             for (const item of nbrs) {
-              if (!visited.has(item.neighborId)) {
-                visited.add(item.neighborId);
-                queue.push([item.neighborId, [...pathInfo, item]]);
+              if (!visited2.has(item.neighborId)) {
+                visited2.add(item.neighborId);
+                queue2.push([item.neighborId, [...pathInfo, item]]);
               }
             }
           }
 
           if (pathRels) {
             pathRels.forEach(id => edgeIdSet.add(id));
-            pathNodes.forEach(id => {
-              if (id !== String(stepNode.id)) {
-                connectorNodeIdSet.add(id);
-              }
-            });
+            pathNodes.forEach(id => connectorNodeIdSet.add(id));
           }
         }
       }

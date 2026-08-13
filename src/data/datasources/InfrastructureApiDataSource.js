@@ -51,6 +51,15 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
+  async createContainer(endpointId, payload) {
+    const res = await fetch(`/api/endpoints/${endpointId}/containers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return await this._handleResponse(res);
+  }
+
   async createHardware(endpointId, payload) {
     const res = await fetch(`/api/endpoints/${endpointId}/hardware`, {
       method: 'POST',
@@ -62,6 +71,15 @@ export class InfrastructureApiDataSource {
 
   async createSoftware(endpointId, payload) {
     const res = await fetch(`/api/endpoints/${endpointId}/installations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return await this._handleResponse(res);
+  }
+
+  async createContainerSoftware(containerId, payload) {
+    const res = await fetch(`/api/containers/${containerId}/installations`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -196,6 +214,20 @@ export class InfrastructureApiDataSource {
 
   async deleteSoftwareInstallation(id) {
     const res = await fetch(`/api/installations/${id}`, { method: 'DELETE' });
+    return await this._handleResponse(res);
+  }
+
+  async updateContainer(id, payload) {
+    const res = await fetch(`/api/containers/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return await this._handleResponse(res);
+  }
+
+  async deleteContainer(id) {
+    const res = await fetch(`/api/containers/${id}`, { method: 'DELETE' });
     return await this._handleResponse(res);
   }
 

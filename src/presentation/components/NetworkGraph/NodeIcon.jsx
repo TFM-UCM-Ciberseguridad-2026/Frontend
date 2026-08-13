@@ -47,6 +47,19 @@ export function NodeIcon({ categoryId, primaryLabel, color = '#FFFFFF', size = 2
           </>
         );
 
+      case 'container':
+      case 'contenedor':
+      case 'containerimage':
+        // Docker/Container Box
+        return (
+          <>
+            <rect x="4" y="12" width="16" height="8" rx="1" />
+            <rect x="6" y="8" width="4" height="4" rx="0.5" />
+            <rect x="10" y="8" width="4" height="4" rx="0.5" />
+            <rect x="14" y="8" width="4" height="4" rx="0.5" />
+            <rect x="10" y="4" width="4" height="4" rx="0.5" />
+          </>
+        );
 
       case 'instalacion':
       case 'softwareinstallation':

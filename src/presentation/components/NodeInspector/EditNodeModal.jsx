@@ -26,18 +26,18 @@ export function EditNodeModal({ node, onClose, updateNode }) {
               });
             }
           } else {
-             // Fallback to props.ips if API fails
-             if (Array.isArray(props.ips)) {
-               initialIps = props.ips.map(entry => {
-                 if (typeof entry === 'string') return { ip: entry, vlan_id: '' };
-                 return { ip: entry.ip || '', vlan_id: entry.vlan_id ?? '' };
-               });
-             }
+            // Fallback to props.ips if API fails
+            if (Array.isArray(props.ips)) {
+              initialIps = props.ips.map(entry => {
+                if (typeof entry === 'string') return { ip: entry, vlan_id: '' };
+                return { ip: entry.ip || '', vlan_id: entry.vlan_id ?? '' };
+              });
+            }
           }
         } catch (e) {
           console.error("Failed to fetch IPs:", e);
         }
-        
+
         setFormData(prev => ({
           ...prev,
           hostname: props.hostname || '',
@@ -51,7 +51,7 @@ export function EditNodeModal({ node, onClose, updateNode }) {
           ips: initialIps
         }));
       };
-      
+
       // Initialize without IPs while loading
       setFormData({
         hostname: props.hostname || '',
@@ -64,8 +64,23 @@ export function EditNodeModal({ node, onClose, updateNode }) {
         availability_req: props.availability_req || props.availability_requirement || 'HIGH',
         ips: []
       });
-      
+
       fetchIPs();
+    } else if (label === 'Container') {
+      let initialIps = [];
+      if (Array.isArray(props.ips)) {
+        initialIps = props.ips.map(entry => {
+          if (typeof entry === 'string') return { ip: entry, vlan_id: '' };
+          return { ip: entry.ip || '', vlan_id: entry.vlan_id ?? '' };
+        });
+      }
+      setFormData({
+        name: props.name || '',
+        state: props.state || 'running',
+        image_id: props.image_id || '',
+        internet_exposed: Boolean(props.internet_exposed),
+        ips: initialIps
+      });
     } else if (label === 'Network') {
       setFormData({
         nombre: props.nombre || props.name || '',
@@ -153,7 +168,7 @@ export function EditNodeModal({ node, onClose, updateNode }) {
           <div>
             <h2>EDITAR {label.toUpperCase()}</h2>
             <div className="asset-modal-subtitle">
-              {['Endpoint', 'Network'].includes(label)
+              {['Endpoint', 'Network', 'Container'].includes(label)
                 ? 'Modifica las propiedades y reevalúa los enlaces de red de este activo'
                 : 'Modifica las propiedades de este activo en la topología'
               }
@@ -314,6 +329,98 @@ export function EditNodeModal({ node, onClose, updateNode }) {
               </>
             )}
 
+            {/* CAMPOS PARA CONTAINER */}
+            {label === 'Container' && (
+              <>
+                <div>
+                  <div className="asset-field-label">Nombre del contenedor</div>
+                  <input
+                    type="text"
+                    className="asset-input"
+                    value={formData.name || ''}
+                    onChange={(e) => updateField('name', e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <div className="asset-field-label">Estado</div>
+                  <select
+                    className="asset-input"
+                    value={formData.state || 'running'}
+                    onChange={(e) => updateField('state', e.target.value)}
+                  >
+                    <option value="running">running</option>
+                    <option value="stopped">stopped</option>
+                    <option value="paused">paused</option>
+                  </select>
+                </div>
+
+                <div>
+                  <div className="asset-field-label">ID / Nombre de la Imagen</div>
+                  <input
+                    type="text"
+                    className="asset-input"
+                    value={formData.image_id || ''}
+                    onChange={(e) => updateField('image_id', e.target.value)}
+                  />
+                </div>
+
+                <div className="asset-checkbox-row" style={{marginBottom: '1rem'}}>
+                  <input
+                    type="checkbox"
+                    id="edit_cont_internet"
+                    checked={formData.internet_exposed || false}
+                    onChange={(e) => updateField('internet_exposed', e.target.checked)}
+                  />
+                  <label htmlFor="edit_cont_internet" className="asset-field-label asset-checkbox-label">
+                    Expuesto a Internet
+                  </label>
+                </div>
+
+                <div>
+                  <div className="asset-field-label">Direcciones IP y VLANs asociadas</div>
+                  {(formData.ips || []).length > 0 && (
+                    <div className="ip-rows">
+                      {(formData.ips || []).map((ipRow, idx) => (
+                        <div className="ip-row" key={idx}>
+                          <input
+                            type="text"
+                            className="asset-input"
+                            placeholder="Ej: 10.0.1.25"
+                            value={ipRow.ip || ''}
+                            onChange={(e) => updateIp(idx, 'ip', e.target.value)}
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            className="asset-input ip-row-vlan"
+                            placeholder="VLAN ID"
+                            value={ipRow.vlan_id ?? ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              updateIp(idx, 'vlan_id', val === '' ? '' : Number(val));
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="ip-row-remove-btn"
+                            onClick={() => removeIp(idx)}
+                            title="Quitar IP"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <button type="button" className="btn btn-secondary asset-add-ip-btn" onClick={addIp}>
+                    + Añadir IP
+                  </button>
+                </div>
+              </>
+            )}
+
             {/* CAMPOS PARA RED */}
             {label === 'Network' && (
               <>
@@ -380,6 +487,7 @@ export function EditNodeModal({ node, onClose, updateNode }) {
                 </div>
               </>
             )}
+
 
             {/* CAMPOS PARA HARDWARE */}
             {label === 'Hardware' && (

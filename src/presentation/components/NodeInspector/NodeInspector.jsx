@@ -25,7 +25,7 @@ export function NodeInspector({ selectedNode, updateNode, deleteNode, fetchFindi
   }
 
   const categoryLabel = selectedNode.primaryLabel;
-  const isManageableAsset = ['Endpoint', 'Network', 'Hardware'].includes(categoryLabel);
+  const isManageableAsset = ['Endpoint', 'Network', 'Hardware', 'Container'].includes(categoryLabel);
   const canEdit = isManageableAsset && typeof updateNode === 'function';
   const canDelete = isManageableAsset && typeof deleteNode === 'function';
 
@@ -182,10 +182,30 @@ export function NodeInspector({ selectedNode, updateNode, deleteNode, fetchFindi
             <div className="k">ID Interno Neo4j</div>
             <div className="v">{selectedNode.id}</div>
           </div>
-          {Object.entries(selectedNode.properties || {}).map(([k, v]) => {
+          {selectedNode.properties?.image_id && (
+            <div className="prop-row">
+              <div className="k">ID de Imagen</div>
+              <div className="v">{selectedNode.properties.image_id}</div>
+            </div>
+          )}
+          {Object.entries(selectedNode.properties || {})
+            .filter(([k]) => k !== 'image_id')
+            .map(([k, v]) => {
             let display;
             if (typeof v === 'boolean') {
               display = <span className={`pill ${v ? 'true' : 'false'}`}>{v ? 'TRUE' : 'FALSE'}</span>;
+            } else if (k === 'ips' && Array.isArray(v)) {
+              display = (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  {v.map((ipObj, idx) => {
+                    const ipStr = typeof ipObj === 'string' ? ipObj : ipObj.ip;
+                    const vlanStr = (ipObj.vlan_id !== undefined && ipObj.vlan_id !== null) ? ` (VLAN: ${ipObj.vlan_id})` : '';
+                    return <span key={idx} className="pill" style={{ background: 'var(--c800)', color: 'var(--c50)' }}>{ipStr}{vlanStr}</span>;
+                  })}
+                </div>
+              );
+            } else if (typeof v === 'object' && v !== null) {
+              display = JSON.stringify(v);
             } else {
               display = String(v);
             }

@@ -7,6 +7,8 @@ import { GetTopAptsUseCase } from '../../domain/usecases/GetTopAptsUseCase';
 import { GetExploitationPathsUseCase } from '../../domain/usecases/GetExploitationPathsUseCase';
 import { CreateProjectUseCase } from '../../domain/usecases/CreateProjectUseCase';
 import { CreateEndpointUseCase } from '../../domain/usecases/CreateEndpointUseCase';
+import { CreateContainerUseCase } from '../../domain/usecases/CreateContainerUseCase';
+import { CreateContainerSoftwareUseCase } from '../../domain/usecases/CreateContainerSoftwareUseCase';
 import { CreateHardwareUseCase } from '../../domain/usecases/CreateHardwareUseCase';
 import { CreateSoftwareUseCase } from '../../domain/usecases/CreateSoftwareUseCase';
 import { CreateNetworkUseCase } from '../../domain/usecases/CreateNetworkUseCase';
@@ -70,6 +72,8 @@ export function useInfrastructure() {
 
   const createProjectUseCase = useMemo(() => new CreateProjectUseCase(repository), [repository]);
   const createEndpointUseCase = useMemo(() => new CreateEndpointUseCase(repository), [repository]);
+  const createContainerUseCase = useMemo(() => new CreateContainerUseCase(repository), [repository]);
+  const createContainerSoftwareUseCase = useMemo(() => new CreateContainerSoftwareUseCase(repository), [repository]);
   const createHardwareUseCase = useMemo(() => new CreateHardwareUseCase(repository), [repository]);
   const createSoftwareUseCase = useMemo(() => new CreateSoftwareUseCase(repository), [repository]);
   const createNetworkUseCase = useMemo(() => new CreateNetworkUseCase(repository), [repository]);
@@ -208,6 +212,30 @@ export function useInfrastructure() {
       return res;
     } catch (err) {
       toast.error(err.message, 'Error creando Software');
+      throw err;
+    }
+  };
+
+  const createContainer = async (endpointId, data) => {
+    try {
+      const res = await createContainerUseCase.execute(endpointId, data);
+      toast.success('¡Contenedor añadido correctamente!', 'Nuevo Contenedor');
+      await fetchInfrastructure(true);
+      return res;
+    } catch (err) {
+      toast.error(err.message, 'Error creando Contenedor');
+      throw err;
+    }
+  };
+
+  const createContainerSoftware = async (containerId, data) => {
+    try {
+      const res = await createContainerSoftwareUseCase.execute(containerId, data);
+      toast.success('¡Software de contenedor añadido correctamente!', 'Nuevo Software (Contenedor)');
+      await fetchInfrastructure(true);
+      return res;
+    } catch (err) {
+      toast.error(err.message, 'Error creando Software de Contenedor');
       throw err;
     }
   };
@@ -836,8 +864,10 @@ export function useInfrastructure() {
     showToast,
     createProject,
     createEndpoint,
+    createContainer,
     createHardware,
     createSoftware,
+    createContainerSoftware,
     createNetwork,
     updateNode,
     deleteNode,
