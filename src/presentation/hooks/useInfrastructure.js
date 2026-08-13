@@ -593,6 +593,8 @@ export function useInfrastructure() {
         } else if (primaryLabel === 'ContainerImage' || labels.includes('ContainerImage') || rel.type === 'USES_IMAGE') {
           projectContainerImageIds.add(otherId);
           reachableIds.add(otherId);
+        } else if (primaryLabel === 'Network' || labels.includes('Network')) {
+          reachableIds.add(otherId);
         }
       }
     });
