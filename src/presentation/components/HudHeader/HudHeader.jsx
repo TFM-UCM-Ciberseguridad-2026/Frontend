@@ -67,6 +67,20 @@ export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploita
         </button>
 
         <button
+          className={`nav-btn ${activeNav === 'patch-queue' ? 'active' : ''}`}
+          onClick={() => setActiveNav('patch-queue')}
+        >
+          <span className="ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 0 5.4-5.4" />
+              <path d="M15 5l4 4" />
+            </svg>
+          </span>
+          Patch Queue
+        </button>
+
+
+        <button
           className={`nav-btn ${activeNav === 'redes' ? 'active' : ''}`}
           onClick={() => setActiveNav('redes')}
         >

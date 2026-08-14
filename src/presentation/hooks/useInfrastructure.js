@@ -23,6 +23,9 @@ import { ComputeAllProjectRisksUseCase } from '../../domain/usecases/ComputeAllP
 import { UpdateNodeUseCase } from '../../domain/usecases/UpdateNodeUseCase';
 import { DeleteNodeUseCase } from '../../domain/usecases/DeleteNodeUseCase';
 import { useToast } from '../context/ToastContext';
+import { GetPatchQueueUseCase } from '../../domain/usecases/GetPatchQueueUseCase';
+import { RefreshPatchesForVulnerabilityUseCase } from '../../domain/usecases/RefreshPatchesForVulnerabilityUseCase';
+
 
 export function useInfrastructure() {
   const toast = useToast();
@@ -62,6 +65,13 @@ export function useInfrastructure() {
   const [findingVulnsError, setFindingVulnsError] = useState(null);
   const [findingVulnsSourceNode, setFindingVulnsSourceNode] = useState(null);
 
+  // Estados para la cola de parches
+  const [patchQueue, setPatchQueue] = useState([]);
+  const [patchQueueCount, setPatchQueueCount] = useState(0);
+  const [patchQueueLoading, setPatchQueueLoading] = useState(false);
+  const [patchQueueError, setPatchQueueError] = useState(null);
+
+
   // Inyección de dependencias (Clean Architecture)
   const apiDataSource = useMemo(() => new InfrastructureApiDataSource(), []);
   const repository = useMemo(() => new InfrastructureRepositoryImpl(apiDataSource), [apiDataSource]);
@@ -90,6 +100,10 @@ export function useInfrastructure() {
   const getFindingVulnerabilitiesUseCase = useMemo(() => new GetFindingVulnerabilitiesUseCase(repository), [repository]);
   const computeProjectRiskUseCase = useMemo(() => new ComputeProjectRiskUseCase(repository), [repository]);
   const computeAllProjectRisksUseCase = useMemo(() => new ComputeAllProjectRisksUseCase(repository), [repository]);
+
+  // Use Cases para la cola de parches
+  const getPatchQueueUseCase = useMemo(() => new GetPatchQueueUseCase(repository), [repository]);
+  const refreshPatchesForVulnerabilityUseCase = useMemo(() => new RefreshPatchesForVulnerabilityUseCase(repository), [repository]);
 
 
   const showToast = (msg, type = 'info', title = null) => {
@@ -305,6 +319,66 @@ export function useInfrastructure() {
     }
 
   };
+
+  // Funciones para la cola de parches
+  const fetchPatchQueue = async (limit = 100) => {
+    setPatchQueueLoading(true);
+    setPatchQueueError(null);
+    try {
+      const data = await getPatchQueueUseCase.execute(selectedProjectId, limit);
+      setPatchQueue(data.queue);
+      setPatchQueueCount(data.count);
+      return data;
+    } catch (err) {
+      setPatchQueueError(err.message);
+      toast.error(err.message, 'Error cargando Patch Queue');
+      throw err;
+    } finally {
+      setPatchQueueLoading(false);
+    }
+  };
+
+
+  // Refrescar parches para un CVE específico
+  const refreshPatchesForCVE = async (cveId) => {
+    try {
+      await refreshPatchesForVulnerabilityUseCase.execute(cveId);
+      toast.success(`Parches actualizados para ${cveId}`, 'Patches actualizados');
+      await fetchPatchQueue();
+      await fetchInfrastructure(true);
+    } catch (err) {
+      toast.error(err.message, 'Error refrescando patches');
+      throw err;
+    }
+  };
+
+
+  // Función para enfocar un item de la cola de parches en el grafo
+  const focusPatchQueueItem = (item) => {
+    const findingNode = (graphData?.nodes || []).find(n =>
+      (n.primaryLabel === 'Finding' || n.labels?.includes('Finding')) &&
+      Number(n.properties?.id) === Number(item.finding_id)
+    );
+
+    if (findingNode) {
+      setSelectedNode(findingNode);
+      return findingNode;
+    }
+
+    const vulnNode = (graphData?.nodes || []).find(n =>
+      (n.primaryLabel === 'Vulnerability' || n.labels?.includes('Vulnerability')) &&
+      n.properties?.cve_id === item.cve_id
+    );
+
+    if (vulnNode) {
+      setSelectedNode(vulnNode);
+      return vulnNode;
+    }
+
+    toast.warning(`No se encontró ${item.cve_id} en el grafo visible`, 'Nodo no encontrado');
+    return null;
+  };
+
 
   // Helper para desencadenar la descarga en el navegador
   const _triggerDownload = (filename, jsonText) => {
@@ -911,7 +985,14 @@ export function useInfrastructure() {
     findingVulnsData,
     findingVulnsLoading,
     findingVulnsError,
-    findingVulnsSourceNode
+    findingVulnsSourceNode,
+    patchQueue,
+    patchQueueCount,
+    patchQueueLoading,
+    patchQueueError,
+    fetchPatchQueue,
+    refreshPatchesForCVE,
+    focusPatchQueueItem
   };
 
 }

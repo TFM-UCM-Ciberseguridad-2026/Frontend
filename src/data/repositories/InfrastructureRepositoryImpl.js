@@ -90,6 +90,18 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     return await this.apiDataSource.computeAllProjectRisks();
   }
 
+  async getPatchQueue(projectId, limit) {
+    return await this.apiDataSource.fetchPatchQueue(projectId, limit);
+  }
+
+  async refreshPatchesForVulnerability(cveId) {
+    return await this.apiDataSource.refreshPatchesForVulnerability(cveId);
+  }
+
+  async declarePatchApplied(installationId, payload) {
+    return await this.apiDataSource.declarePatchApplied(installationId, payload);
+  }
+
   async updateEndpoint(id, payload) { return await this.apiDataSource.updateEndpoint(id, payload); }
   async deleteEndpoint(id) { return await this.apiDataSource.deleteEndpoint(id); }
   async updateNetwork(id, payload) { return await this.apiDataSource.updateNetwork(id, payload); }

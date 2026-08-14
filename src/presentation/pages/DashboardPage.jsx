@@ -9,6 +9,8 @@ import { NetworksPage } from './NetworksPage';
 import { TtpsPage } from './TtpsPage';
 import { ExportModal } from '../components/Archive/ExportModal';
 import { ImportModal } from '../components/Archive/ImportModal';
+import { PatchQueuePage } from './PatchQueuePage';
+
 
 export function DashboardPage({
   setShowDashboard,
@@ -68,7 +70,15 @@ export function DashboardPage({
   findingVulnsData,
   findingVulnsLoading,
   findingVulnsError,
-  findingVulnsSourceNode
+  findingVulnsSourceNode,
+  // Patch Queue
+  patchQueue,
+  patchQueueCount,
+  patchQueueLoading,
+  patchQueueError,
+  fetchPatchQueue,
+  refreshPatchesForCVE,
+  focusPatchQueueItem
 }) {
   const [activeNav, setActiveNav] = useState('grafo'); // 'grafo', 'inventario', 'redes'
   const [showExportModal, setShowExportModal] = useState(false);
@@ -152,6 +162,20 @@ export function DashboardPage({
           <InventoryPage
             graphData={graphData}
             categories={categories}
+          />
+        )}
+
+        {activeNav === 'patch-queue' && (
+          <PatchQueuePage
+            selectedProjectId={selectedProjectId}
+            patchQueue={patchQueue}
+            patchQueueCount={patchQueueCount}
+            patchQueueLoading={patchQueueLoading}
+            patchQueueError={patchQueueError}
+            fetchPatchQueue={fetchPatchQueue}
+            refreshPatchesForCVE={refreshPatchesForCVE}
+            focusPatchQueueItem={focusPatchQueueItem}
+            setActiveNav={setActiveNav}
           />
         )}
 
