@@ -117,6 +117,15 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
+  async renameProject(projectId, newName) {
+    const res = await fetch(`/api/projects/${projectId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newName })
+    });
+    return await this._handleResponse(res);
+  }
+
   async scanInstallationVulnerabilities(installationId, softwareId, limit = 100) {
     const params = new URLSearchParams({
       software_id: String(softwareId),

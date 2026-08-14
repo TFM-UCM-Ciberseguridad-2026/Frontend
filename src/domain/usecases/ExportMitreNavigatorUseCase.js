@@ -93,7 +93,7 @@ export class ExportMitreNavigatorUseCase {
     };
 
     return {
-      filename: `${projectName.toLowerCase().replace(/[^a-z0-9]/gi, '_')}_mitre_attack_navigator.json`,
+      filename: `${projectName.replace(/[^\w\sáéíóúÁÉÍÓÚñÑ-]/gi, '_').replace(/\s+/g, '_')}_mitre_attack_navigator.json`,
       content: JSON.stringify(layer, null, 2)
     };
   }

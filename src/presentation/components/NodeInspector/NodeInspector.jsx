@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { RiskSummary } from '../Risk/RiskSummary';
 import { EditNodeModal } from './EditNodeModal';
+import { RenameProjectModal, DeleteProjectModal } from '../HudHeader/ProjectActionModals';
 
-export function NodeInspector({ selectedNode, updateNode, deleteNode, fetchFindingVulnerabilities }) {
+export function NodeInspector({ selectedNode, updateNode, deleteNode, fetchFindingVulnerabilities, renameProject, deleteProject }) {
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showRenameProjectModal, setShowRenameProjectModal] = useState(false);
+  const [showDeleteProjectModal, setShowDeleteProjectModal] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
@@ -28,6 +31,10 @@ export function NodeInspector({ selectedNode, updateNode, deleteNode, fetchFindi
   const isManageableAsset = ['Endpoint', 'Network', 'Hardware', 'Container'].includes(categoryLabel);
   const canEdit = isManageableAsset && typeof updateNode === 'function';
   const canDelete = isManageableAsset && typeof deleteNode === 'function';
+  
+  const isProject = categoryLabel === 'Project';
+  const canEditProject = isProject && typeof renameProject === 'function';
+  const canDeleteProject = isProject && typeof deleteProject === 'function';
 
   const arcDasharray = (fraction, radius) => {
     const circumference = 2 * Math.PI * radius;
@@ -49,7 +56,7 @@ export function NodeInspector({ selectedNode, updateNode, deleteNode, fetchFindi
         <h2 className="node-title">{selectedNode.name}</h2>
 
         {/* ACCIONES DE GESTIÓN DE NODO (EDITAR / ELIMINAR) */}
-        {(canDelete || canEdit) && (
+        {(canDelete || canEdit || canEditProject || canDeleteProject) && (
           <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
             {canEdit && (
               <button
@@ -59,6 +66,17 @@ export function NodeInspector({ selectedNode, updateNode, deleteNode, fetchFindi
                 title="Editar propiedades y enlaces de red de este activo"
               >
                 ✏️ Editar Activo
+              </button>
+            )}
+            
+            {canEditProject && (
+              <button
+                className="btn btn-secondary"
+                style={{ flex: 1, padding: '0.4rem 0.6rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', background: 'var(--c900)', border: '1px solid var(--line)' }}
+                onClick={() => setShowRenameProjectModal(true)}
+                title="Renombrar este proyecto"
+              >
+                ✏️ Renombrar
               </button>
             )}
 
@@ -99,6 +117,17 @@ export function NodeInspector({ selectedNode, updateNode, deleteNode, fetchFindi
                   </div>
                 </div>
               )
+            )}
+            
+            {canDeleteProject && (
+              <button
+                className="btn btn-secondary"
+                style={{ flex: 1, padding: '0.4rem 0.6rem', fontSize: '0.75rem', color: '#ff8585', background: 'var(--c900)', border: '1px solid rgba(255, 107, 107, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                onClick={() => setShowDeleteProjectModal(true)}
+                title="Eliminar este proyecto"
+              >
+                🗑️ Eliminar
+              </button>
             )}
           </div>
         )}
@@ -226,6 +255,19 @@ export function NodeInspector({ selectedNode, updateNode, deleteNode, fetchFindi
           updateNode={updateNode}
         />
       )}
+      
+      <RenameProjectModal
+        isOpen={showRenameProjectModal}
+        onClose={() => setShowRenameProjectModal(false)}
+        project={{ id: selectedNode.id || selectedNode.properties.id, name: selectedNode.name }}
+        onRename={renameProject}
+      />
+      <DeleteProjectModal
+        isOpen={showDeleteProjectModal}
+        onClose={() => setShowDeleteProjectModal(false)}
+        project={{ id: selectedNode.id || selectedNode.properties.id, name: selectedNode.name }}
+        onDelete={deleteProject}
+      />
     </aside>
   );
 }

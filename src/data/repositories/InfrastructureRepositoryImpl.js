@@ -69,6 +69,10 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     return await this.apiDataSource.importInfrastructure(exportData);
   }
 
+  async renameProject(projectId, newName) {
+    return await this.apiDataSource.renameProject(projectId, newName);
+  }
+
   async deleteProject(projectId) {
     return await this.apiDataSource.deleteProject(projectId);
   }
