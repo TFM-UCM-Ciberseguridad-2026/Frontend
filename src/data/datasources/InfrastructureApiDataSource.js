@@ -24,8 +24,11 @@ export class InfrastructureApiDataSource {
     return await res.json();
   }
 
-  async fetchExploitationPaths() {
-    const res = await fetch('/api/infrastructure/exploitation-paths');
+  async fetchExploitationPaths(projectId) {
+    const url = projectId
+      ? `/api/infrastructure/exploitation-paths?project_id=${projectId}`
+      : '/api/infrastructure/exploitation-paths';
+    const res = await fetch(url);
     if (!res.ok) {
       throw new Error(`Error: ${res.statusText}`);
     }

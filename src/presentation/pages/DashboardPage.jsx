@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HudHeader } from '../components/HudHeader/HudHeader';
 import { TopAptsModal } from '../components/TopApts/TopAptsModal';
 import { ExploitationPathsModal } from '../components/ExploitationPaths/ExploitationPathsModal';
@@ -73,6 +73,11 @@ export function DashboardPage({
   const [activeNav, setActiveNav] = useState('grafo'); // 'grafo', 'inventario', 'redes'
   const [showExportModal, setShowExportModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+
+  useEffect(() => {
+    setShowExportModal(false);
+    setShowImportModal(false);
+  }, [selectedProjectId]);
 
   const categories = [
     { key: 'ALL', label: 'Todos', color: '#7973FF' },

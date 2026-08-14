@@ -149,7 +149,7 @@ export function useInfrastructure() {
     setPathsLoading(true);
     setPathsError(null);
     try {
-      const data = await getExploitationPathsUseCase.execute();
+      const data = await getExploitationPathsUseCase.execute(selectedProjectId);
       setExploitationPaths(data || []);
     } catch (err) {
       console.error(err);
@@ -496,6 +496,9 @@ export function useInfrastructure() {
   useEffect(() => {
     setSelectedNode(null);
     setSelectedExploitationPath(null);
+    setShowPathsModal(false);
+    setShowAPTPanel(false);
+    setShowFindingVulnsModal(false);
   }, [selectedProjectId]);
 
 
