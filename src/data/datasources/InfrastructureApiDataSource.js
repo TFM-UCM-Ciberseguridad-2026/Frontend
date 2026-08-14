@@ -262,4 +262,30 @@ export class InfrastructureApiDataSource {
       return null;
     }
   }
+
+  async fetchPatchQueue(projectId, limit = 100) {
+    const params = new URLSearchParams();
+    if (projectId) params.set('project_id', projectId);
+    if (limit) params.set('limit', String(limit));
+
+    const res = await fetch(`/api/patch-queue?${params.toString()}`);
+    return await this._handleResponse(res);
+  }
+
+  async refreshPatchesForVulnerability(cveId) {
+    const res = await fetch(`/api/vulnerabilities/${encodeURIComponent(cveId)}/patches/refresh`, {
+      method: 'POST'
+    });
+    return await this._handleResponse(res);
+  }
+
+  async declarePatchApplied(installationId, payload) {
+    const res = await fetch(`/api/installations/${encodeURIComponent(installationId)}/applied-patches`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return await this._handleResponse(res);
+  }
+
 }
