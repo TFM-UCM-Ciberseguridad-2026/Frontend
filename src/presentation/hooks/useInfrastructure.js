@@ -20,6 +20,8 @@ import { ScanInstallationVulnerabilitiesUseCase } from '../../domain/usecases/Sc
 import { GetFindingVulnerabilitiesUseCase } from '../../domain/usecases/GetFindingVulnerabilitiesUseCase';
 import { ComputeProjectRiskUseCase } from '../../domain/usecases/ComputeProjectRiskUseCase';
 import { ComputeAllProjectRisksUseCase } from '../../domain/usecases/ComputeAllProjectRisksUseCase';
+import { RenameProjectUseCase } from '../../domain/usecases/RenameProjectUseCase';
+import { DeleteProjectUseCase } from '../../domain/usecases/DeleteProjectUseCase';
 import { UpdateNodeUseCase } from '../../domain/usecases/UpdateNodeUseCase';
 import { DeleteNodeUseCase } from '../../domain/usecases/DeleteNodeUseCase';
 import { useToast } from '../context/ToastContext';
@@ -81,6 +83,8 @@ export function useInfrastructure() {
   const getExploitationPathsUseCase = useMemo(() => new GetExploitationPathsUseCase(repository), [repository]);
 
   const createProjectUseCase = useMemo(() => new CreateProjectUseCase(repository), [repository]);
+  const renameProjectUseCase = useMemo(() => new RenameProjectUseCase(repository), [repository]);
+  const deleteProjectUseCase = useMemo(() => new DeleteProjectUseCase(repository), [repository]);
   const createEndpointUseCase = useMemo(() => new CreateEndpointUseCase(repository), [repository]);
   const createContainerUseCase = useMemo(() => new CreateContainerUseCase(repository), [repository]);
   const createContainerSoftwareUseCase = useMemo(() => new CreateContainerSoftwareUseCase(repository), [repository]);
@@ -163,7 +167,7 @@ export function useInfrastructure() {
     setPathsLoading(true);
     setPathsError(null);
     try {
-      const data = await getExploitationPathsUseCase.execute();
+      const data = await getExploitationPathsUseCase.execute(selectedProjectId);
       setExploitationPaths(data || []);
     } catch (err) {
       console.error(err);
@@ -180,6 +184,42 @@ export function useInfrastructure() {
 
   const clearSelectedExploitationPath = () => {
     setSelectedExploitationPath(null);
+  };
+
+
+  const renameProject = async (projectId, newName) => {
+    try {
+      const res = await renameProjectUseCase.execute(projectId, newName);
+      showToast('¡Proyecto renombrado con éxito!');
+      await fetchInfrastructure(true);
+      return res;
+    } catch (err) {
+      toast.error(err.message, 'Error al renombrar el Proyecto');
+      throw err;
+    }
+  };
+
+  const deleteProject = async (projectId) => {
+    try {
+      await deleteProjectUseCase.execute(projectId);
+      showToast('¡Proyecto eliminado con éxito!');
+      // Refresh the graph data
+      await fetchInfrastructure(true);
+      // If the deleted project is the currently active one, select another one if available
+      if (String(projectId) === String(selectedProjectId)) {
+        const remainingProjects = projects.filter(p => String(p.id) !== String(projectId));
+        if (remainingProjects.length > 0) {
+          setSelectedProjectId(remainingProjects[0].id);
+        } else {
+          setSelectedProjectId(null);
+          // If no projects remain, close the dashboard to show the welcome screen
+          setShowDashboard(false);
+        }
+      }
+    } catch (err) {
+      toast.error(err.message, 'Error al eliminar el Proyecto');
+      throw err;
+    }
   };
 
   const createProject = async (data) => {
@@ -399,7 +439,7 @@ export function useInfrastructure() {
       // Ahora projectName podría venir del filteredGraphData o sacarlo del id.
       // Buscamos el nombre para pasarlo al usecase (opcional)
       const projId = targetProjectId || selectedProjectId;
-      const projectNode = filteredGraphData?.nodes?.find(
+      const projectNode = graphData?.nodes?.find(
         n => (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
             String(n.properties?.id ?? n.id) === String(projId)
       );
@@ -429,7 +469,7 @@ export function useInfrastructure() {
     try {
       showToast('Generando Excel de inventario...', 'info');
       const projId = targetProjectId || selectedProjectId;
-      const projectNode = filteredGraphData?.nodes?.find(
+      const projectNode = graphData?.nodes?.find(
         n => (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
             String(n.properties?.id ?? n.id) === String(projId)
       );
@@ -570,6 +610,9 @@ export function useInfrastructure() {
   useEffect(() => {
     setSelectedNode(null);
     setSelectedExploitationPath(null);
+    setShowPathsModal(false);
+    setShowAPTPanel(false);
+    setShowFindingVulnsModal(false);
   }, [selectedProjectId]);
 
 
@@ -969,6 +1012,8 @@ export function useInfrastructure() {
     createNetwork,
     updateNode,
     deleteNode,
+    renameProject,
+    deleteProject,
     exportProject,
     exportMitreNavigator,
     exportInventory,

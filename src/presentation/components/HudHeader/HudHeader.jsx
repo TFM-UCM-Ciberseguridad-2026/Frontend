@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
+import { RenameProjectModal, DeleteProjectModal } from './ProjectActionModals';
 
-export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploitationPaths, setShowDashboard, projects, selectedProjectId, setSelectedProjectId, selectedProjectNode, onOpenExport, onOpenImport }) {
+export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploitationPaths, setShowDashboard, projects, selectedProjectId, setSelectedProjectId, selectedProjectNode, onOpenExport, onOpenImport, renameProject, deleteProject }) {
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const [showRenameModal, setShowRenameModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   return (
     <header className="hud-header">
@@ -14,21 +17,44 @@ export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploita
       </div>
 
       <nav className="hud-nav">
-        {projects && projects.length > 1 && (
-          <div className="project-selector">
-            <span className="ic">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M3 7h18M3 12h18M3 17h18" />
-              </svg>
-            </span>
-            <select
-              value={selectedProjectId || ''}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
+        {projects && projects.length > 0 && (
+          <div className="project-selector" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <span className="ic">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M3 7h18M3 12h18M3 17h18" />
+                </svg>
+              </span>
+              <select
+                value={selectedProjectId || ''}
+                onChange={(e) => setSelectedProjectId(e.target.value)}
+              >
+                {projects.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+            
+            <button 
+              className="hud-action-icon" 
+              onClick={() => setShowRenameModal(true)} 
+              title="Renombrar Proyecto"
+              style={{ background: '#2c2c35', border: '1px solid #444', color: '#fff', cursor: 'pointer', padding: '6px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >
-              {projects.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+              </svg>
+            </button>
+            <button 
+              className="hud-action-icon" 
+              onClick={() => setShowDeleteModal(true)} 
+              title="Eliminar Proyecto"
+              style={{ background: '#352c2c', border: '1px solid #5a2c2c', color: '#ff6b6b', cursor: 'pointer', padding: '6px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              </svg>
+            </button>
           </div>
         )}
 
@@ -177,6 +203,19 @@ export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploita
           )}
         </div>
       </nav>
+      {/* MODALES DE GESTIÓN DE PROYECTO */}
+      <RenameProjectModal
+        isOpen={showRenameModal}
+        onClose={() => setShowRenameModal(false)}
+        project={projects?.find(p => String(p.id) === String(selectedProjectId))}
+        onRename={renameProject}
+      />
+      <DeleteProjectModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        project={projects?.find(p => String(p.id) === String(selectedProjectId))}
+        onDelete={deleteProject}
+      />
     </header>
   );
 }

@@ -26,8 +26,8 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     return (rawData || []).map(apt => new AptActor(apt));
   }
 
-  async getExploitationPaths() {
-    const rawData = await this.apiDataSource.fetchExploitationPaths();
+  async getExploitationPaths(projectId) {
+    const rawData = await this.apiDataSource.fetchExploitationPaths(projectId);
     return (rawData || []).map(path => new ExploitationPath(path));
   }
 
@@ -67,6 +67,10 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
 
   async importInfrastructure(exportData) {
     return await this.apiDataSource.importInfrastructure(exportData);
+  }
+
+  async renameProject(projectId, newName) {
+    return await this.apiDataSource.renameProject(projectId, newName);
   }
 
   async deleteProject(projectId) {

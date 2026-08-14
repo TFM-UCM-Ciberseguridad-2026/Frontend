@@ -35,7 +35,7 @@ export class ExportProjectUseCase {
     };
 
     return {
-      filename: `${projectName.toLowerCase().replace(/[^a-z0-9]/gi, '_')}_export.json`,
+      filename: `${projectName.replace(/[^\w\sáéíóúÁÉÍÓÚñÑ-]/gi, '_').replace(/\s+/g, '_')}_export.json`,
       content: JSON.stringify(exportObject, null, 2)
     };
   }

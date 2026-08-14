@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HudHeader } from '../components/HudHeader/HudHeader';
 import { TopAptsModal } from '../components/TopApts/TopAptsModal';
 import { ExploitationPathsModal } from '../components/ExploitationPaths/ExploitationPathsModal';
@@ -54,6 +54,8 @@ export function DashboardPage({
   createNetwork,
   updateNode,
   deleteNode,
+  renameProject,
+  deleteProject,
   exportProject,
   exportMitreNavigator,
   exportInventory,
@@ -84,10 +86,17 @@ export function DashboardPage({
   const [showExportModal, setShowExportModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
 
+  useEffect(() => {
+    setShowExportModal(false);
+    setShowImportModal(false);
+  }, [selectedProjectId]);
+
   const categories = [
     { key: 'ALL', label: 'Todos', color: '#7973FF' },
     { key: 'Network', label: 'Red / Subred', color: '#7973FF' },
     { key: 'Endpoint', label: 'Endpoint', color: '#FFFFFF' },
+    { key: 'Container', label: 'Contenedor', color: '#00D1FF' },
+    { key: 'ContainerImage', label: 'Imagen Contenedor', color: '#00A3FF' },
     { key: 'Hardware', label: 'Hardware', color: '#A5A5FF' },
     { key: 'Project', label: 'Proyecto', color: '#4D3BFF' },
     { key: 'SoftwareInstallation', label: 'Instalación', color: '#3813FF' },
@@ -119,6 +128,8 @@ export function DashboardPage({
         onOpenExport={() => setShowExportModal(true)}
         onOpenImport={() => setShowImportModal(true)}
         selectedProjectNode={selectedProjectNode}
+        renameProject={renameProject}
+        deleteProject={deleteProject}
       />
 
       <div className="app">
@@ -149,8 +160,11 @@ export function DashboardPage({
             createSoftware={createSoftware}
             createContainerSoftware={createContainerSoftware}
             createNetwork={createNetwork}
+            createNetwork={createNetwork}
             updateNode={updateNode}
             deleteNode={deleteNode}
+            renameProject={renameProject}
+            deleteProject={deleteProject}
             riskActionLoading={riskActionLoading}
             analyzeProjectVulnerabilities={analyzeProjectVulnerabilities}
             computeSelectedProjectRisk={computeSelectedProjectRisk}

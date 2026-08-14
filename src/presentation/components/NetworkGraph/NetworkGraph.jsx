@@ -686,7 +686,6 @@ export function NetworkGraph({
 
         while (queue.length > 0) {
           const [curr, pathInfo] = queue.shift();
-          if (pathInfo.length > 3) break;
 
           if (curr === tgtId) {
             pathRels = pathInfo.map(p => p.relId);
@@ -910,12 +909,14 @@ export function NetworkGraph({
 
             const isPathEdge = pathEdgeIdSet.has(rel.id);
             const pathDimmed = pathActive && !isPathEdge;
+            
+            const edgeShouldBeDimmed = (isDimmed && !isPathEdge) || (searchDimmed && !isPathEdge) || pathDimmed;
 
             return (
               <path
                 key={rel.id}
                 d={getEdgePath(rel.source, rel.target)}
-                className={`edge flow ${isPathEdge ? 'path-highlighted' : ''} ${(isDimmed || searchDimmed || pathDimmed) ? 'dim' : ''}`}
+                className={`edge flow ${isPathEdge ? 'path-highlighted' : ''} ${edgeShouldBeDimmed ? 'dim' : ''}`}
                 style={{
                   stroke: isPathEdge
                     ? '#ef4444'
@@ -950,11 +951,13 @@ export function NetworkGraph({
             const isConnectorNode = pathConnectorNodeIdSet.has(String(node.id));
             const isNodeInPath = isStepNode || isConnectorNode;
             const pathDimmedNode = pathActive && !isNodeInPath;
+            
+            const nodeShouldBeDimmed = (isDimmed && !isNodeInPath) || pathDimmedNode;
 
             return (
               <g
                 key={node.id}
-                className={`node-group ${node.pinned ? '' : 'free'} ${(isDimmed || pathDimmedNode) ? 'dim' : ''} ${isSelected ? 'selected' : ''} ${isStepNode ? 'path-node' : ''} ${isDecom ? 'decommissioned' : ''}`}
+                className={`node-group ${node.pinned ? '' : 'free'} ${nodeShouldBeDimmed ? 'dim' : ''} ${isSelected ? 'selected' : ''} ${isStepNode ? 'path-node' : ''} ${isDecom ? 'decommissioned' : ''}`}
                 transform={`translate(${node.x}, ${node.y})`}
                 onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
                 onDoubleClick={(e) => handleNodeDoubleClick(e, node.id)}
