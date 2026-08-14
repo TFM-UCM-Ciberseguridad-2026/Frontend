@@ -7,6 +7,8 @@ import { GetTopAptsUseCase } from '../../domain/usecases/GetTopAptsUseCase';
 import { GetExploitationPathsUseCase } from '../../domain/usecases/GetExploitationPathsUseCase';
 import { CreateProjectUseCase } from '../../domain/usecases/CreateProjectUseCase';
 import { CreateEndpointUseCase } from '../../domain/usecases/CreateEndpointUseCase';
+import { CreateContainerUseCase } from '../../domain/usecases/CreateContainerUseCase';
+import { CreateContainerSoftwareUseCase } from '../../domain/usecases/CreateContainerSoftwareUseCase';
 import { CreateHardwareUseCase } from '../../domain/usecases/CreateHardwareUseCase';
 import { CreateSoftwareUseCase } from '../../domain/usecases/CreateSoftwareUseCase';
 import { CreateNetworkUseCase } from '../../domain/usecases/CreateNetworkUseCase';
@@ -70,6 +72,8 @@ export function useInfrastructure() {
 
   const createProjectUseCase = useMemo(() => new CreateProjectUseCase(repository), [repository]);
   const createEndpointUseCase = useMemo(() => new CreateEndpointUseCase(repository), [repository]);
+  const createContainerUseCase = useMemo(() => new CreateContainerUseCase(repository), [repository]);
+  const createContainerSoftwareUseCase = useMemo(() => new CreateContainerSoftwareUseCase(repository), [repository]);
   const createHardwareUseCase = useMemo(() => new CreateHardwareUseCase(repository), [repository]);
   const createSoftwareUseCase = useMemo(() => new CreateSoftwareUseCase(repository), [repository]);
   const createNetworkUseCase = useMemo(() => new CreateNetworkUseCase(repository), [repository]);
@@ -208,6 +212,30 @@ export function useInfrastructure() {
       return res;
     } catch (err) {
       toast.error(err.message, 'Error creando Software');
+      throw err;
+    }
+  };
+
+  const createContainer = async (endpointId, data) => {
+    try {
+      const res = await createContainerUseCase.execute(endpointId, data);
+      toast.success('¡Contenedor añadido correctamente!', 'Nuevo Contenedor');
+      await fetchInfrastructure(true);
+      return res;
+    } catch (err) {
+      toast.error(err.message, 'Error creando Contenedor');
+      throw err;
+    }
+  };
+
+  const createContainerSoftware = async (containerId, data) => {
+    try {
+      const res = await createContainerSoftwareUseCase.execute(containerId, data);
+      toast.success('¡Software de contenedor añadido correctamente!', 'Nuevo Software (Contenedor)');
+      await fetchInfrastructure(true);
+      return res;
+    } catch (err) {
+      toast.error(err.message, 'Error creando Software de Contenedor');
       throw err;
     }
   };
@@ -372,32 +400,50 @@ export function useInfrastructure() {
         }
 
         const nodes = dataToImport.nodes || dataToImport.graphData?.nodes || [];
-        const projectNode = nodes.find(n => n.labels?.includes('Project') || n.primaryLabel === 'Project');
+        const rels = dataToImport.relationships || dataToImport.graphData?.relationships || [];
 
-        if (projectNode) {
-          const oldNodeId = String(projectNode.id);
-          const oldPropId = projectNode.properties?.id !== undefined && projectNode.properties?.id !== null ? String(projectNode.properties.id) : null;
+        const idMapping = {};
+        const globalLabels = ['Vulnerability', 'ThreatActor', 'TTP', 'Mitigation', 'Software', 'ContainerImage'];
 
-          if (projectNode.properties) {
-            projectNode.properties.nombre = options.renameTo;
-            projectNode.properties.name = options.renameTo;
-            projectNode.properties.id = newProjId;
+        nodes.forEach((n, idx) => {
+          const isGlobal = n.labels?.some(l => globalLabels.includes(l));
+          
+          if (!isGlobal) {
+            const newId = n.labels?.includes('Project') ? String(newProjId) : String(Date.now() + idx + Math.floor(Math.random() * 10000));
+            const oldNodeId = String(n.id);
+            idMapping[oldNodeId] = newId;
+            
+            if (n.properties?.id !== undefined && n.properties?.id !== null) {
+              const oldPropId = String(n.properties.id);
+              idMapping[oldPropId] = newId;
+              if (typeof n.properties.id === 'number') {
+                n.properties.id = parseInt(newId, 10);
+              } else {
+                n.properties.id = newId;
+              }
+            }
+            
+            n.id = newId;
+
+            if (n.labels?.includes('Project')) {
+              if (n.properties) {
+                n.properties.nombre = options.renameTo;
+                n.properties.name = options.renameTo;
+              }
+            }
           }
-          projectNode.id = String(newProjId);
+        });
 
-          const rels = dataToImport.relationships || dataToImport.graphData?.relationships || [];
-          rels.forEach(rel => {
-            const sStr = String(rel.source);
-            const tStr = String(rel.target);
-
-            if (sStr === oldNodeId || (oldPropId && sStr === oldPropId)) {
-              rel.source = String(newProjId);
-            }
-            if (tStr === oldNodeId || (oldPropId && tStr === oldPropId)) {
-              rel.target = String(newProjId);
-            }
-          });
-        }
+        rels.forEach(rel => {
+          const sStr = String(rel.source);
+          const tStr = String(rel.target);
+          if (idMapping[sStr]) {
+            rel.source = idMapping[sStr];
+          }
+          if (idMapping[tStr]) {
+            rel.target = idMapping[tStr];
+          }
+        });
       }
 
       // 3. Ejecutar caso de uso de importación
@@ -528,6 +574,7 @@ export function useInfrastructure() {
     });
 
     // 4. Instalaciones de Software dentro de los Contenedores del proyecto y ContainerImage
+    const projectContainerImageIds = new Set();
     rels.forEach(rel => {
       const sourceIsCont = projectContainerIds.has(rel.source);
       const targetIsCont = projectContainerIds.has(rel.target);
@@ -544,6 +591,9 @@ export function useInfrastructure() {
           projectInstallationIds.add(otherId);
           reachableIds.add(otherId);
         } else if (primaryLabel === 'ContainerImage' || labels.includes('ContainerImage') || rel.type === 'USES_IMAGE') {
+          projectContainerImageIds.add(otherId);
+          reachableIds.add(otherId);
+        } else if (primaryLabel === 'Network' || labels.includes('Network')) {
           reachableIds.add(otherId);
         }
       }
@@ -555,9 +605,11 @@ export function useInfrastructure() {
     rels.forEach(rel => {
       const sourceIsInst = projectInstallationIds.has(rel.source);
       const targetIsInst = projectInstallationIds.has(rel.target);
+      const sourceIsImage = projectContainerImageIds.has(rel.source);
+      const targetIsImage = projectContainerImageIds.has(rel.target);
 
-      if (sourceIsInst || targetIsInst) {
-        const otherId = sourceIsInst ? rel.target : rel.source;
+      if (sourceIsInst || targetIsInst || sourceIsImage || targetIsImage) {
+        const otherId = (sourceIsInst || sourceIsImage) ? rel.target : rel.source;
         const otherNode = nodeMap.get(otherId);
         if (!otherNode) return;
 
@@ -573,12 +625,12 @@ export function useInfrastructure() {
       }
     });
 
-    // 6. Vulnerabilidades, Exploits, Remediaciones de los Findings del proyecto
+    // 6. Vulnerabilidades, Exploits, Remediaciones de los Findings y ContainerImages del proyecto
     const projectRemediationIds = new Set();
 
     rels.forEach(rel => {
-      const sourceIsFinding = projectFindingIds.has(rel.source);
-      const targetIsFinding = projectFindingIds.has(rel.target);
+      const sourceIsFinding = projectFindingIds.has(rel.source) || projectContainerImageIds.has(rel.source);
+      const targetIsFinding = projectFindingIds.has(rel.target) || projectContainerImageIds.has(rel.target);
 
       if (sourceIsFinding || targetIsFinding) {
         const otherId = sourceIsFinding ? rel.target : rel.source;
@@ -591,7 +643,7 @@ export function useInfrastructure() {
         if (primaryLabel === 'Remediation' || labels.includes('Remediation') || rel.type === 'HAS_REMEDIATION') {
           projectRemediationIds.add(otherId);
           reachableIds.add(otherId);
-        } else if (primaryLabel === 'Vulnerability' || labels.includes('Vulnerability') || primaryLabel === 'Exploit' || labels.includes('Exploit') || rel.type === 'OF_VULNERABILITY' || rel.type === 'HAS_EXPLOIT') {
+        } else if (primaryLabel === 'Vulnerability' || labels.includes('Vulnerability') || primaryLabel === 'Exploit' || labels.includes('Exploit') || rel.type === 'OF_VULNERABILITY' || rel.type === 'HAS_EXPLOIT' || rel.type === 'HAS_VULNERABILITY') {
           reachableIds.add(otherId);
         }
       }
@@ -836,8 +888,10 @@ export function useInfrastructure() {
     showToast,
     createProject,
     createEndpoint,
+    createContainer,
     createHardware,
     createSoftware,
+    createContainerSoftware,
     createNetwork,
     updateNode,
     deleteNode,

@@ -20,6 +20,8 @@ export class DeleteNodeUseCase {
       return await this.infrastructureRepository.deleteSoftwareInstallation(id);
     } else if (cat.includes('software') || cat === 'sw') {
       return await this.infrastructureRepository.deleteSoftware(id);
+    } else if (cat.includes('container') || cat === 'contenedor') {
+      return await this.infrastructureRepository.deleteContainer(id);
     } else {
       // Para cualquier otro tipo (Hallazgos, Vulnerabilidades, TTPs, etc.), usamos el borrado genérico
       return await this.infrastructureRepository.deleteNode(id);

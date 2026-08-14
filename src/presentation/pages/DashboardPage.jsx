@@ -45,8 +45,10 @@ export function DashboardPage({
   selectedProjectId,
   setSelectedProjectId,
   createEndpoint,
+  createContainer,
   createHardware,
   createSoftware,
+  createContainerSoftware,
   createNetwork,
   updateNode,
   deleteNode,
@@ -132,8 +134,10 @@ export function DashboardPage({
             endpoints={endpoints}
             showToast={showToast}
             createEndpoint={createEndpoint}
+            createContainer={createContainer}
             createHardware={createHardware}
             createSoftware={createSoftware}
+            createContainerSoftware={createContainerSoftware}
             createNetwork={createNetwork}
             updateNode={updateNode}
             deleteNode={deleteNode}

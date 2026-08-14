@@ -22,12 +22,20 @@ export class InfrastructureRepository {
     throw new Error('Method createEndpoint not implemented');
   }
 
+  async createContainer(endpointId, containerData) {
+    throw new Error('Method createContainer not implemented');
+  }
+
   async createHardware(endpointId, hardwareData) {
     throw new Error('Method createHardware not implemented');
   }
 
-  async createSoftware(endpointId, softwarePayload) {
+  async createSoftware(endpointId, softwareData) {
     throw new Error('Method createSoftware not implemented');
+  }
+
+  async createContainerSoftware(containerId, softwareData) {
+    throw new Error('Method createContainerSoftware not implemented');
   }
 
   async createNetwork(networkData) {
