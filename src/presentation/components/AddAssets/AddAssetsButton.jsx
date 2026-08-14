@@ -51,7 +51,8 @@ const INITIAL_FORMS = {
     vendor: '',
     release_date: '',
     install_path: '',
-    status: 'active'
+    status: 'active',
+    criticality_level: 'STANDARD'
   },
   network: {
     nombre: '',
@@ -837,6 +838,23 @@ export function AddAssetButton({
                   onChange={(e) => updateField('software', 'install_path', e.target.value)}
                   required
                 />
+              </div>
+
+              <div>
+                <div className="asset-field-label">Criticidad de la instalación</div>
+                <select
+                  className="asset-input"
+                  value={forms.software.criticality_level || 'STANDARD'}
+                  onChange={(e) => updateField('software', 'criticality_level', e.target.value)}
+                >
+                  <option value="LOW">LOW · utilidad menor</option>
+                  <option value="STANDARD">STANDARD · por defecto</option>
+                  <option value="HIGH">HIGH · servicio relevante</option>
+                  <option value="CRITICAL">CRITICAL · BBDD, auth, secretos, pagos</option>
+                </select>
+                <div className="asset-field-help">
+                  Afecta a la prioridad de parcheo, no al riesgo técnico de la vulnerabilidad.
+                </div>
               </div>
 
               <div>
