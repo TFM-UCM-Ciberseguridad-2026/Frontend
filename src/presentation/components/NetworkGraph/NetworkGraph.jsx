@@ -700,11 +700,20 @@ export function NetworkGraph({
       }
     }
 
+// Identificar nodos y aristas de hallazgos en la ruta de ataque
     (selectedExploitationPath.steps || []).forEach((step) => {
       const stepNode = findNodeForHostOrId(step.targetEndpoint, step.targetEndpointId);
       if (stepNode && step.finding_id) {
-        const findingNode = graphData.nodes.find(n => String(n.id) === String(step.finding_id));
-        
+        // Busca el nodo agrupado que contiene la ID del hallazgo de este paso
+        const findingNode = graphData.nodes.find(n =>
+          String(n.id) === String(step.finding_id) ||
+          String(n.properties?.id) === String(step.finding_id) ||
+          (Array.isArray(n.properties?.findings) && n.properties.findings.some(f =>
+            String(f.id) === String(step.finding_id) ||
+            String(f.properties?.id) === String(step.finding_id)
+          ))
+        );
+
         if (findingNode) {
           const queue = [[String(stepNode.id), []]];
           const visited = new Set([String(stepNode.id)]);
@@ -713,7 +722,7 @@ export function NetworkGraph({
 
           while (queue.length > 0) {
             const [curr, pathInfo] = queue.shift();
-            if (pathInfo.length > 3) break;
+            if (pathInfo.length > 4) break;
 
             if (curr === String(findingNode.id)) {
               pathRels = pathInfo.map(p => p.relId);

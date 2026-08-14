@@ -86,7 +86,13 @@ export function GraphPage({
 
 
       {/* PANEL DERECHO: INSPECTOR — grid column 3 (300px) */}
-      <NodeInspector selectedNode={selectedNode} updateNode={updateNode} deleteNode={deleteNode} fetchFindingVulnerabilities={fetchFindingVulnerabilities} />
+      <NodeInspector 
+        selectedNode={selectedNode}
+        updateNode={updateNode}
+        deleteNode={deleteNode}
+        fetchFindingVulnerabilities={fetchFindingVulnerabilities}
+        selectedExploitationPath={selectedExploitationPath}
+      />
     </>
   );
 }
