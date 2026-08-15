@@ -162,6 +162,7 @@ export function DashboardPage({
           <TtpsPage
             graphData={graphData}
             showToast={showToast}
+            fetchInfrastructure={fetchInfrastructure}
           />
         )}
       </div>
