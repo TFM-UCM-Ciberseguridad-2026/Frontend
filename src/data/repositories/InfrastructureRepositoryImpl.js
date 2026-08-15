@@ -26,8 +26,8 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     return (rawData || []).map(apt => new AptActor(apt));
   }
 
-  async getExploitationPaths() {
-    const rawData = await this.apiDataSource.fetchExploitationPaths();
+  async getExploitationPaths(projectId) {
+    const rawData = await this.apiDataSource.fetchExploitationPaths(projectId);
     return (rawData || []).map(path => new ExploitationPath(path));
   }
 
@@ -37,6 +37,11 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
 
   async createEndpoint(projectId, payload) {
     const res = await this.apiDataSource.createEndpoint(projectId, payload);
+    return res ? new Node(res) : null;
+  }
+
+  async createContainer(endpointId, payload) {
+    const res = await this.apiDataSource.createContainer(endpointId, payload);
     return res ? new Node(res) : null;
   }
 
@@ -50,6 +55,11 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     return res ? new Node(res) : null;
   }
 
+  async createContainerSoftware(containerId, payload) {
+    const res = await this.apiDataSource.createContainerSoftware(containerId, payload);
+    return res ? new Node(res) : null;
+  }
+
   async createNetwork(payload) {
     const res = await this.apiDataSource.createNetwork(payload);
     return res ? new Node(res) : null;
@@ -57,6 +67,10 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
 
   async importInfrastructure(exportData) {
     return await this.apiDataSource.importInfrastructure(exportData);
+  }
+
+  async renameProject(projectId, newName) {
+    return await this.apiDataSource.renameProject(projectId, newName);
   }
 
   async deleteProject(projectId) {
@@ -80,6 +94,18 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     return await this.apiDataSource.computeAllProjectRisks();
   }
 
+  async getPatchQueue(projectId, limit) {
+    return await this.apiDataSource.fetchPatchQueue(projectId, limit);
+  }
+
+  async refreshPatchesForVulnerability(cveId) {
+    return await this.apiDataSource.refreshPatchesForVulnerability(cveId);
+  }
+
+  async declarePatchApplied(installationId, payload) {
+    return await this.apiDataSource.declarePatchApplied(installationId, payload);
+  }
+
   async updateEndpoint(id, payload) { return await this.apiDataSource.updateEndpoint(id, payload); }
   async deleteEndpoint(id) { return await this.apiDataSource.deleteEndpoint(id); }
   async updateNetwork(id, payload) { return await this.apiDataSource.updateNetwork(id, payload); }
@@ -90,6 +116,8 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
   async deleteSoftware(id) { return await this.apiDataSource.deleteSoftware(id); }
   async updateSoftwareInstallation(id, payload) { return await this.apiDataSource.updateSoftwareInstallation(id, payload); }
   async deleteSoftwareInstallation(id) { return await this.apiDataSource.deleteSoftwareInstallation(id); }
+  async updateContainer(id, payload) { return await this.apiDataSource.updateContainer(id, payload); }
+  async deleteContainer(id) { return await this.apiDataSource.deleteContainer(id); }
   async deleteNode(id) { return await this.apiDataSource.deleteNode(id); }
   async getEndpointIPs(id) { return await this.apiDataSource.getEndpointIPs(id); }
   async exportProject(id) { return await this.apiDataSource.exportProject(id); }

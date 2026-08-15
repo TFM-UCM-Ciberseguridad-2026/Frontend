@@ -15,6 +15,12 @@ export function ExportModal({
   const [exportMitreChecked, setExportMitreChecked] = useState(false);
   const [targetProjectId, setTargetProjectId] = useState(selectedProjectId || (projects[0]?.id ?? '1'));
 
+  React.useEffect(() => {
+    if (isOpen) {
+      setTargetProjectId(selectedProjectId || (projects[0]?.id ?? '1'));
+    }
+  }, [isOpen, selectedProjectId, projects]);
+
   if (!isOpen) return null;
 
   const handleExport = () => {
@@ -52,16 +58,10 @@ export function ExportModal({
 
         {projects && projects.length > 0 && (
           <div>
-            <div className="archive-section-label">Proyecto a Exportar</div>
-            <select
-              className="archive-select"
-              value={targetProjectId}
-              onChange={e => setTargetProjectId(e.target.value)}
-            >
-              {projects.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
+            <div className="archive-section-label">Proyecto Seleccionado para Exportar</div>
+            <div className="archive-select" style={{ backgroundColor: '#1a1a1a', padding: '10px', borderRadius: '4px', border: '1px solid #333' }}>
+              {projects.find(p => String(p.id) === String(targetProjectId))?.name || 'Proyecto Desconocido'}
+            </div>
           </div>
         )}
 

@@ -3,6 +3,7 @@ import { useToast } from '../../context/ToastContext';
 
 const ASSET_TYPES = [
   { key: 'endpoint', label: 'Endpoint', icon: '💻', description: 'Equipo, servidor o dispositivo de red' },
+  { key: 'container', label: 'Contenedor', icon: '🐳', description: 'Contenedor alojado en un Endpoint' },
   { key: 'hardware', label: 'Hardware', icon: '🖥️', description: 'Componente físico asociado a un endpoint' },
   { key: 'software', label: 'Software', icon: '📦', description: 'Aplicación o sistema instalado' },
   { key: 'network', label: 'Red', icon: '🌐', description: 'Subred o segmento de red' }
@@ -21,6 +22,15 @@ const INITIAL_FORMS = {
     availability_req: 'MEDIUM',
     ips: []
   },
+  container: {
+    host_id: '',
+    name: '',
+    image_id: '',
+    state: 'running',
+    risk_score: 0,
+    internet_exposed: false,
+    ips: []
+  },
   hardware: {
     endpoint_id: '',
     modelo: '',
@@ -33,6 +43,7 @@ const INITIAL_FORMS = {
   },
   software: {
     endpoint_id: '',
+    is_container: false,
     name: '',
     version: '',
     type: 'a',
@@ -40,7 +51,8 @@ const INITIAL_FORMS = {
     vendor: '',
     release_date: '',
     install_path: '',
-    status: 'active'
+    status: 'active',
+    criticality_level: 'STANDARD'
   },
   network: {
     nombre: '',
@@ -57,8 +69,10 @@ export function AddAssetButton({
   endpoints = [],
   onCreated,
   createEndpoint,
+  createContainer,
   createHardware,
   createSoftware,
+  createContainerSoftware,
   createNetwork
 }) {
   const toast = useToast();
@@ -66,6 +80,7 @@ export function AddAssetButton({
   const [activeType, setActiveType] = useState(null);
   const [forms, setForms] = useState(() => ({
     endpoint: cloneInitialForm('endpoint'),
+    container: cloneInitialForm('container'),
     hardware: cloneInitialForm('hardware'),
     software: cloneInitialForm('software'),
     network: cloneInitialForm('network')
@@ -105,32 +120,32 @@ export function AddAssetButton({
     setForms(prev => ({ ...prev, [typeKey]: cloneInitialForm(typeKey) }));
   };
 
-  // --- Manejo de IPs del endpoint ---
-  const addIpToEndpoint = () => {
+  // --- Manejo de IPs ---
+  const addIp = (typeKey) => {
     setForms(prev => ({
       ...prev,
-      endpoint: {
-        ...prev.endpoint,
-        ips: [...prev.endpoint.ips, { ip: '', vlan_id: '' }]
+      [typeKey]: {
+        ...prev[typeKey],
+        ips: [...prev[typeKey].ips, { ip: '', vlan_id: '' }]
       }
     }));
   };
 
-  const updateEndpointIp = (index, field, value) => {
+  const updateIp = (typeKey, index, field, value) => {
     setForms(prev => {
-      const ips = prev.endpoint.ips.map((row, i) =>
+      const ips = prev[typeKey].ips.map((row, i) =>
         i === index ? { ...row, [field]: value } : row
       );
-      return { ...prev, endpoint: { ...prev.endpoint, ips } };
+      return { ...prev, [typeKey]: { ...prev[typeKey], ips } };
     });
   };
 
-  const removeEndpointIp = (index) => {
+  const removeIp = (typeKey, index) => {
     setForms(prev => ({
       ...prev,
-      endpoint: {
-        ...prev.endpoint,
-        ips: prev.endpoint.ips.filter((_, i) => i !== index)
+      [typeKey]: {
+        ...prev[typeKey],
+        ips: prev[typeKey].ips.filter((_, i) => i !== index)
       }
     }));
   };
@@ -149,6 +164,13 @@ export function AddAssetButton({
           }
           break;
         }
+        case 'container': {
+          const { host_id, ...rest } = data;
+          if (createContainer) {
+            await createContainer(host_id, rest);
+          }
+          break;
+        }
         case 'hardware': {
           const { endpoint_id, ...rest } = data;
           if (createHardware) {
@@ -157,9 +179,15 @@ export function AddAssetButton({
           break;
         }
         case 'software': {
-          const { endpoint_id, ...rest } = data;
-          if (createSoftware) {
-            await createSoftware(endpoint_id, rest);
+          const { endpoint_id, is_container, ...rest } = data;
+          if (is_container) {
+            if (createContainerSoftware) {
+              await createContainerSoftware(endpoint_id, rest);
+            }
+          } else {
+            if (createSoftware) {
+              await createSoftware(endpoint_id, rest);
+            }
           }
           break;
         }
@@ -365,7 +393,7 @@ export function AddAssetButton({
                           className="asset-input"
                           placeholder="10.0.1.25"
                           value={ipRow.ip}
-                          onChange={(e) => updateEndpointIp(idx, 'ip', e.target.value)}
+                          onChange={(e) => updateIp('endpoint', idx, 'ip', e.target.value)}
                         />
                         <input
                           type="number"
@@ -373,12 +401,12 @@ export function AddAssetButton({
                           className="asset-input ip-row-vlan"
                           placeholder="VLAN ID"
                           value={ipRow.vlan_id}
-                          onChange={(e) => updateEndpointIp(idx, 'vlan_id', e.target.value)}
+                          onChange={(e) => updateIp('endpoint', idx, 'vlan_id', e.target.value)}
                         />
                         <button
                           type="button"
                           className="ip-row-remove-btn"
-                          onClick={() => removeEndpointIp(idx)}
+                          onClick={() => removeIp('endpoint', idx)}
                           title="Quitar IP"
                         >
                           ✕
@@ -388,7 +416,7 @@ export function AddAssetButton({
                   </div>
                 )}
 
-                <button type="button" className="btn btn-secondary asset-add-ip-btn" onClick={addIpToEndpoint}>
+                <button type="button" className="btn btn-secondary asset-add-ip-btn" onClick={() => addIp('endpoint')}>
                   + Añadir IP
                 </button>
 
@@ -405,6 +433,135 @@ export function AddAssetButton({
                 </button>
                 <button type="submit" className="btn btn-accent asset-submit-btn" disabled={loading}>
                   {loading ? 'Guardando...' : 'Guardar Endpoint'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* CONTAINER */}
+      {activeType === 'container' && (
+        <div className="asset-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) closeAll(); }}>
+          <div className="asset-modal">
+            <div className="asset-modal-header">
+              <div>
+                <h2>🐳 Nuevo Contenedor</h2>
+                <div className="asset-modal-subtitle">Despliega un contenedor en un endpoint host</div>
+              </div>
+              <button className="asset-modal-close" onClick={closeAll}>✕</button>
+            </div>
+
+            <form onSubmit={(e) => handleSubmit(e, 'container')} className="asset-form">
+              <div>
+                <div className="asset-field-label">Endpoint Host</div>
+                <select
+                  className="asset-input"
+                  value={forms.container.host_id}
+                  onChange={(e) => updateField('container', 'host_id', parseInt(e.target.value) || '')}
+                  required
+                >
+                  <option value="">-- Selecciona el host --</option>
+                  {endpoints.map(ep => (
+                    <option key={ep.id} value={ep.id}>{ep.name || ep.hostname}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <div className="asset-field-label">Nombre del contenedor</div>
+                <input
+                  type="text"
+                  className="asset-input"
+                  placeholder="nginx-frontend"
+                  value={forms.container.name}
+                  onChange={(e) => updateField('container', 'name', e.target.value)}
+                  required
+                />
+              </div>
+
+              <div>
+                <div className="asset-field-label">Estado</div>
+                <select
+                  className="asset-input"
+                  value={forms.container.state}
+                  onChange={(e) => updateField('container', 'state', e.target.value)}
+                >
+                  <option value="running">running</option>
+                  <option value="stopped">stopped</option>
+                  <option value="paused">paused</option>
+                </select>
+              </div>
+
+              <div>
+                <div className="asset-field-label">ID / Nombre de la Imagen (Opcional)</div>
+                <input
+                  type="text"
+                  className="asset-input"
+                  placeholder="sha256:abcd... o nginx:latest"
+                  value={forms.container.image_id}
+                  onChange={(e) => updateField('container', 'image_id', e.target.value)}
+                />
+              </div>
+
+              <div className="asset-checkbox-row" style={{marginBottom: '1rem'}}>
+                <input
+                  type="checkbox"
+                  id="cont_internet"
+                  checked={forms.container.internet_exposed}
+                  onChange={(e) => updateField('container', 'internet_exposed', e.target.checked)}
+                />
+                <label htmlFor="cont_internet" className="asset-field-label asset-checkbox-label">
+                  Expuesto a Internet
+                </label>
+              </div>
+
+              <div>
+                <div className="asset-field-label">Direcciones IP (si aplican)</div>
+                {forms.container.ips.length > 0 && (
+                  <div className="ip-rows">
+                    {forms.container.ips.map((ipRow, idx) => (
+                      <div className="ip-row" key={idx}>
+                        <input
+                          type="text"
+                          className="asset-input"
+                          placeholder="10.0.1.25"
+                          value={ipRow.ip}
+                          onChange={(e) => updateIp('container', idx, 'ip', e.target.value)}
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          className="asset-input ip-row-vlan"
+                          placeholder="VLAN ID"
+                          value={ipRow.vlan_id}
+                          onChange={(e) => updateIp('container', idx, 'vlan_id', e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          className="ip-row-remove-btn"
+                          onClick={() => removeIp('container', idx)}
+                          title="Quitar IP"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <button type="button" className="btn btn-secondary asset-add-ip-btn" onClick={() => addIp('container')}>
+                  + Añadir IP
+                </button>
+              </div>
+
+              {formError && <p className="asset-error-text">⚠️ {formError}</p>}
+
+              <div className="asset-form-actions">
+                <button type="button" className="btn btn-secondary" onClick={backToTypeSelect}>
+                  ← Cambiar tipo
+                </button>
+                <button type="submit" className="btn btn-accent asset-submit-btn" disabled={loading}>
+                  {loading ? 'Guardando...' : 'Guardar Contenedor'}
                 </button>
               </div>
             </form>
@@ -548,20 +705,47 @@ export function AddAssetButton({
             </div>
 
             <form onSubmit={(e) => handleSubmit(e, 'software')} className="asset-form">
-              <div>
-                <div className="asset-field-label">Endpoint</div>
-                <select
-                  className="asset-input"
-                  value={forms.software.endpoint_id}
-                  onChange={(e) => updateField('software', 'endpoint_id', e.target.value)}
-                  required
-                >
-                  <option value="">-- Selecciona un endpoint --</option>
-                  {endpoints.map(ep => (
-                    <option key={ep.id} value={ep.id}>{ep.name}</option>
-                  ))}
-                </select>
+              <div className="asset-checkbox-row" style={{ marginBottom: '0.5rem', background: 'var(--bg-card)', padding: '0.5rem', borderRadius: '4px' }}>
+                <input
+                  type="checkbox"
+                  id="asset-is-container"
+                  checked={forms.software.is_container}
+                  onChange={(e) => updateField('software', 'is_container', e.target.checked)}
+                />
+                <label htmlFor="asset-is-container" className="asset-field-label asset-checkbox-label">
+                  El software está instalado en un Contenedor
+                </label>
               </div>
+
+              {forms.software.is_container ? (
+                <div>
+                  <div className="asset-field-label">ID del Contenedor</div>
+                  <input
+                    type="text"
+                    className="asset-input"
+                    placeholder="Ej: d73j2..."
+                    value={forms.software.endpoint_id}
+                    onChange={(e) => updateField('software', 'endpoint_id', e.target.value)}
+                    required
+                  />
+                  <div className="asset-field-help">Introduce el ID alfanumérico del contenedor (puedes copiarlo desde el panel lateral al seleccionar el nodo en el grafo).</div>
+                </div>
+              ) : (
+                <div>
+                  <div className="asset-field-label">Endpoint</div>
+                  <select
+                    className="asset-input"
+                    value={forms.software.endpoint_id}
+                    onChange={(e) => updateField('software', 'endpoint_id', e.target.value)}
+                    required
+                  >
+                    <option value="">-- Selecciona un endpoint --</option>
+                    {endpoints.map(ep => (
+                      <option key={ep.id} value={ep.id}>{ep.name || ep.hostname}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div>
                 <div className="asset-field-label">Nombre</div>
@@ -654,6 +838,23 @@ export function AddAssetButton({
                   onChange={(e) => updateField('software', 'install_path', e.target.value)}
                   required
                 />
+              </div>
+
+              <div>
+                <div className="asset-field-label">Criticidad de la instalación</div>
+                <select
+                  className="asset-input"
+                  value={forms.software.criticality_level || 'STANDARD'}
+                  onChange={(e) => updateField('software', 'criticality_level', e.target.value)}
+                >
+                  <option value="LOW">LOW · utilidad menor</option>
+                  <option value="STANDARD">STANDARD · por defecto</option>
+                  <option value="HIGH">HIGH · servicio relevante</option>
+                  <option value="CRITICAL">CRITICAL · BBDD, auth, secretos, pagos</option>
+                </select>
+                <div className="asset-field-help">
+                  Afecta a la prioridad de parcheo, no al riesgo técnico de la vulnerabilidad.
+                </div>
               </div>
 
               <div>

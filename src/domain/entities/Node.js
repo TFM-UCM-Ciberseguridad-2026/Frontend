@@ -43,6 +43,9 @@ export class Node {
         return 'remediacion';
       case 'Hardware':
         return 'hardware';
+      case 'Container':
+      case 'ContainerImage':
+        return 'container';
       default:
         return 'todos';
     }
@@ -58,7 +61,15 @@ export class Node {
       case 'Network':
         return `${props.nombre || props.name || 'Red'} (${props.cidr || ''})`;
       case 'Endpoint':
-        return props.hostname || `Host #${props.id}`;
+        let hostname = props.hostname || props.nombre || props.name;
+        if (!hostname) hostname = `Endpoint #${props.id}`;
+        return hostname;
+      case 'Hardware':
+        return `HW: ${props.cpu_cores}C/${props.ram_gb}G`;
+      case 'Container':
+        return props.name || `Container #${props.id}`;
+      case 'ContainerImage':
+        return props.name ? `${props.name}:${props.tag || 'latest'}` : `Image #${props.id}`;
       case 'Software':
         return `${props.name || 'Software'} v${props.version || ''}`;
       case 'SoftwareInstallation':

@@ -30,6 +30,15 @@ export class UpdateNodeUseCase {
       return await this.infrastructureRepository.updateSoftwareInstallation(id, payload);
     } else if (cat.includes('software') || cat === 'sw') {
       return await this.infrastructureRepository.updateSoftware(id, payload);
+    } else if (cat.includes('container') || cat === 'contenedor') {
+      const ips = (payload.ips || [])
+        .filter(entry => entry && typeof entry.ip === 'string' && entry.ip.trim() !== '')
+        .map(entry => ({
+          ip: entry.ip.trim(),
+          vlan_id: entry.vlan_id === '' || entry.vlan_id === undefined || entry.vlan_id === null ? null : Number(entry.vlan_id)
+        }));
+      const cleanPayload = { ...payload, ips };
+      return await this.infrastructureRepository.updateContainer(id, cleanPayload);
     } else {
       throw new Error(`La edición para el tipo "${category}" no está soportada o no requiere modificación manual.`);
     }

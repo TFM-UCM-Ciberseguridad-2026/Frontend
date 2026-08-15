@@ -24,8 +24,11 @@ export class InfrastructureApiDataSource {
     return await res.json();
   }
 
-  async fetchExploitationPaths() {
-    const res = await fetch('/api/infrastructure/exploitation-paths');
+  async fetchExploitationPaths(projectId) {
+    const url = projectId
+      ? `/api/infrastructure/exploitation-paths?project_id=${projectId}`
+      : '/api/infrastructure/exploitation-paths';
+    const res = await fetch(url);
     if (!res.ok) {
       throw new Error(`Error: ${res.statusText}`);
     }
@@ -51,6 +54,15 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
+  async createContainer(endpointId, payload) {
+    const res = await fetch(`/api/endpoints/${endpointId}/containers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return await this._handleResponse(res);
+  }
+
   async createHardware(endpointId, payload) {
     const res = await fetch(`/api/endpoints/${endpointId}/hardware`, {
       method: 'POST',
@@ -62,6 +74,15 @@ export class InfrastructureApiDataSource {
 
   async createSoftware(endpointId, payload) {
     const res = await fetch(`/api/endpoints/${endpointId}/installations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return await this._handleResponse(res);
+  }
+
+  async createContainerSoftware(containerId, payload) {
+    const res = await fetch(`/api/containers/${containerId}/installations`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -92,6 +113,15 @@ export class InfrastructureApiDataSource {
   async deleteProject(projectId) {
     const res = await fetch(`/api/projects/${projectId}`, {
       method: 'DELETE'
+    });
+    return await this._handleResponse(res);
+  }
+
+  async renameProject(projectId, newName) {
+    const res = await fetch(`/api/projects/${projectId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newName })
     });
     return await this._handleResponse(res);
   }
@@ -199,6 +229,20 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
+  async updateContainer(id, payload) {
+    const res = await fetch(`/api/containers/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return await this._handleResponse(res);
+  }
+
+  async deleteContainer(id) {
+    const res = await fetch(`/api/containers/${id}`, { method: 'DELETE' });
+    return await this._handleResponse(res);
+  }
+
   async deleteNode(id) {
     const res = await fetch(`/api/nodes/${id}`, { method: 'DELETE' });
     return await this._handleResponse(res);
@@ -230,4 +274,30 @@ export class InfrastructureApiDataSource {
       return null;
     }
   }
+
+  async fetchPatchQueue(projectId, limit = 100) {
+    const params = new URLSearchParams();
+    if (projectId) params.set('project_id', projectId);
+    if (limit) params.set('limit', String(limit));
+
+    const res = await fetch(`/api/patch-queue?${params.toString()}`);
+    return await this._handleResponse(res);
+  }
+
+  async refreshPatchesForVulnerability(cveId) {
+    const res = await fetch(`/api/vulnerabilities/${encodeURIComponent(cveId)}/patches/refresh`, {
+      method: 'POST'
+    });
+    return await this._handleResponse(res);
+  }
+
+  async declarePatchApplied(installationId, payload) {
+    const res = await fetch(`/api/installations/${encodeURIComponent(installationId)}/applied-patches`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return await this._handleResponse(res);
+  }
+
 }

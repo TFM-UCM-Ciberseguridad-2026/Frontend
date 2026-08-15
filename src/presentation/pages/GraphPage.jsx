@@ -26,11 +26,15 @@ export function GraphPage({
   endpoints,
   showToast,
   createEndpoint,
+  createContainer,
   createHardware,
   createSoftware,
+  createContainerSoftware,
   createNetwork,
   updateNode,
   deleteNode,
+  renameProject,
+  deleteProject,
   riskActionLoading,
   analyzeProjectVulnerabilities,
   computeSelectedProjectRisk,
@@ -64,8 +68,10 @@ export function GraphPage({
           onCreated={() => fetchInfrastructure(true)}
           showToast={showToast}
           createEndpoint={createEndpoint}
+          createContainer={createContainer}
           createHardware={createHardware}
           createSoftware={createSoftware}
+          createContainerSoftware={createContainerSoftware}
           createNetwork={createNetwork}
         />
 
@@ -86,7 +92,7 @@ export function GraphPage({
 
 
       {/* PANEL DERECHO: INSPECTOR — grid column 3 (300px) */}
-      <NodeInspector selectedNode={selectedNode} updateNode={updateNode} deleteNode={deleteNode} fetchFindingVulnerabilities={fetchFindingVulnerabilities} />
+      <NodeInspector selectedNode={selectedNode} updateNode={updateNode} deleteNode={deleteNode} fetchFindingVulnerabilities={fetchFindingVulnerabilities} renameProject={renameProject} deleteProject={deleteProject} />
     </>
   );
 }
