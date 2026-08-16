@@ -492,6 +492,41 @@ export function useInfrastructure() {
     const rels = graphData.relationships || [];
     const nodeMap = new Map(graphData.nodes.map(n => [n.id, n]));
 
+    const routeFindingKeys = new Set();
+
+    (selectedExploitationPath?.steps || []).forEach(step => {
+      if (step.finding_id) routeFindingKeys.add(String(step.finding_id));
+      if (step.cve_id) routeFindingKeys.add(String(step.cve_id));
+      if (step.vulnerability) routeFindingKeys.add(String(step.vulnerability));
+
+      if (Array.isArray(step.finding_ids)) {
+        step.finding_ids.forEach(id => {
+          if (id) routeFindingKeys.add(String(id));
+        });
+      }
+
+      if (Array.isArray(step.findings)) {
+        step.findings.forEach(f => {
+          if (f.id) routeFindingKeys.add(String(f.id));
+          if (f.finding_id) routeFindingKeys.add(String(f.finding_id));
+          if (f.cve_id) routeFindingKeys.add(String(f.cve_id));
+          if (f.properties?.id) routeFindingKeys.add(String(f.properties.id));
+          if (f.properties?.cve_id) routeFindingKeys.add(String(f.properties.cve_id));
+        });
+      }
+    });
+
+    const isRouteFinding = (findingNode) => {
+      if (!findingNode || routeFindingKeys.size === 0) return false;
+
+      return (
+        routeFindingKeys.has(String(findingNode.id)) ||
+        routeFindingKeys.has(String(findingNode.properties?.id)) ||
+        routeFindingKeys.has(String(findingNode.properties?.finding_id)) ||
+        routeFindingKeys.has(String(findingNode.properties?.cve_id))
+      );
+    };
+
     const reachableIds = new Set();
     reachableIds.add(projectNode.id);
 
@@ -593,9 +628,20 @@ export function useInfrastructure() {
     // Crear nodos agrupados de Hallazgos por cada SoftwareInstallation
     const groupedFindingNodesMap = new Map();
     const groupedFindingNodeIds = new Set();
+    const routeFindingNodes = new Map();
 
     installationFindingsMap.forEach((findingsList, instId) => {
       if (findingsList.length === 0) return;
+
+      const visibleFindings = findingsList.filter(isRouteFinding);
+      const groupedFindings = findingsList.filter(f => !isRouteFinding(f));
+
+      visibleFindings.forEach(finding => {
+        routeFindingNodes.set(finding.id, finding);
+        reachableIds.add(finding.id);
+      });
+
+      if (groupedFindings.length === 0) return;
 
       const groupedNodeId = `findings-group-${instId}`;
       groupedFindingNodeIds.add(groupedNodeId);
@@ -605,21 +651,42 @@ export function useInfrastructure() {
         primaryLabel: 'Finding',
         categoryId: 'hallazgo',
         labels: ['Finding', 'FindingsGroup'],
-        name: `Hallazgos (${findingsList.length})`,
+        name: `Hallazgos (${groupedFindings.length})`,
         properties: {
           id: groupedNodeId,
           software_installation_id: instId,
-          findings: findingsList,
-          has_vulnerabilities: findingsList.some(f => Boolean(f.properties?.has_vulnerabilities))
+          findings: groupedFindings,
+          has_vulnerabilities: groupedFindings.some(f => Boolean(f.properties?.has_vulnerabilities))
         }
       };
 
       groupedFindingNodesMap.set(instId, groupedNode);
     });
 
+    rels.forEach(rel => {
+      const sourceIsRouteFinding = routeFindingNodes.has(rel.source);
+      const targetIsRouteFinding = routeFindingNodes.has(rel.target);
+
+      if (rel.type === 'OF_VULNERABILITY' && (sourceIsRouteFinding || targetIsRouteFinding)) {
+        const vulnId = sourceIsRouteFinding ? rel.target : rel.source;
+        reachableIds.add(vulnId);
+      }
+    });
+
     const finalRelationships = rels.filter(r => {
-      const isFindingRel = nodeMap.get(r.source)?.primaryLabel === 'Finding' || nodeMap.get(r.target)?.primaryLabel === 'Finding';
-      if (isFindingRel) return false;
+      const sourceNode = nodeMap.get(r.source);
+      const targetNode = nodeMap.get(r.target);
+
+      const sourceIsFinding = sourceNode?.primaryLabel === 'Finding' || sourceNode?.labels?.includes('Finding');
+      const targetIsFinding = targetNode?.primaryLabel === 'Finding' || targetNode?.labels?.includes('Finding');
+      const isFindingRel = sourceIsFinding || targetIsFinding;
+
+      const sourceIsRouteFinding = routeFindingNodes.has(r.source);
+      const targetIsRouteFinding = routeFindingNodes.has(r.target);
+      const isRouteFindingRel = sourceIsRouteFinding || targetIsRouteFinding;
+
+      if (isFindingRel && !isRouteFindingRel) return false;
+
       return reachableIds.has(r.source) && reachableIds.has(r.target);
     });
 
@@ -635,9 +702,12 @@ export function useInfrastructure() {
     });
 
     const finalNodes = graphData.nodes.filter(n => {
-      if (n.primaryLabel === 'Finding' || n.labels?.includes('Finding')) {
-        return false; // Ocultamos nodos de hallazgos individuales en el grafo
+      const isFinding = n.primaryLabel === 'Finding' || n.labels?.includes('Finding');
+
+      if (isFinding && !routeFindingNodes.has(n.id)) {
+        return false;
       }
+
       return reachableIds.has(n.id);
     });
 
@@ -669,7 +739,7 @@ export function useInfrastructure() {
       nodes: finalNodes,
       relationships: finalRelationships
     };
-  }, [graphData, selectedProjectId]);
+  }, [graphData, selectedProjectId, selectedExploitationPath]);
 
   // Sincronizar el nodo seleccionado cuando se actualice el grafo para reflejar ediciones al momento
   useEffect(() => {

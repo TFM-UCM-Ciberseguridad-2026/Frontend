@@ -202,15 +202,28 @@ export function NetworkGraph({
       }
     }
 
-    // 4. Filtrar nodos visibles (excluir TTP, ThreatActor, Vulnerability y el subárbol de decomisados)
+    // 4. Filtrar nodos visibles.
+    // Ocultamos TTP y ThreatActor siempre.
+    // Las Vulnerability normales se ocultan, pero mantenemos visibles las de ContainerImage.
     const visibleNodes = graphData.nodes.filter(n => {
       const idStr = String(n.id);
+
       if (
         n.labels.includes('TTP') ||
-        n.labels.includes('ThreatActor') ||
-        n.labels.includes('Vulnerability')
+        n.labels.includes('ThreatActor')
       ) {
         return false;
+      }
+
+      if (n.labels.includes('Vulnerability')) {
+        const isFromContainerImage = rels.some(r =>
+          r.type === 'HAS_VULNERABILITY' &&
+          (r.source === n.id || r.target === n.id)
+        );
+
+        if (!isFromContainerImage) {
+          return false;
+        }
       }
 
       // Ocultamos los nodos descendientes del subárbol
@@ -220,6 +233,7 @@ export function NetworkGraph({
 
       return true;
     });
+
 
     const depths = {};
     visibleNodes.forEach(n => {
@@ -582,6 +596,91 @@ export function NetworkGraph({
       });
     };
 
+  const getStepFindingRefs = (step) => {
+    const refs = [];
+
+    if (step.finding_id) {
+      refs.push({
+        id: step.finding_id,
+        cve_id: step.vulnerability || step.cve_id || '',
+        title: step.vulnerability || ''
+      });
+    }
+
+    if (Array.isArray(step.finding_ids)) {
+      step.finding_ids.forEach(id => {
+        refs.push({
+          id,
+          cve_id: '',
+          title: ''
+        });
+      });
+    }
+
+    if (Array.isArray(step.findings)) {
+      step.findings.forEach(f => {
+        refs.push({
+          id: f.id || f.finding_id || f.properties?.id,
+          cve_id: f.cve_id || f.properties?.cve_id || '',
+          title: f.title || f.properties?.title || f.cve_id || ''
+        });
+      });
+    }
+
+    const seen = new Set();
+    return refs.filter(ref => {
+      const key = String(ref.id || ref.cve_id || ref.title || '');
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
+
+
+  const findFindingNode = (findingRef) => {
+    const findingID = findingRef?.id;
+    const cveID = findingRef?.cve_id;
+
+    return graphData.nodes.find(n => {
+      const labels = n.labels || [];
+      const isFinding = n.primaryLabel === 'Finding' || labels.includes('Finding');
+      const isVulnerability = n.primaryLabel === 'Vulnerability' || labels.includes('Vulnerability');
+
+      if (findingID && (
+        String(n.id) === String(findingID) ||
+        String(n.properties?.id) === String(findingID)
+      )) {
+        return true;
+      }
+
+      if (
+        Array.isArray(n.properties?.findings) &&
+        n.properties.findings.some(f =>
+          String(f.id) === String(findingID) ||
+          String(f.finding_id) === String(findingID) ||
+          String(f.properties?.id) === String(findingID) ||
+          String(f.cve_id) === String(cveID) ||
+          String(f.properties?.cve_id) === String(cveID)
+        )
+      ) {
+        return true;
+      }
+
+      if (cveID && isFinding && (
+        n.properties?.cve_id === cveID ||
+        Array.isArray(n.properties?.cves) && n.properties.cves.includes(cveID)
+      )) {
+        return true;
+      }
+
+      if (cveID && isVulnerability && n.properties?.cve_id === cveID) {
+        return true;
+      }
+
+      return false;
+    });
+  };
+
     const orderedPathNodes = [];
 
     const entryNode = findNodeForHostOrId(selectedExploitationPath.initialEndpoint, null) ||
@@ -593,7 +692,9 @@ export function NetworkGraph({
     }
 
     (selectedExploitationPath.steps || []).forEach((step) => {
-      const stepNode = findNodeForHostOrId(step.targetEndpoint, step.targetEndpointId);
+      const tId = step.is_container ? step.container_id : step.targetEndpointId;
+      const tName = step.is_container ? step.container_name : step.targetEndpoint;
+      const stepNode = findNodeForHostOrId(tName, tId);
       if (stepNode) {
         if (!orderedPathNodes.some(n => String(n.id) === String(stepNode.id))) {
           orderedPathNodes.push(stepNode);
@@ -700,55 +801,79 @@ export function NetworkGraph({
       }
     }
 
-// Identificar nodos y aristas de hallazgos en la ruta de ataque
+    // Identificar todos los findings/vulnerabilities implicados en cada paso de la ruta.
     (selectedExploitationPath.steps || []).forEach((step) => {
-      const stepNode = findNodeForHostOrId(step.targetEndpoint, step.targetEndpointId);
-      if (stepNode && step.finding_id) {
-        // Busca el nodo agrupado que contiene la ID del hallazgo de este paso
-        const findingNode = graphData.nodes.find(n =>
-          String(n.id) === String(step.finding_id) ||
-          String(n.properties?.id) === String(step.finding_id) ||
-          (Array.isArray(n.properties?.findings) && n.properties.findings.some(f =>
-            String(f.id) === String(step.finding_id) ||
-            String(f.properties?.id) === String(step.finding_id)
-          ))
-        );
+      const tId = step.is_container ? step.container_id : step.targetEndpointId;
+      const tName = step.is_container ? step.container_name : step.targetEndpoint;
+      const stepNode = findNodeForHostOrId(tName, tId);
 
-        if (findingNode) {
-          const queue = [[String(stepNode.id), []]];
-          const visited = new Set([String(stepNode.id)]);
-          let pathRels = null;
-          let pathNodes = null;
+      if (!stepNode) return;
 
-          while (queue.length > 0) {
-            const [curr, pathInfo] = queue.shift();
-            if (pathInfo.length > 4) break;
+      let findingRefs = getStepFindingRefs(step);
 
-            if (curr === String(findingNode.id)) {
-              pathRels = pathInfo.map(p => p.relId);
-              pathNodes = pathInfo.map(p => p.neighborId);
-              break;
-            }
+      // Fallback para pasos antiguos o LPE/container image sin finding_id.
+      if (findingRefs.length === 0 && step.vulnerability) {
+        findingRefs = [{
+          id: null,
+          cve_id: step.vulnerability,
+          title: step.vulnerability
+        }];
+      }
 
-            const nbrs = adjMap.get(curr) || [];
-            for (const item of nbrs) {
-              if (!visited.has(item.neighborId)) {
-                visited.add(item.neighborId);
-                queue.push([item.neighborId, [...pathInfo, item]]);
-              }
-            }
+      findingRefs.forEach((findingRef) => {
+        let findingNode = findFindingNode(findingRef);
+
+        if (!findingNode && findingRef.title) {
+          const vulnWords = findingRef.title
+            .toLowerCase()
+            .replace(/[()]/g, '')
+            .split(/\s+/)
+            .filter(w => w.length > 3);
+
+          findingNode = graphData.nodes.find(n =>
+            (n.labels?.includes('Finding') || n.labels?.includes('Vulnerability')) &&
+            vulnWords.some(word =>
+              n.properties?.title?.toLowerCase().includes(word) ||
+              n.properties?.cve_id?.toLowerCase().includes(word) ||
+              n.properties?.description?.toLowerCase().includes(word)
+            )
+          );
+        }
+
+        if (!findingNode) return;
+
+        const queue = [[String(findingNode.id), []]];
+        const visited = new Set([String(findingNode.id)]);
+
+        connectorNodeIdSet.add(String(findingNode.id));
+
+        let pathRels = null;
+        let pathNodes = null;
+
+        while (queue.length > 0) {
+          const [curr, pathInfo] = queue.shift();
+          if (pathInfo.length > 4) break;
+
+          if (curr === String(stepNode.id)) {
+            pathRels = pathInfo.map(p => p.relId);
+            pathNodes = pathInfo.map(p => p.neighborId);
+            break;
           }
 
-          if (pathRels) {
-            pathRels.forEach(id => edgeIdSet.add(id));
-            pathNodes.forEach(id => {
-              if (id !== String(stepNode.id)) {
-                connectorNodeIdSet.add(id);
-              }
-            });
+          const nbrs = adjMap.get(curr) || [];
+          for (const item of nbrs) {
+            if (!visited.has(item.neighborId)) {
+              visited.add(item.neighborId);
+              queue.push([item.neighborId, [...pathInfo, item]]);
+            }
           }
         }
-      }
+
+        if (pathRels) {
+          pathRels.forEach(id => edgeIdSet.add(id));
+          pathNodes.forEach(id => connectorNodeIdSet.add(id));
+        }
+      });
     });
 
     return { pathEdgeIdSet: edgeIdSet, pathConnectorNodeIdSet: connectorNodeIdSet, pathNodeStepMap: nodeStepMap };
@@ -889,11 +1014,16 @@ export function NetworkGraph({
             const isPathEdge = pathEdgeIdSet.has(rel.id);
             const pathDimmed = pathActive && !isPathEdge;
 
+            const edgeShouldBeDimmed =
+              (isDimmed && !isPathEdge) ||
+              (searchDimmed && !isPathEdge) ||
+              pathDimmed;
+
             return (
               <path
                 key={rel.id}
                 d={getEdgePath(rel.source, rel.target)}
-                className={`edge flow ${isPathEdge ? 'path-highlighted' : ''} ${(isDimmed || searchDimmed || pathDimmed) ? 'dim' : ''}`}
+                className={`edge flow ${isPathEdge ? 'path-highlighted' : ''} ${edgeShouldBeDimmed ? 'dim' : ''}`}
                 style={{
                   stroke: isPathEdge
                     ? '#ef4444'
@@ -929,10 +1059,12 @@ export function NetworkGraph({
             const isNodeInPath = isStepNode || isConnectorNode;
             const pathDimmedNode = pathActive && !isNodeInPath;
 
+            const nodeShouldBeDimmed = (isDimmed && !isNodeInPath) || pathDimmedNode;
+
             return (
               <g
                 key={node.id}
-                className={`node-group ${node.pinned ? '' : 'free'} ${(isDimmed || pathDimmedNode) ? 'dim' : ''} ${isSelected ? 'selected' : ''} ${isStepNode ? 'path-node' : ''} ${isDecom ? 'decommissioned' : ''}`}
+                className={`node-group ${node.pinned ? '' : 'free'} ${nodeShouldBeDimmed ? 'dim' : ''} ${isSelected ? 'selected' : ''} ${isStepNode ? 'path-node' : ''} ${isDecom ? 'decommissioned' : ''}`}
                 transform={`translate(${node.x}, ${node.y})`}
                 onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
                 onDoubleClick={(e) => handleNodeDoubleClick(e, node.id)}
