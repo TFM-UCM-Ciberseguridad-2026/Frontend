@@ -180,6 +180,27 @@ export function useInfrastructure() {
 
   const selectExploitationPath = (path) => {
     setSelectedExploitationPath(path);
+
+    if (path && path.steps && path.steps.length > 0) {
+      // Buscar el último paso de la ruta
+      const lastStep = path.steps[path.steps.length - 1];
+      const targetFindingId = lastStep?.finding_id;
+
+      if (targetFindingId && filteredGraphData?.nodes) {
+        // Encontrar el nodo del grupo de hallazgos que contiene el finding de la ruta
+        const targetGroupNode = filteredGraphData.nodes.find(n =>
+          String(n.id) === String(targetFindingId) ||
+          (Array.isArray(n.properties?.findings) && n.properties.findings.some(f =>
+            String(f.id) === String(targetFindingId) ||
+            String(f.properties?.id) === String(targetFindingId)
+          ))
+        );
+
+        if (targetGroupNode) {
+          setSelectedNode(targetGroupNode);
+        }
+      }
+    }
   };
 
   const clearSelectedExploitationPath = () => {
@@ -345,12 +366,12 @@ export function useInfrastructure() {
     try {
       const res = await deleteNodeUseCase.execute(category, id);
       toast.success('¡El activo fue eliminado del grafo correctamente!', 'Activo Eliminado');
-      
+
       // Si tenemos un nodo seleccionado, lo limpiamos tras borrar para cerrar el Inspector (Punto 1 de Pablo)
       if (selectedNode) {
         setSelectedNode(null);
       }
-      
+
       await fetchInfrastructure(true);
       return res;
     } catch (err) {
@@ -444,7 +465,7 @@ export function useInfrastructure() {
             String(n.properties?.id ?? n.id) === String(projId)
       );
       const projectName = projectNode?.properties?.nombre || projectNode?.properties?.name || 'Proyecto';
-      
+
       const { filename, content } = await exportProjectUseCase.execute(projId, projectName);
       _triggerDownload(filename, content);
       showToast('¡Proyecto exportado a JSON con éxito!');
@@ -484,7 +505,7 @@ export function useInfrastructure() {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      
+
       showToast('¡Inventario Excel exportado con éxito!');
     } catch (err) {
       console.error(err);
@@ -521,12 +542,12 @@ export function useInfrastructure() {
 
         nodes.forEach((n, idx) => {
           const isGlobal = n.labels?.some(l => globalLabels.includes(l));
-          
+
           if (!isGlobal) {
             const newId = n.labels?.includes('Project') ? String(newProjId) : String(Date.now() + idx + Math.floor(Math.random() * 10000));
             const oldNodeId = String(n.id);
             idMapping[oldNodeId] = newId;
-            
+
             if (n.properties?.id !== undefined && n.properties?.id !== null) {
               const oldPropId = String(n.properties.id);
               idMapping[oldPropId] = newId;
@@ -536,7 +557,7 @@ export function useInfrastructure() {
                 n.properties.id = newId;
               }
             }
-            
+
             n.id = newId;
 
             if (n.labels?.includes('Project')) {
@@ -616,13 +637,13 @@ export function useInfrastructure() {
   }, [selectedProjectId]);
 
 
-  // Filtrar graphData según el proyecto seleccionado (estrictamente por jerarquía de pertenencia)
+
+// Filtrar graphData según el proyecto seleccionado y agrupar hallazgos por SoftwareInstallation
   const filteredGraphData = useMemo(() => {
     if (!selectedProjectId || !graphData.nodes || graphData.nodes.length === 0) {
       return graphData;
     }
 
-    // 1. Nodo del proyecto seleccionado
     const projectNode = graphData.nodes.find(
       n => (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
           String(n.properties?.id ?? n.id) === String(selectedProjectId)
@@ -634,9 +655,44 @@ export function useInfrastructure() {
     const rels = graphData.relationships || [];
     const nodeMap = new Map(graphData.nodes.map(n => [n.id, n]));
 
+    const routeFindingKeys = new Set();
+
+    (selectedExploitationPath?.steps || []).forEach(step => {
+      if (step.finding_id) routeFindingKeys.add(String(step.finding_id));
+      if (step.cve_id) routeFindingKeys.add(String(step.cve_id));
+      if (step.vulnerability) routeFindingKeys.add(String(step.vulnerability));
+
+      if (Array.isArray(step.finding_ids)) {
+        step.finding_ids.forEach(id => {
+          if (id) routeFindingKeys.add(String(id));
+        });
+      }
+
+      if (Array.isArray(step.findings)) {
+        step.findings.forEach(f => {
+          if (f.id) routeFindingKeys.add(String(f.id));
+          if (f.finding_id) routeFindingKeys.add(String(f.finding_id));
+          if (f.cve_id) routeFindingKeys.add(String(f.cve_id));
+          if (f.properties?.id) routeFindingKeys.add(String(f.properties.id));
+          if (f.properties?.cve_id) routeFindingKeys.add(String(f.properties.cve_id));
+        });
+      }
+    });
+
+    const isRouteFinding = (findingNode) => {
+      if (!findingNode || routeFindingKeys.size === 0) return false;
+
+      return (
+        routeFindingKeys.has(String(findingNode.id)) ||
+        routeFindingKeys.has(String(findingNode.properties?.id)) ||
+        routeFindingKeys.has(String(findingNode.properties?.finding_id)) ||
+        routeFindingKeys.has(String(findingNode.properties?.cve_id))
+      );
+    };
+
     const reachableIds = new Set();
     reachableIds.add(projectNode.id);
-    // 2. Endpoints y Redes pertenecientes a ESTE proyecto
+
     const projectEndpointIds = new Set();
     rels.forEach(rel => {
       const isSourceProject = rel.source === projectNode.id;
@@ -655,7 +711,6 @@ export function useInfrastructure() {
       }
     });
 
-    // 3. Nodos directamente vinculados a los Endpoints del proyecto (Hardware, Redes, Contenedores, Instalaciones de Software)
     const projectContainerIds = new Set();
     const projectInstallationIds = new Set();
 
@@ -671,11 +726,7 @@ export function useInfrastructure() {
         const primaryLabel = otherNode.primaryLabel || otherNode.labels?.[0];
         const labels = otherNode.labels || [];
 
-        const isProject = primaryLabel === 'Project' || labels.includes('Project');
-        const isOtherEndpoint = primaryLabel === 'Endpoint' || labels.includes('Endpoint');
-
-        // Evitar saltar a otros proyectos u otros endpoints
-        if (isProject || isOtherEndpoint) return;
+        if (primaryLabel === 'Project' || labels.includes('Project') || primaryLabel === 'Endpoint' || labels.includes('Endpoint')) return;
 
         if (primaryLabel === 'Container' || labels.includes('Container') || rel.type === 'HOSTS') {
           projectContainerIds.add(otherId);
@@ -684,7 +735,6 @@ export function useInfrastructure() {
           projectInstallationIds.add(otherId);
           reachableIds.add(otherId);
         } else {
-          // Hardware, Network, etc.
           reachableIds.add(otherId);
         }
       }
@@ -716,8 +766,8 @@ export function useInfrastructure() {
       }
     });
 
-    // 5. Software (catálogo) y Findings de las Instalaciones del proyecto
-    const projectFindingIds = new Set();
+    // Mapeo de SoftwareInstallation ID -> Lista de Nodos Finding
+    const installationFindingsMap = new Map();
 
     rels.forEach(rel => {
       const sourceIsInst = projectInstallationIds.has(rel.source);
@@ -726,6 +776,9 @@ export function useInfrastructure() {
       const targetIsImage = projectContainerImageIds.has(rel.target);
 
       if (sourceIsInst || targetIsInst || sourceIsImage || targetIsImage) {
+        const instId = (sourceIsInst || targetIsInst)
+          ? (sourceIsInst ? rel.source : rel.target)
+          : (sourceIsImage ? rel.source : rel.target);
         const otherId = (sourceIsInst || sourceIsImage) ? rel.target : rel.source;
         const otherNode = nodeMap.get(otherId);
         if (!otherNode) return;
@@ -734,62 +787,112 @@ export function useInfrastructure() {
         const labels = otherNode.labels || [];
 
         if (primaryLabel === 'Finding' || labels.includes('Finding') || rel.type === 'HAS_FINDING') {
-          projectFindingIds.add(otherId);
-          reachableIds.add(otherId);
+          if (!installationFindingsMap.has(instId)) {
+            installationFindingsMap.set(instId, []);
+          }
+          installationFindingsMap.get(instId).push(otherNode);
         } else if (primaryLabel === 'Software' || labels.includes('Software') || rel.type === 'INSTANCE_OF') {
           reachableIds.add(otherId);
         }
       }
     });
 
-    // 6. Vulnerabilidades, Exploits, Remediaciones de los Findings y ContainerImages del proyecto
-    const projectRemediationIds = new Set();
+    // Crear nodos agrupados de Hallazgos por cada SoftwareInstallation
+    const groupedFindingNodesMap = new Map();
+    const groupedFindingNodeIds = new Set();
+    const routeFindingNodes = new Map();
 
-    rels.forEach(rel => {
-      const sourceIsFinding = projectFindingIds.has(rel.source) || projectContainerImageIds.has(rel.source);
-      const targetIsFinding = projectFindingIds.has(rel.target) || projectContainerImageIds.has(rel.target);
+    installationFindingsMap.forEach((findingsList, instId) => {
+      if (findingsList.length === 0) return;
 
-      if (sourceIsFinding || targetIsFinding) {
-        const otherId = sourceIsFinding ? rel.target : rel.source;
-        const otherNode = nodeMap.get(otherId);
-        if (!otherNode) return;
+      const visibleFindings = findingsList.filter(isRouteFinding);
+      const groupedFindings = findingsList.filter(f => !isRouteFinding(f));
 
-        const primaryLabel = otherNode.primaryLabel || otherNode.labels?.[0];
-        const labels = otherNode.labels || [];
+      visibleFindings.forEach(finding => {
+        routeFindingNodes.set(finding.id, finding);
+        reachableIds.add(finding.id);
+      });
 
-        if (primaryLabel === 'Remediation' || labels.includes('Remediation') || rel.type === 'HAS_REMEDIATION') {
-          projectRemediationIds.add(otherId);
-          reachableIds.add(otherId);
-        } else if (primaryLabel === 'Vulnerability' || labels.includes('Vulnerability') || primaryLabel === 'Exploit' || labels.includes('Exploit') || rel.type === 'OF_VULNERABILITY' || rel.type === 'HAS_EXPLOIT' || rel.type === 'HAS_VULNERABILITY') {
-          reachableIds.add(otherId);
+      if (groupedFindings.length === 0) return;
+
+      const groupedNodeId = `findings-group-${instId}`;
+      groupedFindingNodeIds.add(groupedNodeId);
+
+      const groupedNode = {
+        id: groupedNodeId,
+        primaryLabel: 'Finding',
+        categoryId: 'hallazgo',
+        labels: ['Finding', 'FindingsGroup'],
+        name: `Hallazgos (${groupedFindings.length})`,
+        properties: {
+          id: groupedNodeId,
+          software_installation_id: instId,
+          findings: groupedFindings,
+          has_vulnerabilities: groupedFindings.some(f => Boolean(f.properties?.has_vulnerabilities))
         }
-      }
+      };
+
+      groupedFindingNodesMap.set(instId, groupedNode);
     });
 
-    // 7. Patches de las Remediaciones
     rels.forEach(rel => {
-      const sourceIsRem = projectRemediationIds.has(rel.source);
-      const targetIsRem = projectRemediationIds.has(rel.target);
+      const sourceIsRouteFinding = routeFindingNodes.has(rel.source);
+      const targetIsRouteFinding = routeFindingNodes.has(rel.target);
 
-      if (sourceIsRem || targetIsRem) {
-        const otherId = sourceIsRem ? rel.target : rel.source;
-        const otherNode = nodeMap.get(otherId);
-        if (!otherNode) return;
-
-        reachableIds.add(otherId);
+      if (rel.type === 'OF_VULNERABILITY' && (sourceIsRouteFinding || targetIsRouteFinding)) {
+        const vulnId = sourceIsRouteFinding ? rel.target : rel.source;
+        reachableIds.add(vulnId);
       }
     });
 
-    // 8. Generar aristas virtuales CONTAINS_NETWORK para anclar visualmente las Redes al Proyecto
-    // en caso de que la BD antigua no tenga los enlaces explícitos.
-    const finalRelationships = rels.filter(r => reachableIds.has(r.source) && reachableIds.has(r.target));
-    const finalNodes = graphData.nodes.filter(n => reachableIds.has(n.id));
+    const finalRelationships = rels.filter(r => {
+      const sourceNode = nodeMap.get(r.source);
+      const targetNode = nodeMap.get(r.target);
 
+      const sourceIsFinding = sourceNode?.primaryLabel === 'Finding' || sourceNode?.labels?.includes('Finding');
+      const targetIsFinding = targetNode?.primaryLabel === 'Finding' || targetNode?.labels?.includes('Finding');
+      const isFindingRel = sourceIsFinding || targetIsFinding;
+
+      const sourceIsRouteFinding = routeFindingNodes.has(r.source);
+      const targetIsRouteFinding = routeFindingNodes.has(r.target);
+      const isRouteFindingRel = sourceIsRouteFinding || targetIsRouteFinding;
+
+      if (isFindingRel && !isRouteFindingRel) return false;
+
+      return reachableIds.has(r.source) && reachableIds.has(r.target);
+    });
+
+    // Añadir relaciones agrupadas SoftwareInstallation -> Grupo de Hallazgos
+    groupedFindingNodesMap.forEach((groupedNode, instId) => {
+      finalRelationships.push({
+        id: `rel-group-${instId}`,
+        source: instId,
+        target: groupedNode.id,
+        type: 'HAS_FINDING',
+        properties: { virtual: true }
+      });
+    });
+
+    const finalNodes = graphData.nodes.filter(n => {
+      const isFinding = n.primaryLabel === 'Finding' || n.labels?.includes('Finding');
+
+      if (isFinding && !routeFindingNodes.has(n.id)) {
+        return false;
+      }
+
+      return reachableIds.has(n.id);
+    });
+
+    // Añadir los nodos agrupados de hallazgos
+    groupedFindingNodesMap.forEach((groupedNode) => {
+      finalNodes.push(groupedNode);
+    });
+
+    // Asegurar aristas virtuales CONTAINS_NETWORK
     finalNodes.forEach(n => {
       if (n.primaryLabel === 'Network' || (n.labels && n.labels.includes('Network'))) {
-        // Verificar si ya existe una relación de pertenencia/contención con el proyecto
-        const hasProjectRel = finalRelationships.some(r => 
-          (r.source === projectNode.id && r.target === n.id) || 
+        const hasProjectRel = finalRelationships.some(r =>
+          (r.source === projectNode.id && r.target === n.id) ||
           (r.target === projectNode.id && r.source === n.id)
         );
         if (!hasProjectRel) {
@@ -808,7 +911,7 @@ export function useInfrastructure() {
       nodes: finalNodes,
       relationships: finalRelationships
     };
-  }, [graphData, selectedProjectId]);
+  }, [graphData, selectedProjectId, selectedExploitationPath]);
 
   // Sincronizar el nodo seleccionado cuando se actualice el grafo para reflejar ediciones al momento
   useEffect(() => {

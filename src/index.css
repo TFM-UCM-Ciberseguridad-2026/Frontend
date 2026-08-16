@@ -2314,3 +2314,30 @@ aside {
   box-shadow: 0 0 15px rgba(77, 59, 255, 0.15);
   text-align: right;
 }
+
+/* Estilos del Acordeón de Hallazgos */
+.findings-accordion-list {
+  margin-top: 12px;
+}
+
+.finding-accordion-card {
+  transition: all 0.25s ease;
+}
+
+.finding-accordion-card:hover {
+  border-color: var(--c400) !important;
+}
+
+.finding-accordion-header:hover {
+  background: rgba(122, 115, 255, 0.15) !important;
+}
+
+.btn-ver-cves {
+  font-family: 'Rajdhani', sans-serif;
+  letter-spacing: 0.5px;
+}
+
+.btn-ver-cves:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.6) !important;
+}

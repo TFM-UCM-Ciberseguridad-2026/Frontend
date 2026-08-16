@@ -1,18 +1,112 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { RiskSummary } from '../Risk/RiskSummary';
 import { EditNodeModal } from './EditNodeModal';
+import { RiskScoreGauge } from '../Risk/RiskScoreGauge';
+import { toPercent } from '../Risk/riskFormat';
 import { RenameProjectModal, DeleteProjectModal } from '../HudHeader/ProjectActionModals';
+import './NodeInspector.css';
 
-export function NodeInspector({ selectedNode, updateNode, deleteNode, fetchFindingVulnerabilities, renameProject, deleteProject }) {
+const getRiskBadgeClass = (score, tier) => {
+  const t = (tier || '').toUpperCase();
+  const numScore = Number(score || 0);
+
+  if (t === 'CRITICAL' || numScore >= 0.9) return 'risk-badge-critical';
+  if (t === 'HIGH' || numScore >= 0.7) return 'risk-badge-high';
+  if (t === 'MEDIUM' || numScore >= 0.4) return 'risk-badge-medium';
+  return 'risk-badge-low';
+};
+
+export function NodeInspector({
+  selectedNode,
+  updateNode,
+  deleteNode,
+  fetchFindingVulnerabilities,
+  selectedExploitationPath,
+  renameProject,
+  deleteProject
+}) {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showRenameProjectModal, setShowRenameProjectModal] = useState(false);
   const [showDeleteProjectModal, setShowDeleteProjectModal] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [expandedFindingId, setExpandedFindingId] = useState(null);
 
+  // Extraer lista de hallazgos asociados al nodo seleccionado
+  const findingsList = useMemo(() => {
+    if (!selectedNode) return [];
+    if (Array.isArray(selectedNode.properties?.findings) && selectedNode.properties.findings.length > 0) {
+      return selectedNode.properties.findings;
+    }
+    const isFinding = selectedNode.primaryLabel === 'Finding' || selectedNode.labels?.includes('Finding');
+    if (isFinding) {
+      return [selectedNode];
+    }
+    return [];
+  }, [selectedNode]);
+
+  // Ordenación única por RIESGO (descendente: mayor riesgo primero)
+  const sortedFindings = useMemo(() => {
+    if (findingsList.length === 0) return [];
+    return [...findingsList].sort((a, b) => {
+      const rA = Number(a.properties?.risk_score || 0);
+      const rB = Number(b.properties?.risk_score || 0);
+      return rB - rA;
+    });
+  }, [findingsList]);
+
+  // Identificar con precisión el hallazgo objetivo de la ruta de ataque activa
+  const targetPathFindingId = useMemo(() => {
+    if (!selectedExploitationPath?.steps || sortedFindings.length === 0) return null;
+
+    for (const step of selectedExploitationPath.steps) {
+      if (!step) continue;
+      const sFindingId = String(step.finding_id || '').trim();
+      const sVuln = String(step.vulnerability || '').trim().toLowerCase();
+
+      for (const f of sortedFindings) {
+        const fNodeId = String(f.id || '').trim();
+        const fPropId = String(f.properties?.id ?? '').trim();
+        const fCveId = String(f.properties?.cve_id || f.properties?.cve || '').trim().toLowerCase();
+
+        // Match por ID (elementId o ID numérico de propiedad)
+        const isIdMatch = Boolean(
+          sFindingId && (
+            fNodeId === sFindingId ||
+            fPropId === sFindingId ||
+            fNodeId.endsWith(':' + sFindingId) ||
+            sFindingId.endsWith(':' + fNodeId) ||
+            sFindingId.endsWith(':' + fPropId)
+          )
+        );
+
+        // Match por CVE
+        const isCveMatch = Boolean(sVuln && fCveId && (fCveId === sVuln || fCveId.includes(sVuln)));
+
+        if (isIdMatch || isCveMatch) {
+          // Devolver el ID en el mismo formato exacto que fId en el map loop (props.id ?? f.id)
+          return String(f.properties?.id ?? f.id);
+        }
+      }
+    }
+
+    return null;
+  }, [selectedExploitationPath, sortedFindings]);
+
+  // Auto-desplegar: Prioriza el hallazgo de la ruta de ataque objetivo; si no hay, abre el de mayor riesgo
   useEffect(() => {
     setConfirmDelete(false);
     setShowEditModal(false);
-  }, [selectedNode?.id]);
+
+    if (targetPathFindingId) {
+      setExpandedFindingId(targetPathFindingId);
+    } else if (sortedFindings.length > 0) {
+      const firstId = String(sortedFindings[0].properties?.id ?? sortedFindings[0].id);
+      setExpandedFindingId(firstId);
+    } else {
+      setExpandedFindingId(null);
+    }
+  }, [selectedNode?.id, targetPathFindingId, sortedFindings]);
+
   if (!selectedNode) {
     return (
       <aside className="detail-panel">
@@ -27,52 +121,45 @@ export function NodeInspector({ selectedNode, updateNode, deleteNode, fetchFindi
     );
   }
 
-  const categoryLabel = selectedNode.primaryLabel;
+  const categoryLabel = selectedNode.primaryLabel || selectedNode.labels?.[0] || 'Unknown';
+  const nodeName = selectedNode.name || selectedNode.properties?.title || selectedNode.properties?.nombre || 'Sin Nombre';
   const isManageableAsset = ['Endpoint', 'Network', 'Hardware', 'Container'].includes(categoryLabel);
   const canEdit = isManageableAsset && typeof updateNode === 'function';
   const canDelete = isManageableAsset && typeof deleteNode === 'function';
-  
   const isProject = categoryLabel === 'Project';
   const canEditProject = isProject && typeof renameProject === 'function';
   const canDeleteProject = isProject && typeof deleteProject === 'function';
+  const isFindingGroup = sortedFindings.length > 0;
 
-  const arcDasharray = (fraction, radius) => {
-    const circumference = 2 * Math.PI * radius;
-    return `${circumference * fraction} ${circumference}`;
+  const toggleFinding = (id) => {
+    const targetId = String(id);
+    setExpandedFindingId(prev => (prev === targetId ? null : targetId));
   };
-
-  const isVuln = selectedNode.categoryId === 'vulnerabilidad';
-  const isFinding = selectedNode.primaryLabel === 'Finding';
-  const hasVulns = Boolean(selectedNode.properties?.has_vulnerabilities);
-
-  const baseScore = parseFloat(selectedNode.properties.base_score || selectedNode.properties.cvss_score || 0);
-  const epssScore = parseFloat(selectedNode.properties.epss_score || 0);
 
   return (
     <aside className="detail-panel">
       <p className="eyebrow">Propiedades del activo</p>
-      <div style={{ padding: '10px 0' }}>
+      <div className="inspector-padding">
         <span className="badge">{categoryLabel.toUpperCase()}</span>
-        <h2 className="node-title">{selectedNode.name}</h2>
+        <h2 className="node-title">{nodeName}</h2>
 
-        {/* ACCIONES DE GESTIÓN DE NODO (EDITAR / ELIMINAR) */}
+        {/* ACCIONES DE GESTIÓN DE NODO */}
         {(canDelete || canEdit || canEditProject || canDeleteProject) && (
-          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+          <div className="node-actions-group">
             {canEdit && (
               <button
-                className="btn btn-secondary"
-                style={{ flex: 1, padding: '0.4rem 0.6rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', background: 'var(--c900)', border: '1px solid var(--line)' }}
+                type="button"
+                className="btn btn-secondary btn-node-action"
                 onClick={() => setShowEditModal(true)}
-                title="Editar propiedades y enlaces de red de este activo"
               >
                 ✏️ Editar Activo
               </button>
             )}
-            
+
             {canEditProject && (
               <button
-                className="btn btn-secondary"
-                style={{ flex: 1, padding: '0.4rem 0.6rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', background: 'var(--c900)', border: '1px solid var(--line)' }}
+                type="button"
+                className="btn btn-secondary btn-node-action"
                 onClick={() => setShowRenameProjectModal(true)}
                 title="Renombrar este proyecto"
               >
@@ -83,33 +170,32 @@ export function NodeInspector({ selectedNode, updateNode, deleteNode, fetchFindi
             {canDelete && (
               !confirmDelete ? (
                 <button
-                  className="btn btn-secondary"
-                  style={{ flex: 1, padding: '0.4rem 0.6rem', fontSize: '0.75rem', color: '#ff8585', background: 'var(--c900)', border: '1px solid rgba(255, 107, 107, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                  type="button"
+                  className="btn btn-secondary btn-node-action btn-node-delete"
                   onClick={() => setConfirmDelete(true)}
-                  title="Eliminar este nodo del grafo"
                 >
                   🗑️ Eliminar
                 </button>
               ) : (
-                <div style={{ display: 'flex', gap: '6px', width: '100%', marginTop: '4px', background: 'rgba(224, 49, 49, 0.15)', padding: '8px', borderRadius: '6px', border: '1px dashed #e03131', flexDirection: 'column' }}>
-                  <div style={{ fontSize: '0.72rem', color: '#ffaaaa', textAlign: 'center', fontWeight: 600 }}>
+                <div className="delete-confirm-box">
+                  <div className="delete-confirm-title">
                     ⚠️ ¿Eliminar de forma permanente?
                   </div>
-                  <div style={{ display: 'flex', gap: '4px' }}>
+                  <div className="delete-confirm-actions">
                     <button
-                      className="btn"
-                      style={{ flex: 1, padding: '0.35rem', fontSize: '0.75rem', background: '#e03131', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}
+                      type="button"
+                      className="btn btn-confirm-delete"
                       onClick={() => {
                         setConfirmDelete(false);
-                        const idToDelete = selectedNode.domainId || selectedNode.properties?.id || selectedNode.id;
-                        deleteNode(selectedNode.primaryLabel, idToDelete);
+                        const idToDelete = selectedNode.properties?.id ?? selectedNode.id;
+                        deleteNode(categoryLabel, idToDelete);
                       }}
                     >
                       Sí, Eliminar
                     </button>
                     <button
-                      className="btn btn-secondary"
-                      style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem', background: 'transparent', border: '1px solid var(--line)' }}
+                      type="button"
+                      className="btn btn-secondary btn-cancel-delete"
                       onClick={() => setConfirmDelete(false)}
                     >
                       Cancelar
@@ -118,11 +204,11 @@ export function NodeInspector({ selectedNode, updateNode, deleteNode, fetchFindi
                 </div>
               )
             )}
-            
+
             {canDeleteProject && (
               <button
-                className="btn btn-secondary"
-                style={{ flex: 1, padding: '0.4rem 0.6rem', fontSize: '0.75rem', color: '#ff8585', background: 'var(--c900)', border: '1px solid rgba(255, 107, 107, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                type="button"
+                className="btn btn-secondary btn-node-action btn-node-delete"
                 onClick={() => setShowDeleteProjectModal(true)}
                 title="Eliminar este proyecto"
               >
@@ -132,120 +218,120 @@ export function NodeInspector({ selectedNode, updateNode, deleteNode, fetchFindi
           </div>
         )}
 
-        <RiskSummary node={selectedNode} />
+        {/* VISTA DE ACORDEÓN DE HALLAZGOS */}
+        {isFindingGroup ? (
+          <div className="findings-accordion-list">
+            {sortedFindings.map((finding, index) => {
+              const props = finding.properties || {};
+              const rawId = props.id ?? finding.id ?? index;
+              const fId = String(rawId);
+              const titleName = props.title || finding.name || `Finding #${fId}`;
+              const isExpanded = expandedFindingId === fId;
+              const isPathTarget = targetPathFindingId === fId;
+              const hasVulns = Boolean(props.has_vulnerabilities);
 
-      {isFinding && (
-        <button
-          type="button"
-          style={{
-            width: '100%',
-            marginBottom: '1rem',
-            padding: '0.6rem',
-            borderRadius: '8px',
-            fontWeight: 600,
-            fontSize: '0.85rem',
-            cursor: !hasVulns ? 'not-allowed' : 'pointer',
-            border: '1px solid rgba(239, 68, 68, 0.5)',
-            background: !hasVulns ? 'rgba(239, 68, 68, 0.1)' : 'linear-gradient(135deg, #ef4444, #b91c1c)',
-            color: !hasVulns ? '#f87171' : '#ffffff',
-            opacity: !hasVulns ? 0.6 : 1,
-            boxShadow: !hasVulns ? 'none' : '0 4px 15px rgba(239, 68, 68, 0.35)'
-          }}
-          disabled={!hasVulns}
-          onClick={() => fetchFindingVulnerabilities?.(selectedNode)}
-        >
-          {hasVulns ? 'Ver CVEs' : 'Sin CVEs asociados'}
-        </button>
-      )}
-        
-        {isVuln && (baseScore > 0 || epssScore > 0) && (
-          <div className="gauge-row">
-            {baseScore > 0 && (
-              <div className="gauge-big">
-                <svg width="112" height="112" viewBox="0 0 112 112">
-                  <circle cx="56" cy="56" r="48" stroke="var(--c900)" strokeWidth="7" fill="none" />
-                  <circle
-                    cx="56"
-                    cy="56"
-                    r="48"
-                    stroke="var(--c50)"
-                    strokeWidth="7"
-                    fill="none"
-                    strokeLinecap="round"
-                    strokeDasharray={arcDasharray(baseScore / 10, 48)}
-                  />
-                </svg>
-                <div className="val">
-                  <b>{baseScore}</b>
-                  <span>BASE SCORE</span>
-                </div>
-              </div>
-            )}
+              const riskPct = toPercent(props.risk_score) ?? 0;
+              const badgeClass = getRiskBadgeClass(props.risk_score, props.risk_tier);
 
-            {epssScore > 0 && (
-              <div className="gauge-small">
-                <svg width="72" height="72" viewBox="0 0 72 72">
-                  <circle cx="36" cy="36" r="30" stroke="var(--c900)" strokeWidth="5" fill="none" />
-                  <circle
-                    cx="36"
-                    cy="36"
-                    r="30"
-                    stroke="var(--c400)"
-                    strokeWidth="5"
-                    fill="none"
-                    strokeLinecap="round"
-                    strokeDasharray={arcDasharray(epssScore, 30)}
-                  />
-                </svg>
-                <div className="val">
-                  <b>{Math.round(epssScore * 100)}%</b>
-                  <span>EPSS</span>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+              return (
+                <div key={fId} className={`finding-accordion-card ${isPathTarget ? 'is-path-target' : ''}`}>
+                  {/* CABECERA PLEGADA */}
+                  <div
+                    className={`finding-accordion-header ${isExpanded ? 'is-expanded' : ''}`}
+                    onClick={() => toggleFinding(fId)}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span className="finding-accordion-title">
+                        {titleName}
+                      </span>
+                      {isPathTarget && (
+                        <span className="path-target-badge" title="Vulnerabilidad de la ruta de ataque activa">
+                          🎯 EN RUTA
+                        </span>
+                      )}
+                    </div>
 
-        <div className="props">
-          <div className="prop-row">
-            <div className="k">ID Interno Neo4j</div>
-            <div className="v">{selectedNode.id}</div>
-          </div>
-          {selectedNode.properties?.image_id && (
-            <div className="prop-row">
-              <div className="k">ID de Imagen</div>
-              <div className="v">{selectedNode.properties.image_id}</div>
-            </div>
-          )}
-          {Object.entries(selectedNode.properties || {})
-            .filter(([k]) => k !== 'image_id')
-            .map(([k, v]) => {
-            let display;
-            if (typeof v === 'boolean') {
-              display = <span className={`pill ${v ? 'true' : 'false'}`}>{v ? 'TRUE' : 'FALSE'}</span>;
-            } else if (k === 'ips' && Array.isArray(v)) {
-              display = (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  {v.map((ipObj, idx) => {
-                    const ipStr = typeof ipObj === 'string' ? ipObj : ipObj.ip;
-                    const vlanStr = (ipObj.vlan_id !== undefined && ipObj.vlan_id !== null) ? ` (VLAN: ${ipObj.vlan_id})` : '';
-                    return <span key={idx} className="pill" style={{ background: 'var(--c800)', color: 'var(--c50)' }}>{ipStr}{vlanStr}</span>;
-                  })}
+                    <div className="finding-accordion-meta">
+                      <span className={`risk-badge ${badgeClass}`}>
+                        {`Risk: ${riskPct}%`}
+                      </span>
+                      <span className={`finding-accordion-chevron ${isExpanded ? 'is-expanded' : ''}`}>
+                        ▼
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* CONTENIDO DESPLEGADO */}
+                  {isExpanded && (
+                    <div className="finding-accordion-body">
+                      <div className="finding-gauges-row">
+                        <RiskScoreGauge score={props.risk_score} tier={props.risk_tier} label="RISK" />
+                        <RiskScoreGauge score={props.priority_score} tier={props.priority_tier} label="PRIORITY" />
+                      </div>
+
+                      <div className="props finding-props-container">
+                        <div className="prop-row">
+                          <div className="k">IMPACT</div>
+                          <div className="v">{props.impact_score ?? 'N/A'}</div>
+                        </div>
+                        <div className="prop-row">
+                          <div className="k">LIKELIHOOD</div>
+                          <div className="v">{props.likelihood ?? 'N/A'}</div>
+                        </div>
+                        <div className="prop-row">
+                          <div className="k">EXPOSURE</div>
+                          <div className="v">{props.exposure_factor ?? 'N/A'}</div>
+                        </div>
+                        <div className="prop-row">
+                          <div className="k">REMEDIATION</div>
+                          <div className="v">{props.remediation_factor ?? 'N/A'}</div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        className="btn-ver-cves"
+                        disabled={!hasVulns}
+                        onClick={() => fetchFindingVulnerabilities?.(finding)}
+                      >
+                        {hasVulns ? 'Ver CVEs' : 'Sin CVEs asociados'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
-            } else if (typeof v === 'object' && v !== null) {
-              display = JSON.stringify(v);
-            } else {
-              display = String(v);
-            }
-            return (
-              <div className="prop-row" key={k}>
-                <div className="k">{k.replace(/_/g, ' ')}</div>
-                <div className="v">{display}</div>
+            })}
+          </div>
+        ) : (
+          /* VISTA SECUNDARIA PARA OTROS NODOS */
+          <>
+            <RiskSummary node={selectedNode} />
+
+            <div className="props">
+              <div className="prop-row">
+                <div className="k">ID Interno Neo4j</div>
+                <div className="v">{selectedNode.id}</div>
               </div>
-            );
-          })}
-        </div>
+              {Object.entries(selectedNode.properties || {}).map(([k, v]) => {
+                if (k === 'findings' || (typeof v === 'object' && v !== null)) {
+                  return null;
+                }
+                let display;
+                if (typeof v === 'boolean') {
+                  display = <span className={`pill ${v ? 'true' : 'false'}`}>{v ? 'TRUE' : 'FALSE'}</span>;
+                } else {
+                  display = String(v);
+                }
+                return (
+                  <div className="prop-row" key={k}>
+                    <div className="k">{k.replace(/_/g, ' ')}</div>
+                    <div className="v">{display}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
       </div>
 
       {showEditModal && (
@@ -255,17 +341,23 @@ export function NodeInspector({ selectedNode, updateNode, deleteNode, fetchFindi
           updateNode={updateNode}
         />
       )}
-      
+
       <RenameProjectModal
         isOpen={showRenameProjectModal}
         onClose={() => setShowRenameProjectModal(false)}
-        project={{ id: selectedNode.id || selectedNode.properties.id, name: selectedNode.name }}
+        project={{
+          id: selectedNode.properties?.id ?? selectedNode.id,
+          name: selectedNode.name || selectedNode.properties?.nombre
+        }}
         onRename={renameProject}
       />
       <DeleteProjectModal
         isOpen={showDeleteProjectModal}
         onClose={() => setShowDeleteProjectModal(false)}
-        project={{ id: selectedNode.id || selectedNode.properties.id, name: selectedNode.name }}
+        project={{
+          id: selectedNode.properties?.id ?? selectedNode.id,
+          name: selectedNode.name || selectedNode.properties?.nombre
+        }}
         onDelete={deleteProject}
       />
     </aside>
