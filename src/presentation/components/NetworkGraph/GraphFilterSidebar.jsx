@@ -11,7 +11,8 @@ export function GraphFilterSidebar({
   fetchExploitationPaths,
   selectedExploitationPath,
   clearSelectedExploitationPath,
-  riskActionLoading,
+  vulnScanLoading,
+  riskComputeLoading,
   analyzeProjectVulnerabilities,
   computeSelectedProjectRisk
 }) {
@@ -122,11 +123,11 @@ export function GraphFilterSidebar({
             <button
               type="button"
               className="sidebar-action-btn vuln-btn"
-              disabled={riskActionLoading}
+              disabled={vulnScanLoading || riskComputeLoading}
               onClick={analyzeProjectVulnerabilities}
             >
               <span className="ic">
-                {riskActionLoading ? (
+                {vulnScanLoading ? (
                   <svg className="spin-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
                   </svg>
@@ -138,7 +139,7 @@ export function GraphFilterSidebar({
                   </svg>
                 )}
               </span>
-              <span>{riskActionLoading ? 'Procesando...' : 'Analizar vulnerabilidades'}</span>
+              <span>{vulnScanLoading ? 'Analizando...' : 'Analizar vulnerabilidades'}</span>
             </button>
           )}
 
@@ -146,11 +147,11 @@ export function GraphFilterSidebar({
             <button
               type="button"
               className="sidebar-action-btn risk-btn"
-              disabled={riskActionLoading}
+              disabled={vulnScanLoading || riskComputeLoading}
               onClick={computeSelectedProjectRisk}
             >
               <span className="ic">
-                {riskActionLoading ? (
+                {riskComputeLoading ? (
                   <svg className="spin-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
                   </svg>
@@ -162,16 +163,14 @@ export function GraphFilterSidebar({
                   </svg>
                 )}
               </span>
-              <span>{riskActionLoading ? 'Procesando...' : 'Calcular riesgo'}</span>
+              <span>{riskComputeLoading ? 'Calculando...' : 'Calcular riesgo'}</span>
             </button>
           )}
         </div>
       </div>
 
       {/* CONTENEDOR DE SECCIONES CON SCROLL SLIM */}
-
       <div className="filter-scroll-container">
-        {/* SECCIÓN 1: CATEGORÍAS */}
         <div className="filter-accordion">
           <button
             className="accordion-header"
@@ -225,7 +224,6 @@ export function GraphFilterSidebar({
           )}
         </div>
 
-        {/* SECCIÓN 2: FILTROS AVANZADOS (FUTUROS) */}
         <div className="filter-accordion">
           <button
             className="accordion-header"
@@ -266,7 +264,6 @@ export function GraphFilterSidebar({
         </div>
       </div>
 
-      {/* FOOTER RESUMEN DE COMPONENTES DE GRAFO */}
       <div className="sidebar-stats-footer">
         <div className="stat-chip">
           <span className="stat-num">{totalNodes}</span>

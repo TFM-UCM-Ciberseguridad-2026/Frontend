@@ -28,7 +28,6 @@ import { useToast } from '../context/ToastContext';
 import { GetPatchQueueUseCase } from '../../domain/usecases/GetPatchQueueUseCase';
 import { RefreshPatchesForVulnerabilityUseCase } from '../../domain/usecases/RefreshPatchesForVulnerabilityUseCase';
 
-
 export function useInfrastructure() {
   const toast = useToast();
   const [showDashboard, setShowDashboard] = useState(false);
@@ -56,8 +55,9 @@ export function useInfrastructure() {
   const [pathsError, setPathsError] = useState(null);
   const [selectedExploitationPath, setSelectedExploitationPath] = useState(null);
 
-  // Estados riesgo
-  const [riskActionLoading, setRiskActionLoading] = useState(false);
+  // Estados independientes para el escaneo y el cálculo de riesgo
+  const [vulnScanLoading, setVulnScanLoading] = useState(false);
+  const [riskComputeLoading, setRiskComputeLoading] = useState(false);
   const [riskActionError, setRiskActionError] = useState(null);
 
   // Estados del modal de CVEs por Finding
@@ -72,7 +72,6 @@ export function useInfrastructure() {
   const [patchQueueCount, setPatchQueueCount] = useState(0);
   const [patchQueueLoading, setPatchQueueLoading] = useState(false);
   const [patchQueueError, setPatchQueueError] = useState(null);
-
 
   // Inyección de dependencias (Clean Architecture)
   const apiDataSource = useMemo(() => new InfrastructureApiDataSource(), []);
@@ -99,16 +98,13 @@ export function useInfrastructure() {
   const exportInventoryUseCase = useMemo(() => new ExportInventoryUseCase(repository), [repository]);
   const importInfrastructureUseCase = useMemo(() => new ImportInfrastructureUseCase(repository), [repository]);
 
-  // Casos de uso para cálculo de riesgo
   const scanInstallationVulnerabilitiesUseCase = useMemo(() => new ScanInstallationVulnerabilitiesUseCase(repository), [repository]);
   const getFindingVulnerabilitiesUseCase = useMemo(() => new GetFindingVulnerabilitiesUseCase(repository), [repository]);
   const computeProjectRiskUseCase = useMemo(() => new ComputeProjectRiskUseCase(repository), [repository]);
   const computeAllProjectRisksUseCase = useMemo(() => new ComputeAllProjectRisksUseCase(repository), [repository]);
 
-  // Use Cases para la cola de parches
   const getPatchQueueUseCase = useMemo(() => new GetPatchQueueUseCase(repository), [repository]);
   const refreshPatchesForVulnerabilityUseCase = useMemo(() => new RefreshPatchesForVulnerabilityUseCase(repository), [repository]);
-
 
   const showToast = (msg, type = 'info', title = null) => {
     toast.showToast(msg, type, title);
@@ -122,7 +118,7 @@ export function useInfrastructure() {
       setGraphData(data);
     } catch (err) {
       console.error(err);
-      const errorMsg = `No se pudo conectar a la base de datos de Neo4j. Verifica que el servidor de Backend (puerto 8080) y la base de datos de Neo4j estén activos. Detalles: ${err.message}`;
+      const errorMsg = `No se pudo conectar a la base de datos de Neo4j. Detalles: ${err.message}`;
       setError(errorMsg);
       toast.error(err.message, 'Error de Conexión');
     } finally {
@@ -182,12 +178,10 @@ export function useInfrastructure() {
     setSelectedExploitationPath(path);
 
     if (path && path.steps && path.steps.length > 0) {
-      // Buscar el último paso de la ruta
       const lastStep = path.steps[path.steps.length - 1];
       const targetFindingId = lastStep?.finding_id;
 
       if (targetFindingId && filteredGraphData?.nodes) {
-        // Encontrar el nodo del grupo de hallazgos que contiene el finding de la ruta
         const targetGroupNode = filteredGraphData.nodes.find(n =>
           String(n.id) === String(targetFindingId) ||
           (Array.isArray(n.properties?.findings) && n.properties.findings.some(f =>
@@ -207,7 +201,6 @@ export function useInfrastructure() {
     setSelectedExploitationPath(null);
   };
 
-
   const renameProject = async (projectId, newName) => {
     try {
       const res = await renameProjectUseCase.execute(projectId, newName);
@@ -224,16 +217,13 @@ export function useInfrastructure() {
     try {
       await deleteProjectUseCase.execute(projectId);
       showToast('¡Proyecto eliminado con éxito!');
-      // Refresh the graph data
       await fetchInfrastructure(true);
-      // If the deleted project is the currently active one, select another one if available
       if (String(projectId) === String(selectedProjectId)) {
         const remainingProjects = projects.filter(p => String(p.id) !== String(projectId));
         if (remainingProjects.length > 0) {
           setSelectedProjectId(remainingProjects[0].id);
         } else {
           setSelectedProjectId(null);
-          // If no projects remain, close the dashboard to show the welcome screen
           setShowDashboard(false);
         }
       }
@@ -318,7 +308,7 @@ export function useInfrastructure() {
   const createNetwork = async (data) => {
     try {
       const res = await createNetworkUseCase.execute(data, selectedProjectId);
-      toast.success('¡Red añadida correctamente! Los endpoints compatibles se han enlazado automáticamente.', 'Nueva Red');
+      toast.success('¡Red añadida correctamente!', 'Nueva Red');
       await fetchInfrastructure(true);
       return res;
     } catch (err) {
@@ -327,7 +317,6 @@ export function useInfrastructure() {
     }
   };
 
-  // CVEs de un Finding
   const fetchFindingVulnerabilities = async (findingNode) => {
     setShowFindingVulnsModal(true);
     setFindingVulnsLoading(true);
@@ -353,7 +342,7 @@ export function useInfrastructure() {
   const updateNode = async (category, id, data, selectedProjectId) => {
     try {
       const res = await updateNodeUseCase.execute(category, id, data, selectedProjectId);
-      toast.success('¡Activo actualizado y re-enlazado correctamente!', 'Edición Guardada');
+      toast.success('¡Activo actualizado!', 'Edición Guardada');
       await fetchInfrastructure(true);
       return res;
     } catch (err) {
@@ -365,23 +354,18 @@ export function useInfrastructure() {
   const deleteNode = async (category, id) => {
     try {
       const res = await deleteNodeUseCase.execute(category, id);
-      toast.success('¡El activo fue eliminado del grafo correctamente!', 'Activo Eliminado');
-
-      // Si tenemos un nodo seleccionado, lo limpiamos tras borrar para cerrar el Inspector (Punto 1 de Pablo)
+      toast.success('¡El activo fue eliminado del grafo!', 'Activo Eliminado');
       if (selectedNode) {
         setSelectedNode(null);
       }
-
       await fetchInfrastructure(true);
       return res;
     } catch (err) {
       toast.error(err.message, 'Error eliminando Activo');
       throw err;
     }
-
   };
 
-  // Funciones para la cola de parches
   const fetchPatchQueue = async (limit = 100) => {
     setPatchQueueLoading(true);
     setPatchQueueError(null);
@@ -399,8 +383,6 @@ export function useInfrastructure() {
     }
   };
 
-
-  // Refrescar parches para un CVE específico
   const refreshPatchesForCVE = async (cveId) => {
     try {
       await refreshPatchesForVulnerabilityUseCase.execute(cveId);
@@ -413,8 +395,6 @@ export function useInfrastructure() {
     }
   };
 
-
-  // Función para enfocar un item de la cola de parches en el grafo
   const focusPatchQueueItem = (item) => {
     const findingNode = (graphData?.nodes || []).find(n =>
       (n.primaryLabel === 'Finding' || n.labels?.includes('Finding')) &&
@@ -440,8 +420,6 @@ export function useInfrastructure() {
     return null;
   };
 
-
-  // Helper para desencadenar la descarga en el navegador
   const _triggerDownload = (filename, jsonText) => {
     const blob = new Blob([jsonText], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -457,8 +435,6 @@ export function useInfrastructure() {
   const exportProject = async (targetProjectId) => {
     try {
       showToast('Generando JSON en el servidor...', 'info');
-      // Ahora projectName podría venir del filteredGraphData o sacarlo del id.
-      // Buscamos el nombre para pasarlo al usecase (opcional)
       const projId = targetProjectId || selectedProjectId;
       const projectNode = graphData?.nodes?.find(
         n => (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
@@ -517,7 +493,6 @@ export function useInfrastructure() {
     try {
       let dataToImport = typeof fileData === 'string' ? JSON.parse(fileData) : JSON.parse(JSON.stringify(fileData));
 
-      // 1. Si el usuario seleccionó "Sobrescribir", eliminar el proyecto existente en Neo4j primero
       if (options.overwrite && options.targetProjectId) {
         try {
           await repository.deleteProject(options.targetProjectId);
@@ -526,7 +501,6 @@ export function useInfrastructure() {
         }
       }
 
-      // 2. Si el usuario seleccionó "Renombrar", actualizar el nombre y asignar nuevo ID único al proyecto en el JSON
       if (options.renameTo) {
         const newProjId = Date.now();
         if (dataToImport.project) {
@@ -581,32 +555,26 @@ export function useInfrastructure() {
         });
       }
 
-      // 3. Ejecutar caso de uso de importación
       await importInfrastructureUseCase.execute(dataToImport);
       showToast('¡Infraestructura cargada e importada con éxito!');
       await fetchInfrastructure(true);
 
-      // 4. Auto-seleccionar el proyecto importado
       try {
         const impProjectId = dataToImport?.project?.id || dataToImport?.nodes?.find(n => n.labels?.includes('Project') || n.primaryLabel === 'Project')?.properties?.id;
         if (impProjectId !== undefined && impProjectId !== null) {
           setSelectedProjectId(String(impProjectId));
         }
-      } catch (e) {
-        // Ignorar si no se puede extraer el ID del proyecto
-      }
+      } catch (e) {}
     } catch (err) {
       console.error(err);
       throw err;
     }
   };
 
-  // Cargar datos al montar el hook y al activar el Dashboard
   useEffect(() => {
     fetchInfrastructure();
   }, [showDashboard]);
 
-  // Derivar lista de proyectos disponibles
   const projects = useMemo(() => {
     return (graphData.nodes || []).filter(
       n => n.labels?.includes('Project') || n.primaryLabel === 'Project'
@@ -616,7 +584,6 @@ export function useInfrastructure() {
     }));
   }, [graphData]);
 
-  // Auto-seleccionar el primer proyecto cuando se carga la data
   useEffect(() => {
     if (projects.length > 0 && selectedProjectId === null) {
       setSelectedProjectId(projects[0].id);
@@ -626,8 +593,6 @@ export function useInfrastructure() {
     }
   }, [projects, selectedProjectId]);
 
-
-  // Limpiar selección visual al cambiar de proyecto
   useEffect(() => {
     setSelectedNode(null);
     setSelectedExploitationPath(null);
@@ -636,9 +601,7 @@ export function useInfrastructure() {
     setShowFindingVulnsModal(false);
   }, [selectedProjectId]);
 
-
-
-// Filtrar graphData según el proyecto seleccionado y agrupar hallazgos por SoftwareInstallation
+  // Filtrar graphData según el proyecto seleccionado y agrupar hallazgos por SoftwareInstallation
   const filteredGraphData = useMemo(() => {
     if (!selectedProjectId || !graphData.nodes || graphData.nodes.length === 0) {
       return graphData;
@@ -740,7 +703,6 @@ export function useInfrastructure() {
       }
     });
 
-    // 4. Instalaciones de Software dentro de los Contenedores del proyecto y ContainerImage
     const projectContainerImageIds = new Set();
     rels.forEach(rel => {
       const sourceIsCont = projectContainerIds.has(rel.source);
@@ -766,7 +728,6 @@ export function useInfrastructure() {
       }
     });
 
-    // Mapeo de SoftwareInstallation ID -> Lista de Nodos Finding
     const installationFindingsMap = new Map();
 
     rels.forEach(rel => {
@@ -797,7 +758,6 @@ export function useInfrastructure() {
       }
     });
 
-    // Crear nodos agrupados de Hallazgos por cada SoftwareInstallation
     const groupedFindingNodesMap = new Map();
     const groupedFindingNodeIds = new Set();
     const routeFindingNodes = new Map();
@@ -862,7 +822,6 @@ export function useInfrastructure() {
       return reachableIds.has(r.source) && reachableIds.has(r.target);
     });
 
-    // Añadir relaciones agrupadas SoftwareInstallation -> Grupo de Hallazgos
     groupedFindingNodesMap.forEach((groupedNode, instId) => {
       finalRelationships.push({
         id: `rel-group-${instId}`,
@@ -883,12 +842,10 @@ export function useInfrastructure() {
       return reachableIds.has(n.id);
     });
 
-    // Añadir los nodos agrupados de hallazgos
     groupedFindingNodesMap.forEach((groupedNode) => {
       finalNodes.push(groupedNode);
     });
 
-    // Asegurar aristas virtuales CONTAINS_NETWORK
     finalNodes.forEach(n => {
       if (n.primaryLabel === 'Network' || (n.labels && n.labels.includes('Network'))) {
         const hasProjectRel = finalRelationships.some(r =>
@@ -913,7 +870,6 @@ export function useInfrastructure() {
     };
   }, [graphData, selectedProjectId, selectedExploitationPath]);
 
-  // Sincronizar el nodo seleccionado cuando se actualice el grafo para reflejar ediciones al momento
   useEffect(() => {
     if (selectedNode && filteredGraphData.nodes) {
       const freshNode = filteredGraphData.nodes.find(n => n.id === selectedNode.id);
@@ -927,7 +883,6 @@ export function useInfrastructure() {
     return filteredGraphData.nodes.filter(n => n.labels.includes(type)).length;
   }, [filteredGraphData]);
 
- // Derivar lista de instalaciones de software para el proyecto seleccionado
   const getSelectedProjectSoftwareInstallations = useCallback(() => {
     const nodes = filteredGraphData.nodes || [];
     const relationships = filteredGraphData.relationships || [];
@@ -946,16 +901,12 @@ export function useInfrastructure() {
           (r.source === installationNode.id || r.target === installationNode.id)
         );
 
-        if (!rel) {
-          return null;
-        }
+        if (!rel) return null;
 
         const softwareElementId = rel.source === installationNode.id ? rel.target : rel.source;
         const softwareNode = softwareByElementId.get(softwareElementId);
 
-        if (!softwareNode) {
-          return null;
-        }
+        if (!softwareNode) return null;
 
         return {
           installationId: installationNode.properties?.id || installationNode.properties?.installation_id,
@@ -968,22 +919,22 @@ export function useInfrastructure() {
       .filter(item => item.installationId && item.softwareId);
   }, [filteredGraphData]);
 
-
-  // Función para analizar vulnerabilidades de todas las instalaciones de software del proyecto seleccionado
+  // FUNCIÓN 1: Analizar vulnerabilidades + CÁLCULO AUTOMÁTICO DE RIESGO
   const analyzeProjectVulnerabilities = async () => {
-    if (!selectedProjectId || riskActionLoading) return;
+    if (!selectedProjectId || vulnScanLoading || riskComputeLoading) return;
 
-    setRiskActionLoading(true);
+    setVulnScanLoading(true);
     setRiskActionError(null);
 
+    let successCount = 0;
     try {
       const installations = getSelectedProjectSoftwareInstallations();
       if (installations.length === 0) {
         toast.warning('No hay software instalado en el proyecto seleccionado.', 'Análisis de Vulnerabilidades');
+        setVulnScanLoading(false);
         return;
       }
 
-      let successCount = 0;
       const failedInstallations = [];
 
       for (const installation of installations) {
@@ -1016,17 +967,20 @@ export function useInfrastructure() {
       setRiskActionError(err.message);
       toast.error(`Error inesperado analizando vulnerabilidades: ${err.message}`, 'Falló el Análisis');
     } finally {
-      setRiskActionLoading(false);
+      setVulnScanLoading(false);
+    }
+
+    // SI EL ANÁLISIS FUE EXITOSO, ENCADENAR CÁLCULO DE RIESGO AUTOMÁTICO
+    if (successCount > 0) {
+      await computeSelectedProjectRisk();
     }
   };
 
-
-
-  // Función para calcular el riesgo del proyecto seleccionado
+  // FUNCIÓN 2: Solo calcular riesgo del proyecto
   const computeSelectedProjectRisk = async () => {
-    if (!selectedProjectId || riskActionLoading) return;
+    if (!selectedProjectId || riskComputeLoading) return;
 
-    setRiskActionLoading(true);
+    setRiskComputeLoading(true);
     setRiskActionError(null);
 
     try {
@@ -1038,14 +992,12 @@ export function useInfrastructure() {
       setRiskActionError(err.message);
       toast.error(`Error calculando riesgo: ${err.message}`, 'Cálculo de Riesgo');
     } finally {
-      setRiskActionLoading(false);
+      setRiskComputeLoading(false);
     }
   };
 
-
-  // Función para recalcular el riesgo de todos los proyectos
   const computeAllProjectRisks = async () => {
-    setRiskActionLoading(true);
+    setRiskComputeLoading(true);
     setRiskActionError(null);
 
     try {
@@ -1057,11 +1009,10 @@ export function useInfrastructure() {
       setRiskActionError(err.message);
       toast.error(`Error recalculando todos los proyectos: ${err.message}`, 'Cálculo Global de Riesgos');
     } finally {
-      setRiskActionLoading(false);
+      setRiskComputeLoading(false);
     }
   };
 
-  // Derivar el nodo del proyecto seleccionado para resaltar en el grafo
   const selectedProjectNode = useMemo(() => {
     return (graphData.nodes || []).find(n =>
       (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
@@ -1121,7 +1072,9 @@ export function useInfrastructure() {
     exportMitreNavigator,
     exportInventory,
     importProject,
-    riskActionLoading,
+    vulnScanLoading,
+    riskComputeLoading,
+    riskActionLoading: vulnScanLoading || riskComputeLoading,
     riskActionError,
     analyzeProjectVulnerabilities,
     computeSelectedProjectRisk,
