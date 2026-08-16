@@ -49,15 +49,17 @@ export class ExportInventoryUseCase {
     const categoryOrder = {
       'Project': 1,
       'Endpoint': 2,
-      'Network': 3,
+      'Container': 3,
       'Hardware': 4,
-      'SoftwareInstallation': 5,
-      'Software': 6,
-      'IPAddress': 7,
-      'Finding': 8,
-      'Vulnerability': 9,
-      'Remediation': 10,
-      'Patch': 11
+      'Network': 5,
+      'IPAddress': 6,
+      'SoftwareInstallation': 7,
+      'Software': 8,
+      'ContainerImage': 9,
+      'Finding': 10,
+      'Vulnerability': 11,
+      'Remediation': 12,
+      'Patch': 13
     };
 
     const sortedNodes = [...exportData.nodes].sort((a, b) => {
@@ -79,8 +81,8 @@ export class ExportInventoryUseCase {
       const name = n.name || p.name || p.nombre || p.hostname || p.title || p.cve_id || p.ip || String(n.id);
       
       let locationOrPath = p.ip_address || p.ip || p.path || p.cidr || p.subnet || 'N/A';
-      // Si es un Endpoint, mostrar sus IPs conectadas si las hay
-      if (cat === 'Endpoint' && endpointIpsMap[n.id] && endpointIpsMap[n.id].length > 0) {
+      // Si es un Endpoint o Container, mostrar sus IPs conectadas si las hay
+      if ((cat === 'Endpoint' || cat === 'Container') && endpointIpsMap[n.id] && endpointIpsMap[n.id].length > 0) {
         locationOrPath = endpointIpsMap[n.id].join(', ');
       }
 
@@ -115,15 +117,15 @@ export class ExportInventoryUseCase {
     const masterSheet = XLSX.utils.json_to_sheet(masterRows);
     XLSX.utils.book_append_sheet(wb, masterSheet, 'Inventario General');
 
-    // 2. HOJA: Endpoints y Hardware
+    // 2. HOJA: Endpoints, Hardware y Contenedores
     const endpointRows = sortedNodes
-      .filter(n => ['Endpoint', 'Hardware'].includes(n.primaryLabel || n.labels?.[0]))
+      .filter(n => ['Endpoint', 'Hardware', 'Container'].includes(n.primaryLabel || n.labels?.[0]))
       .map(n => {
         const p = n.properties || {};
-        const isEndpoint = (n.primaryLabel || n.labels?.[0]) === 'Endpoint';
+        const isEndpointOrContainer = ['Endpoint', 'Container'].includes(n.primaryLabel || n.labels?.[0]);
         
         let ipInfo = p.ip_address || p.ip || 'N/A';
-        if (isEndpoint && endpointIpsMap[n.id] && endpointIpsMap[n.id].length > 0) {
+        if (isEndpointOrContainer && endpointIpsMap[n.id] && endpointIpsMap[n.id].length > 0) {
           ipInfo = endpointIpsMap[n.id].join(', ');
         }
 
@@ -132,8 +134,8 @@ export class ExportInventoryUseCase {
           'Categoría': n.primaryLabel || n.labels?.[0],
           'Nombre / Hostname': p.hostname || p.name || n.name,
           'Dirección IP': ipInfo,
-          'Sistema Operativo': p.os || p.operating_system || 'N/A',
-          'Estado': p.status || 'Activo',
+          'Sistema Operativo / Imagen': p.os || p.operating_system || p.image_id || 'N/A',
+          'Estado': p.status || p.state || 'Activo',
           'Hardware / Especificaciones': p.cpu || p.ram || p.specs || 'N/A',
           'Descripción': p.description || ''
         };
@@ -141,7 +143,7 @@ export class ExportInventoryUseCase {
 
     if (endpointRows.length > 0) {
       const epSheet = XLSX.utils.json_to_sheet(endpointRows);
-      XLSX.utils.book_append_sheet(wb, epSheet, 'Endpoints y Hardware');
+      XLSX.utils.book_append_sheet(wb, epSheet, 'Endpoints y Contenedores');
     }
 
     // 3. HOJA: Redes e IPs

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HudHeader } from '../components/HudHeader/HudHeader';
 import { TopAptsModal } from '../components/TopApts/TopAptsModal';
 import { ExploitationPathsModal } from '../components/ExploitationPaths/ExploitationPathsModal';
@@ -9,6 +9,8 @@ import { NetworksPage } from './NetworksPage';
 import { TtpsPage } from './TtpsPage';
 import { ExportModal } from '../components/Archive/ExportModal';
 import { ImportModal } from '../components/Archive/ImportModal';
+import { PatchQueuePage } from './PatchQueuePage';
+
 
 export function DashboardPage({
   setShowDashboard,
@@ -45,11 +47,15 @@ export function DashboardPage({
   selectedProjectId,
   setSelectedProjectId,
   createEndpoint,
+  createContainer,
   createHardware,
   createSoftware,
+  createContainerSoftware,
   createNetwork,
   updateNode,
   deleteNode,
+  renameProject,
+  deleteProject,
   exportProject,
   exportMitreNavigator,
   exportInventory,
@@ -66,16 +72,31 @@ export function DashboardPage({
   findingVulnsData,
   findingVulnsLoading,
   findingVulnsError,
-  findingVulnsSourceNode
+  findingVulnsSourceNode,
+  // Patch Queue
+  patchQueue,
+  patchQueueCount,
+  patchQueueLoading,
+  patchQueueError,
+  fetchPatchQueue,
+  refreshPatchesForCVE,
+  focusPatchQueueItem
 }) {
   const [activeNav, setActiveNav] = useState('grafo'); // 'grafo', 'inventario', 'redes'
   const [showExportModal, setShowExportModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
 
+  useEffect(() => {
+    setShowExportModal(false);
+    setShowImportModal(false);
+  }, [selectedProjectId]);
+
   const categories = [
     { key: 'ALL', label: 'Todos', color: '#7973FF' },
     { key: 'Network', label: 'Red / Subred', color: '#7973FF' },
     { key: 'Endpoint', label: 'Endpoint', color: '#FFFFFF' },
+    { key: 'Container', label: 'Contenedor', color: '#00D1FF' },
+    { key: 'ContainerImage', label: 'Imagen Contenedor', color: '#00A3FF' },
     { key: 'Hardware', label: 'Hardware', color: '#A5A5FF' },
     { key: 'Project', label: 'Proyecto', color: '#4D3BFF' },
     { key: 'SoftwareInstallation', label: 'Instalación', color: '#3813FF' },
@@ -107,6 +128,8 @@ export function DashboardPage({
         onOpenExport={() => setShowExportModal(true)}
         onOpenImport={() => setShowImportModal(true)}
         selectedProjectNode={selectedProjectNode}
+        renameProject={renameProject}
+        deleteProject={deleteProject}
       />
 
       <div className="app">
@@ -132,11 +155,16 @@ export function DashboardPage({
             endpoints={endpoints}
             showToast={showToast}
             createEndpoint={createEndpoint}
+            createContainer={createContainer}
             createHardware={createHardware}
             createSoftware={createSoftware}
+            createContainerSoftware={createContainerSoftware}
+            createNetwork={createNetwork}
             createNetwork={createNetwork}
             updateNode={updateNode}
             deleteNode={deleteNode}
+            renameProject={renameProject}
+            deleteProject={deleteProject}
             riskActionLoading={riskActionLoading}
             analyzeProjectVulnerabilities={analyzeProjectVulnerabilities}
             computeSelectedProjectRisk={computeSelectedProjectRisk}
@@ -148,6 +176,20 @@ export function DashboardPage({
           <InventoryPage
             graphData={graphData}
             categories={categories}
+          />
+        )}
+
+        {activeNav === 'patch-queue' && (
+          <PatchQueuePage
+            selectedProjectId={selectedProjectId}
+            patchQueue={patchQueue}
+            patchQueueCount={patchQueueCount}
+            patchQueueLoading={patchQueueLoading}
+            patchQueueError={patchQueueError}
+            fetchPatchQueue={fetchPatchQueue}
+            refreshPatchesForCVE={refreshPatchesForCVE}
+            focusPatchQueueItem={focusPatchQueueItem}
+            setActiveNav={setActiveNav}
           />
         )}
 

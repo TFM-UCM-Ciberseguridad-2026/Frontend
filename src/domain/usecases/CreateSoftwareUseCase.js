@@ -11,7 +11,13 @@ export class CreateSoftwareUseCase {
       throw new Error('El nombre del software es obligatorio.');
     }
 
-    const { install_path, status, release_date, ...softwareFields } = softwareFormData;
+    const {
+      install_path,
+      status,
+      criticality_level,
+      release_date,
+      ...softwareFields
+    } = softwareFormData;
 
     const softwarePayload = { ...softwareFields };
     if (release_date) {
@@ -22,7 +28,8 @@ export class CreateSoftwareUseCase {
       software: softwarePayload,
       installation: {
         install_path,
-        status
+        status,
+        criticality_level: criticality_level || 'STANDARD'
       }
     };
 

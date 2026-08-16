@@ -65,7 +65,7 @@ export function RiskSummary({ node }) {
           <RiskScoreGauge score={props.risk_score} tier={props.risk_tier} label="RISK" />
           <RiskScoreGauge score={props.priority_score} tier={props.priority_tier} label="PRIORITY" />
         </div>
-        <RiskFact label="Criticality" value={props.criticality_level} />
+        <RiskFact label="Software criticality" value={props.criticality_level || 'STANDARD'} />
         <RiskFact label="Driver CVE" value={props.driver_cve_id} />
       </section>
     );

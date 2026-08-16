@@ -3,6 +3,7 @@ import { RiskSummary } from '../Risk/RiskSummary';
 import { EditNodeModal } from './EditNodeModal';
 import { RiskScoreGauge } from '../Risk/RiskScoreGauge';
 import { toPercent } from '../Risk/riskFormat';
+import { RenameProjectModal, DeleteProjectModal } from '../HudHeader/ProjectActionModals';
 import './NodeInspector.css';
 
 const getRiskBadgeClass = (score, tier) => {
@@ -20,9 +21,13 @@ export function NodeInspector({
   updateNode,
   deleteNode,
   fetchFindingVulnerabilities,
-  selectedExploitationPath
+  selectedExploitationPath,
+  renameProject,
+  deleteProject
 }) {
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showRenameProjectModal, setShowRenameProjectModal] = useState(false);
+  const [showDeleteProjectModal, setShowDeleteProjectModal] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [expandedFindingId, setExpandedFindingId] = useState(null);
 
@@ -117,10 +122,13 @@ export function NodeInspector({
   }
 
   const categoryLabel = selectedNode.primaryLabel || selectedNode.labels?.[0] || 'Unknown';
-  const nodeName = selectedNode.name || selectedNode.properties?.title || 'Sin Nombre';
-  const isManageableAsset = ['Endpoint', 'Network', 'Hardware'].includes(categoryLabel);
+  const nodeName = selectedNode.name || selectedNode.properties?.title || selectedNode.properties?.nombre || 'Sin Nombre';
+  const isManageableAsset = ['Endpoint', 'Network', 'Hardware', 'Container'].includes(categoryLabel);
   const canEdit = isManageableAsset && typeof updateNode === 'function';
   const canDelete = isManageableAsset && typeof deleteNode === 'function';
+  const isProject = categoryLabel === 'Project';
+  const canEditProject = isProject && typeof renameProject === 'function';
+  const canDeleteProject = isProject && typeof deleteProject === 'function';
   const isFindingGroup = sortedFindings.length > 0;
 
   const toggleFinding = (id) => {
@@ -136,7 +144,7 @@ export function NodeInspector({
         <h2 className="node-title">{nodeName}</h2>
 
         {/* ACCIONES DE GESTIÓN DE NODO */}
-        {(canDelete || canEdit) && (
+        {(canDelete || canEdit || canEditProject || canDeleteProject) && (
           <div className="node-actions-group">
             {canEdit && (
               <button
@@ -145,6 +153,17 @@ export function NodeInspector({
                 onClick={() => setShowEditModal(true)}
               >
                 ✏️ Editar Activo
+              </button>
+            )}
+
+            {canEditProject && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-node-action"
+                onClick={() => setShowRenameProjectModal(true)}
+                title="Renombrar este proyecto"
+              >
+                ✏️ Renombrar
               </button>
             )}
 
@@ -184,6 +203,17 @@ export function NodeInspector({
                   </div>
                 </div>
               )
+            )}
+
+            {canDeleteProject && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-node-action btn-node-delete"
+                onClick={() => setShowDeleteProjectModal(true)}
+                title="Eliminar este proyecto"
+              >
+                🗑️ Eliminar
+              </button>
             )}
           </div>
         )}
@@ -311,6 +341,25 @@ export function NodeInspector({
           updateNode={updateNode}
         />
       )}
+
+      <RenameProjectModal
+        isOpen={showRenameProjectModal}
+        onClose={() => setShowRenameProjectModal(false)}
+        project={{
+          id: selectedNode.properties?.id ?? selectedNode.id,
+          name: selectedNode.name || selectedNode.properties?.nombre
+        }}
+        onRename={renameProject}
+      />
+      <DeleteProjectModal
+        isOpen={showDeleteProjectModal}
+        onClose={() => setShowDeleteProjectModal(false)}
+        project={{
+          id: selectedNode.properties?.id ?? selectedNode.id,
+          name: selectedNode.name || selectedNode.properties?.nombre
+        }}
+        onDelete={deleteProject}
+      />
     </aside>
   );
 }

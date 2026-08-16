@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './LandingPage.css';
 import { ImportModal } from '../components/Archive/ImportModal';
+import { RenameProjectModal, DeleteProjectModal } from '../components/HudHeader/ProjectActionModals';
 
 const REPO_URL = 'https://github.com/TFM-UCM-Ciberseguridad-2026/Orquestador';
 
@@ -13,9 +14,14 @@ export function LandingPage({
   setSelectedProjectId,
   createProject,
   importProject,
-  fetchInfrastructure
+  fetchInfrastructure,
+  renameProject,
+  deleteProject
 }) {
   const [activeModal, setActiveModal] = useState(null); // 'projects', 'create', 'import'
+  const [actionProject, setActionProject] = useState(null);
+  const [showRenameModal, setShowRenameModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // Formulario crear proyecto
   const [cName, setCName] = useState('');
@@ -200,12 +206,40 @@ export function LandingPage({
                         ID: #{p.id}
                       </div>
                     </div>
-                    <button
-                      className="hud-btn-mini"
-                      onClick={() => handleSelectProject(p.id)}
-                    >
-                      Abrir proyecto
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <button
+                        className="hud-action-icon"
+                        onClick={() => {
+                          setActionProject(p);
+                          setShowRenameModal(true);
+                        }}
+                        title="Renombrar Proyecto"
+                        style={{ background: '#2c2c35', border: '1px solid #444', color: '#fff', cursor: 'pointer', padding: '6px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                        </svg>
+                      </button>
+                      <button
+                        className="hud-action-icon"
+                        onClick={() => {
+                          setActionProject(p);
+                          setShowDeleteModal(true);
+                        }}
+                        title="Eliminar Proyecto"
+                        style={{ background: '#352c2c', border: '1px solid #5a2c2c', color: '#ff6b6b', cursor: 'pointer', padding: '6px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                        </svg>
+                      </button>
+                      <button
+                        className="hud-btn-mini"
+                        onClick={() => handleSelectProject(p.id)}
+                      >
+                        Abrir proyecto
+                      </button>
+                    </div>
                   </div>
                 ))
               )}
@@ -288,6 +322,31 @@ export function LandingPage({
           }
         }}
       />
+      {/* MODALES DE ACCIÓN SOBRE PROYECTO (Reutilizados del Header) */}
+      <RenameProjectModal
+        isOpen={showRenameModal}
+        onClose={() => setShowRenameModal(false)}
+        project={actionProject}
+        onRename={async (id, newName) => {
+          if (renameProject) {
+            await renameProject(id, newName);
+            // Optionally close the projects modal or keep it open so they see the change
+            // setActiveModal(null); 
+          }
+        }}
+      />
+      
+      <DeleteProjectModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        project={actionProject}
+        onDelete={async (id) => {
+          if (deleteProject) {
+            await deleteProject(id);
+          }
+        }}
+      />
+
     </div>
   );
 }

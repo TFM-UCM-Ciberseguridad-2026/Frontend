@@ -28,6 +28,7 @@ const getLayerY = (categoryId) => {
     case 'red': return -140;
     case 'endpoint':
     case 'hardware': return -40;
+    case 'container': return 10;
     case 'instalacion': return 60;
     case 'software': return 160;
     case 'hallazgo': return 240;
@@ -49,6 +50,7 @@ const getNodeColor = (categoryId) => {
     case 'vulnerabilidad': return '#ef4444';
     case 'remediacion': return '#2701D6';
     case 'parche': return '#2103A9';
+    case 'container': return '#0db7ed';
     default: return '#A5A5FF';
   }
 };
@@ -56,7 +58,9 @@ const getNodeColor = (categoryId) => {
 const getNodeRadius = (categoryId) => {
   switch (categoryId) {
     case 'proyecto': return 32;
+    case 'proyecto': return 32;
     case 'endpoint': return 26;
+    case 'container': return 22;
     default: return 20;
   }
 };
@@ -775,7 +779,6 @@ export function NetworkGraph({
 
         while (queue.length > 0) {
           const [curr, pathInfo] = queue.shift();
-          if (pathInfo.length > 3) break;
 
           if (curr === tgtId) {
             pathRels = pathInfo.map(p => p.relId);
