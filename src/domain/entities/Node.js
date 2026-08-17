@@ -68,8 +68,12 @@ export class Node {
         return `HW: ${props.cpu_cores}C/${props.ram_gb}G`;
       case 'Container':
         return props.name || `Container #${props.id}`;
-      case 'ContainerImage':
-        return props.name ? `${props.name}:${props.tag || 'latest'}` : `Image #${props.id}`;
+      case 'ContainerImage': {
+          if (!props.name) return `Image #${props.id}`;
+          // Si el name ya lleva tag (contiene ':'), usarlo tal cual para no duplicar como "httpd:2.4.49:latest"
+          if (props.name.includes(':')) return props.name;
+          return props.tag ? `${props.name}:${props.tag}` : props.name;
+        }
       case 'Software':
         return `${props.name || 'Software'} v${props.version || ''}`;
       case 'SoftwareInstallation':

@@ -79,6 +79,7 @@ export function EditNodeModal({ node, onClose, updateNode }) {
         state: props.state || 'running',
         image_id: props.image_id || '',
         internet_exposed: Boolean(props.internet_exposed),
+        privileged: Boolean(props.privileged),
         ips: initialIps
       });
     } else if (label === 'Network') {
@@ -375,6 +376,18 @@ export function EditNodeModal({ node, onClose, updateNode }) {
                   />
                   <label htmlFor="edit_cont_internet" className="asset-field-label asset-checkbox-label">
                     Expuesto a Internet
+                  </label>
+                </div>
+
+                <div className="asset-checkbox-row" style={{marginBottom: '1rem'}}>
+                  <input
+                    type="checkbox"
+                    id="edit_cont_privileged"
+                    checked={formData.privileged || false}
+                    onChange={(e) => updateField('privileged', e.target.checked)}
+                  />
+                  <label htmlFor="edit_cont_privileged" className="asset-field-label asset-checkbox-label" title="Si el contenedor corre en modo Privilegiado, las vulnerabilidades locales (LPE) podrán escapar al host">
+                    Ejecución en modo Privilegiado (Privileged)
                   </label>
                 </div>
 

@@ -29,6 +29,7 @@ const INITIAL_FORMS = {
     state: 'running',
     risk_score: 0,
     internet_exposed: false,
+    privileged: false,
     ips: []
   },
   hardware: {
@@ -513,6 +514,18 @@ export function AddAssetButton({
                 />
                 <label htmlFor="cont_internet" className="asset-field-label asset-checkbox-label">
                   Expuesto a Internet
+                </label>
+              </div>
+
+              <div className="asset-checkbox-row" style={{marginBottom: '1rem'}}>
+                <input
+                  type="checkbox"
+                  id="cont_privileged"
+                  checked={forms.container.privileged}
+                  onChange={(e) => updateField('container', 'privileged', e.target.checked)}
+                />
+                <label htmlFor="cont_privileged" className="asset-field-label asset-checkbox-label" title="Si el contenedor corre en modo Privilegiado, las vulnerabilidades locales (LPE) podrán escapar al host">
+                  Ejecución en modo Privilegiado (Privileged)
                 </label>
               </div>
 
