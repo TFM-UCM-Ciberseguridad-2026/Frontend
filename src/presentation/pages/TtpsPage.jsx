@@ -286,16 +286,10 @@ export function TtpsPage({ graphData, showToast, fetchInfrastructure }) {
               <span className="spinner-text">Procesando TTPs de vulnerabilidades en segundo plano...</span>
             </div>
             
+            {/* NOTA PARA FUSIÓN CON lucas_dev: Este cambio en progress-container elimina los contadores X/Y por simplificación de cola continua */}
             <div className="progress-container">
-              <div className="progress-labels">
-                <span>Progreso de Inferencia</span>
-                <span>{syncStatus.processed_cves} / {syncStatus.total_cves} CVEs</span>
-              </div>
               <div className="progress-bar-bg">
-                <div 
-                  className="progress-bar-fill" 
-                  style={{ width: `${syncStatus.total_cves > 0 ? (syncStatus.processed_cves / syncStatus.total_cves) * 100 : 0}%` }}
-                ></div>
+                <div className="progress-bar-fill-indeterminate"></div>
               </div>
               {syncStatus.current_cve && (
                 <div className="current-cve-status">

@@ -931,6 +931,24 @@ main.ttps {
   transition: width 0.4s ease-out;
 }
 
+.ttps .progress-bar-fill-indeterminate {
+  height: 100%;
+  width: 50%;
+  background: linear-gradient(90deg, var(--c500) 0%, var(--c400) 100%);
+  box-shadow: 0 0 12px var(--c400);
+  border-radius: 6px;
+  animation: progress-indeterminate 1.5s infinite linear;
+}
+
+@keyframes progress-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(200%);
+  }
+}
+
 .ttps .current-cve-status {
   font-size: 13px;
   color: var(--c400);
