@@ -358,7 +358,7 @@ export function EditNodeModal({ node, onClose, updateNode }) {
                 </div>
 
                 <div>
-                  <div className="asset-field-label">ID / Nombre de la Imagen</div>
+                  <div className="asset-field-label">Nombre de la Imagen</div>
                   <input
                     type="text"
                     className="asset-input"

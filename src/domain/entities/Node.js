@@ -65,7 +65,10 @@ export class Node {
         if (!hostname) hostname = `Endpoint #${props.id}`;
         return hostname;
       case 'Hardware':
-        return `HW: ${props.cpu_cores}C/${props.ram_gb}G`;
+        const cpu = props.cpu_cores ? `${props.cpu_cores}C/` : '';
+        const ram = props.ram_gb ? `${props.ram_gb}G` : '';
+        if (cpu || ram) return `HW: ${cpu}${ram}`;
+        return `${props.manufacturer || ''} ${props.model || ''}`.trim() || `Hardware #${props.id}`;
       case 'Container':
         return props.name || `Container #${props.id}`;
       case 'ContainerImage': {
@@ -77,11 +80,12 @@ export class Node {
       case 'Software':
         return `${props.name || 'Software'} v${props.version || ''}`;
       case 'SoftwareInstallation':
-        // FIX: antes leía props.path (clave inexistente); la clave real es
-        // "install_path" (json:"install_path" en el struct Go)
+        if (props.software_name) {
+          return `${props.software_name} (${props.install_path || 'Inst'})`;
+        }
         return props.install_path || `Inst: #${props.installation_id || props.id}`;
       case 'Finding':
-        return props.title || `Finding #${props.id}`;
+        return `Finding #${props.id}`;
       case 'Vulnerability':
         return props.cve_id || `Vuln #${props.id}`;
       case 'Remediation':
@@ -92,8 +96,6 @@ export class Node {
         return `${props.id || ''}: ${props.name || ''}`;
       case 'ThreatActor':
         return props.name || `Actor #${props.id}`;
-      case 'Hardware':
-        return `${props.manufacturer || ''} ${props.model || ''}`.trim() || `Hardware #${props.id}`;
       default:
         return `${label} (${props.id || 'N/A'})`;
     }

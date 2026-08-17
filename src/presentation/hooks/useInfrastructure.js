@@ -620,6 +620,20 @@ export function useInfrastructure() {
     const rels = graphData.relationships || [];
     const nodeMap = new Map(graphData.nodes.map(n => [n.id, n]));
 
+    // Inject software name into SoftwareInstallation nodes
+    rels.forEach(rel => {
+      if (rel.type === 'INSTANCE_OF') {
+        const sourceNode = nodeMap.get(rel.source);
+        const targetNode = nodeMap.get(rel.target);
+        if (sourceNode && targetNode && 
+           (sourceNode.primaryLabel === 'SoftwareInstallation' || sourceNode.labels?.includes('SoftwareInstallation')) && 
+           (targetNode.primaryLabel === 'Software' || targetNode.labels?.includes('Software'))) {
+          if (!sourceNode.properties) sourceNode.properties = {};
+          sourceNode.properties.software_name = targetNode.properties?.name || targetNode.name;
+        }
+      }
+    });
+
     const routeFindingKeys = new Set();
 
     (selectedExploitationPath?.steps || []).forEach(step => {
