@@ -76,7 +76,15 @@ export function DashboardPage({
   patchQueueError,
   fetchPatchQueue,
   refreshPatchesForCVE,
-  focusPatchQueueItem
+  focusPatchQueueItem,
+  patchApplyLoading,
+  patchApplyError,
+  declarePatchApplied,
+  patchApplyingKey,
+  patchesByCVE,
+  patchDetailsLoading,
+  patchDetailsError,
+  fetchPatchesForCVE
 }) {
   const [activeNav, setActiveNav] = useState('grafo');
   const [showExportModal, setShowExportModal] = useState(false);
@@ -185,6 +193,14 @@ export function DashboardPage({
             fetchPatchQueue={fetchPatchQueue}
             refreshPatchesForCVE={refreshPatchesForCVE}
             focusPatchQueueItem={focusPatchQueueItem}
+            patchApplyLoading={patchApplyLoading}
+            patchApplyError={patchApplyError}
+            declarePatchApplied={declarePatchApplied}
+            patchApplyingKey={patchApplyingKey}
+            patchesByCVE={patchesByCVE}
+            patchDetailsLoading={patchDetailsLoading}
+            patchDetailsError={patchDetailsError}
+            fetchPatchesForCVE={fetchPatchesForCVE}
             setActiveNav={setActiveNav}
           />
         )}

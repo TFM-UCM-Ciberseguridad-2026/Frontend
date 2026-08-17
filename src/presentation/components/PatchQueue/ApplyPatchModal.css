@@ -1,0 +1,240 @@
+.apply-patch-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: rgba(2, 4, 24, 0.78);
+  backdrop-filter: blur(10px);
+}
+
+.apply-patch-modal {
+  width: min(860px, 96vw);
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(121, 115, 255, 0.45);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top left, rgba(77, 59, 255, 0.18), transparent 38%),
+    rgba(8, 10, 35, 0.96);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.03),
+    0 24px 80px rgba(0, 0, 0, 0.65),
+    0 0 28px rgba(77, 59, 255, 0.28);
+}
+
+.apply-patch-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.apply-patch-modal-header h2 {
+  margin: 0.2rem 0 0.45rem;
+  color: var(--c50);
+  font-size: 1.35rem;
+  letter-spacing: 0.04em;
+}
+
+.apply-patch-cve {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.55rem;
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  border-radius: 999px;
+  background: rgba(239, 68, 68, 0.12);
+  color: #fca5a5;
+  font-family: "Share Tech Mono", monospace;
+  font-size: 0.8rem;
+}
+
+.apply-patch-close {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--c100);
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.apply-patch-close:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.apply-patch-modal-body {
+  overflow-y: auto;
+  padding: 1.2rem 1.5rem;
+}
+
+.apply-patch-section {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border: 1px solid rgba(121, 115, 255, 0.18);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.apply-patch-section h3 {
+  margin: 0 0 0.85rem;
+  color: var(--c100);
+  font-size: 0.9rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.apply-patch-context-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.apply-patch-field {
+  min-width: 0;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.apply-patch-label {
+  display: block;
+  margin-bottom: 0.3rem;
+  color: var(--c400);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.apply-patch-value {
+  display: block;
+  overflow: hidden;
+  color: var(--c50);
+  font-family: "Share Tech Mono", monospace;
+  font-size: 0.86rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.apply-patch-help {
+  margin: 0.85rem 0 0;
+  color: var(--c300);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.apply-patch-recommendation {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-top: 0.85rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid rgba(121, 115, 255, 0.28);
+  border-radius: 12px;
+  background: rgba(77, 59, 255, 0.09);
+}
+
+.apply-patch-recommendation strong {
+  color: var(--c50);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.apply-patch-recommendation a {
+  width: fit-content;
+  color: var(--c200);
+  font-size: 0.78rem;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(121, 115, 255, 0.45);
+}
+
+.apply-patch-recommendation a:hover {
+  color: var(--c50);
+}
+
+.apply-patch-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 0.85rem;
+}
+
+.apply-patch-form-field span {
+  color: var(--c100);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.apply-patch-form-field small {
+  color: var(--c400);
+  font-size: 0.72rem;
+}
+
+.apply-patch-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(121, 115, 255, 0.35);
+  border-radius: 10px;
+  background: rgba(4, 6, 24, 0.88);
+  color: var(--c50);
+  padding: 0.7rem 0.8rem;
+  outline: none;
+}
+
+.apply-patch-input:focus {
+  border-color: var(--c300);
+  box-shadow: 0 0 0 3px rgba(121, 115, 255, 0.14);
+}
+
+.apply-patch-input:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.apply-patch-textarea {
+  resize: vertical;
+  min-height: 96px;
+}
+
+.apply-patch-error {
+  padding: 0.75rem 0.9rem;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 10px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #fca5a5;
+  font-size: 0.82rem;
+}
+
+.apply-patch-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.16);
+}
+
+@media (max-width: 720px) {
+  .apply-patch-modal-backdrop {
+    padding: 1rem;
+  }
+
+  .apply-patch-context-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .apply-patch-actions {
+    flex-direction: column-reverse;
+  }
+}

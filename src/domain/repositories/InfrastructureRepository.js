@@ -65,6 +65,22 @@ export class InfrastructureRepository {
     throw new Error('Method computeAllProjectRisks not implemented');
   }
 
+  async getPatchQueue(projectId, limit) {
+    throw new Error('Method getPatchQueue not implemented');
+  }
+
+  async refreshPatchesForVulnerability(cveId) {
+    throw new Error('Method refreshPatchesForVulnerability not implemented');
+  }
+
+  async getPatchesForVulnerability(cveId) {
+    throw new Error('Method getPatchesForVulnerability not implemented');
+  }
+
+  async declarePatchApplied(installationId, payload) {
+    throw new Error('Method declarePatchApplied not implemented');
+  }
+
   async updateEndpoint(id, payload) { throw new Error('Not implemented'); }
   async deleteEndpoint(id) { throw new Error('Not implemented'); }
   async updateNetwork(id, payload) { throw new Error('Not implemented'); }
@@ -78,4 +94,3 @@ export class InfrastructureRepository {
   async deleteNode(id) { throw new Error('Not implemented'); }
   async exportProject(id) { throw new Error('Not implemented'); }
 }
-

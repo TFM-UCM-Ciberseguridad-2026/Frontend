@@ -102,6 +102,10 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     return await this.apiDataSource.refreshPatchesForVulnerability(cveId);
   }
 
+  async getPatchesForVulnerability(cveId) {
+    return await this.apiDataSource.fetchPatchesForVulnerability(cveId);
+  }
+
   async declarePatchApplied(installationId, payload) {
     return await this.apiDataSource.declarePatchApplied(installationId, payload);
   }
@@ -122,4 +126,3 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
   async getEndpointIPs(id) { return await this.apiDataSource.getEndpointIPs(id); }
   async exportProject(id) { return await this.apiDataSource.exportProject(id); }
 }
-
