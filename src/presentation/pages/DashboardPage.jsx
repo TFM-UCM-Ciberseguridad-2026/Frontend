@@ -11,7 +11,6 @@ import { ExportModal } from '../components/Archive/ExportModal';
 import { ImportModal } from '../components/Archive/ImportModal';
 import { PatchQueuePage } from './PatchQueuePage';
 
-
 export function DashboardPage({
   setShowDashboard,
   graphData,
@@ -32,7 +31,6 @@ export function DashboardPage({
   fetchInfrastructure,
   handleReset,
   fetchTopAPTs,
-  // Rutas de explotación
   showPathsModal,
   setShowPathsModal,
   exploitationPaths,
@@ -60,12 +58,11 @@ export function DashboardPage({
   exportMitreNavigator,
   exportInventory,
   importProject,
-  // Risk Analysis
-  riskActionLoading,
+  vulnScanLoading,
+  riskComputeLoading,
   analyzeProjectVulnerabilities,
   computeSelectedProjectRisk,
   selectedProjectNode,
-  // CVEs de un Finding
   fetchFindingVulnerabilities,
   closeFindingVulnsModal,
   showFindingVulnsModal,
@@ -73,7 +70,6 @@ export function DashboardPage({
   findingVulnsLoading,
   findingVulnsError,
   findingVulnsSourceNode,
-  // Patch Queue
   patchQueue,
   patchQueueCount,
   patchQueueLoading,
@@ -82,7 +78,7 @@ export function DashboardPage({
   refreshPatchesForCVE,
   focusPatchQueueItem
 }) {
-  const [activeNav, setActiveNav] = useState('grafo'); // 'grafo', 'inventario', 'redes'
+  const [activeNav, setActiveNav] = useState('grafo');
   const [showExportModal, setShowExportModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
 
@@ -160,12 +156,12 @@ export function DashboardPage({
             createSoftware={createSoftware}
             createContainerSoftware={createContainerSoftware}
             createNetwork={createNetwork}
-            createNetwork={createNetwork}
             updateNode={updateNode}
             deleteNode={deleteNode}
             renameProject={renameProject}
             deleteProject={deleteProject}
-            riskActionLoading={riskActionLoading}
+            vulnScanLoading={vulnScanLoading}
+            riskComputeLoading={riskComputeLoading}
             analyzeProjectVulnerabilities={analyzeProjectVulnerabilities}
             computeSelectedProjectRisk={computeSelectedProjectRisk}
             fetchFindingVulnerabilities={fetchFindingVulnerabilities}
