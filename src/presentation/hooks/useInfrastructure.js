@@ -20,6 +20,7 @@ import { ScanInstallationVulnerabilitiesUseCase } from '../../domain/usecases/Sc
 import { GetFindingVulnerabilitiesUseCase } from '../../domain/usecases/GetFindingVulnerabilitiesUseCase';
 import { ComputeProjectRiskUseCase } from '../../domain/usecases/ComputeProjectRiskUseCase';
 import { ComputeAllProjectRisksUseCase } from '../../domain/usecases/ComputeAllProjectRisksUseCase';
+import { ScanContainerImageVulnerabilitiesUseCase } from '../../domain/usecases/ScanContainerImageVulnerabilitiesUseCase';
 import { RenameProjectUseCase } from '../../domain/usecases/RenameProjectUseCase';
 import { DeleteProjectUseCase } from '../../domain/usecases/DeleteProjectUseCase';
 import { UpdateNodeUseCase } from '../../domain/usecases/UpdateNodeUseCase';
@@ -27,7 +28,6 @@ import { DeleteNodeUseCase } from '../../domain/usecases/DeleteNodeUseCase';
 import { useToast } from '../context/ToastContext';
 import { GetPatchQueueUseCase } from '../../domain/usecases/GetPatchQueueUseCase';
 import { RefreshPatchesForVulnerabilityUseCase } from '../../domain/usecases/RefreshPatchesForVulnerabilityUseCase';
-
 
 export function useInfrastructure() {
   const toast = useToast();
@@ -56,8 +56,9 @@ export function useInfrastructure() {
   const [pathsError, setPathsError] = useState(null);
   const [selectedExploitationPath, setSelectedExploitationPath] = useState(null);
 
-  // Estados riesgo
-  const [riskActionLoading, setRiskActionLoading] = useState(false);
+  // Estados independientes para el escaneo y el cálculo de riesgo
+  const [vulnScanLoading, setVulnScanLoading] = useState(false);
+  const [riskComputeLoading, setRiskComputeLoading] = useState(false);
   const [riskActionError, setRiskActionError] = useState(null);
 
   // Estados del modal de CVEs por Finding
@@ -72,7 +73,6 @@ export function useInfrastructure() {
   const [patchQueueCount, setPatchQueueCount] = useState(0);
   const [patchQueueLoading, setPatchQueueLoading] = useState(false);
   const [patchQueueError, setPatchQueueError] = useState(null);
-
 
   // Inyección de dependencias (Clean Architecture)
   const apiDataSource = useMemo(() => new InfrastructureApiDataSource(), []);
@@ -99,16 +99,14 @@ export function useInfrastructure() {
   const exportInventoryUseCase = useMemo(() => new ExportInventoryUseCase(repository), [repository]);
   const importInfrastructureUseCase = useMemo(() => new ImportInfrastructureUseCase(repository), [repository]);
 
-  // Casos de uso para cálculo de riesgo
   const scanInstallationVulnerabilitiesUseCase = useMemo(() => new ScanInstallationVulnerabilitiesUseCase(repository), [repository]);
+  const scanContainerImageVulnerabilitiesUseCase = useMemo(() => new ScanContainerImageVulnerabilitiesUseCase(repository), [repository]);
   const getFindingVulnerabilitiesUseCase = useMemo(() => new GetFindingVulnerabilitiesUseCase(repository), [repository]);
   const computeProjectRiskUseCase = useMemo(() => new ComputeProjectRiskUseCase(repository), [repository]);
   const computeAllProjectRisksUseCase = useMemo(() => new ComputeAllProjectRisksUseCase(repository), [repository]);
 
-  // Use Cases para la cola de parches
   const getPatchQueueUseCase = useMemo(() => new GetPatchQueueUseCase(repository), [repository]);
   const refreshPatchesForVulnerabilityUseCase = useMemo(() => new RefreshPatchesForVulnerabilityUseCase(repository), [repository]);
-
 
   const showToast = (msg, type = 'info', title = null) => {
     toast.showToast(msg, type, title);
@@ -122,7 +120,7 @@ export function useInfrastructure() {
       setGraphData(data);
     } catch (err) {
       console.error(err);
-      const errorMsg = `No se pudo conectar a la base de datos de Neo4j. Verifica que el servidor de Backend (puerto 8080) y la base de datos de Neo4j estén activos. Detalles: ${err.message}`;
+      const errorMsg = `No se pudo conectar a la base de datos de Neo4j. Detalles: ${err.message}`;
       setError(errorMsg);
       toast.error(err.message, 'Error de Conexión');
     } finally {
@@ -180,12 +178,30 @@ export function useInfrastructure() {
 
   const selectExploitationPath = (path) => {
     setSelectedExploitationPath(path);
+
+    if (path && path.steps && path.steps.length > 0) {
+      const lastStep = path.steps[path.steps.length - 1];
+      const targetFindingId = lastStep?.finding_id;
+
+      if (targetFindingId && filteredGraphData?.nodes) {
+        const targetGroupNode = filteredGraphData.nodes.find(n =>
+          String(n.id) === String(targetFindingId) ||
+          (Array.isArray(n.properties?.findings) && n.properties.findings.some(f =>
+            String(f.id) === String(targetFindingId) ||
+            String(f.properties?.id) === String(targetFindingId)
+          ))
+        );
+
+        if (targetGroupNode) {
+          setSelectedNode(targetGroupNode);
+        }
+      }
+    }
   };
 
   const clearSelectedExploitationPath = () => {
     setSelectedExploitationPath(null);
   };
-
 
   const renameProject = async (projectId, newName) => {
     try {
@@ -203,16 +219,13 @@ export function useInfrastructure() {
     try {
       await deleteProjectUseCase.execute(projectId);
       showToast('¡Proyecto eliminado con éxito!');
-      // Refresh the graph data
       await fetchInfrastructure(true);
-      // If the deleted project is the currently active one, select another one if available
       if (String(projectId) === String(selectedProjectId)) {
         const remainingProjects = projects.filter(p => String(p.id) !== String(projectId));
         if (remainingProjects.length > 0) {
           setSelectedProjectId(remainingProjects[0].id);
         } else {
           setSelectedProjectId(null);
-          // If no projects remain, close the dashboard to show the welcome screen
           setShowDashboard(false);
         }
       }
@@ -297,7 +310,7 @@ export function useInfrastructure() {
   const createNetwork = async (data) => {
     try {
       const res = await createNetworkUseCase.execute(data, selectedProjectId);
-      toast.success('¡Red añadida correctamente! Los endpoints compatibles se han enlazado automáticamente.', 'Nueva Red');
+      toast.success('¡Red añadida correctamente!', 'Nueva Red');
       await fetchInfrastructure(true);
       return res;
     } catch (err) {
@@ -306,7 +319,6 @@ export function useInfrastructure() {
     }
   };
 
-  // CVEs de un Finding
   const fetchFindingVulnerabilities = async (findingNode) => {
     setShowFindingVulnsModal(true);
     setFindingVulnsLoading(true);
@@ -332,7 +344,7 @@ export function useInfrastructure() {
   const updateNode = async (category, id, data, selectedProjectId) => {
     try {
       const res = await updateNodeUseCase.execute(category, id, data, selectedProjectId);
-      toast.success('¡Activo actualizado y re-enlazado correctamente!', 'Edición Guardada');
+      toast.success('¡Activo actualizado!', 'Edición Guardada');
       await fetchInfrastructure(true);
       return res;
     } catch (err) {
@@ -344,23 +356,18 @@ export function useInfrastructure() {
   const deleteNode = async (category, id) => {
     try {
       const res = await deleteNodeUseCase.execute(category, id);
-      toast.success('¡El activo fue eliminado del grafo correctamente!', 'Activo Eliminado');
-      
-      // Si tenemos un nodo seleccionado, lo limpiamos tras borrar para cerrar el Inspector (Punto 1 de Pablo)
+      toast.success('¡El activo fue eliminado del grafo!', 'Activo Eliminado');
       if (selectedNode) {
         setSelectedNode(null);
       }
-      
       await fetchInfrastructure(true);
       return res;
     } catch (err) {
       toast.error(err.message, 'Error eliminando Activo');
       throw err;
     }
-
   };
 
-  // Funciones para la cola de parches
   const fetchPatchQueue = async (limit = 100) => {
     setPatchQueueLoading(true);
     setPatchQueueError(null);
@@ -378,8 +385,6 @@ export function useInfrastructure() {
     }
   };
 
-
-  // Refrescar parches para un CVE específico
   const refreshPatchesForCVE = async (cveId) => {
     try {
       await refreshPatchesForVulnerabilityUseCase.execute(cveId);
@@ -392,8 +397,6 @@ export function useInfrastructure() {
     }
   };
 
-
-  // Función para enfocar un item de la cola de parches en el grafo
   const focusPatchQueueItem = (item) => {
     const findingNode = (graphData?.nodes || []).find(n =>
       (n.primaryLabel === 'Finding' || n.labels?.includes('Finding')) &&
@@ -419,8 +422,6 @@ export function useInfrastructure() {
     return null;
   };
 
-
-  // Helper para desencadenar la descarga en el navegador
   const _triggerDownload = (filename, jsonText) => {
     const blob = new Blob([jsonText], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -436,15 +437,13 @@ export function useInfrastructure() {
   const exportProject = async (targetProjectId) => {
     try {
       showToast('Generando JSON en el servidor...', 'info');
-      // Ahora projectName podría venir del filteredGraphData o sacarlo del id.
-      // Buscamos el nombre para pasarlo al usecase (opcional)
       const projId = targetProjectId || selectedProjectId;
       const projectNode = graphData?.nodes?.find(
         n => (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
             String(n.properties?.id ?? n.id) === String(projId)
       );
       const projectName = projectNode?.properties?.nombre || projectNode?.properties?.name || 'Proyecto';
-      
+
       const { filename, content } = await exportProjectUseCase.execute(projId, projectName);
       _triggerDownload(filename, content);
       showToast('¡Proyecto exportado a JSON con éxito!');
@@ -484,7 +483,7 @@ export function useInfrastructure() {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      
+
       showToast('¡Inventario Excel exportado con éxito!');
     } catch (err) {
       console.error(err);
@@ -496,7 +495,6 @@ export function useInfrastructure() {
     try {
       let dataToImport = typeof fileData === 'string' ? JSON.parse(fileData) : JSON.parse(JSON.stringify(fileData));
 
-      // 1. Si el usuario seleccionó "Sobrescribir", eliminar el proyecto existente en Neo4j primero
       if (options.overwrite && options.targetProjectId) {
         try {
           await repository.deleteProject(options.targetProjectId);
@@ -505,7 +503,6 @@ export function useInfrastructure() {
         }
       }
 
-      // 2. Si el usuario seleccionó "Renombrar", actualizar el nombre y asignar nuevo ID único al proyecto en el JSON
       if (options.renameTo) {
         const newProjId = Date.now();
         if (dataToImport.project) {
@@ -521,12 +518,12 @@ export function useInfrastructure() {
 
         nodes.forEach((n, idx) => {
           const isGlobal = n.labels?.some(l => globalLabels.includes(l));
-          
+
           if (!isGlobal) {
             const newId = n.labels?.includes('Project') ? String(newProjId) : String(Date.now() + idx + Math.floor(Math.random() * 10000));
             const oldNodeId = String(n.id);
             idMapping[oldNodeId] = newId;
-            
+
             if (n.properties?.id !== undefined && n.properties?.id !== null) {
               const oldPropId = String(n.properties.id);
               idMapping[oldPropId] = newId;
@@ -536,7 +533,7 @@ export function useInfrastructure() {
                 n.properties.id = newId;
               }
             }
-            
+
             n.id = newId;
 
             if (n.labels?.includes('Project')) {
@@ -560,32 +557,26 @@ export function useInfrastructure() {
         });
       }
 
-      // 3. Ejecutar caso de uso de importación
       await importInfrastructureUseCase.execute(dataToImport);
       showToast('¡Infraestructura cargada e importada con éxito!');
       await fetchInfrastructure(true);
 
-      // 4. Auto-seleccionar el proyecto importado
       try {
         const impProjectId = dataToImport?.project?.id || dataToImport?.nodes?.find(n => n.labels?.includes('Project') || n.primaryLabel === 'Project')?.properties?.id;
         if (impProjectId !== undefined && impProjectId !== null) {
           setSelectedProjectId(String(impProjectId));
         }
-      } catch (e) {
-        // Ignorar si no se puede extraer el ID del proyecto
-      }
+      } catch (e) {}
     } catch (err) {
       console.error(err);
       throw err;
     }
   };
 
-  // Cargar datos al montar el hook y al activar el Dashboard
   useEffect(() => {
     fetchInfrastructure();
   }, [showDashboard]);
 
-  // Derivar lista de proyectos disponibles
   const projects = useMemo(() => {
     return (graphData.nodes || []).filter(
       n => n.labels?.includes('Project') || n.primaryLabel === 'Project'
@@ -595,7 +586,6 @@ export function useInfrastructure() {
     }));
   }, [graphData]);
 
-  // Auto-seleccionar el primer proyecto cuando se carga la data
   useEffect(() => {
     if (projects.length > 0 && selectedProjectId === null) {
       setSelectedProjectId(projects[0].id);
@@ -605,8 +595,6 @@ export function useInfrastructure() {
     }
   }, [projects, selectedProjectId]);
 
-
-  // Limpiar selección visual al cambiar de proyecto
   useEffect(() => {
     setSelectedNode(null);
     setSelectedExploitationPath(null);
@@ -615,14 +603,12 @@ export function useInfrastructure() {
     setShowFindingVulnsModal(false);
   }, [selectedProjectId]);
 
-
-  // Filtrar graphData según el proyecto seleccionado (estrictamente por jerarquía de pertenencia)
+  // Filtrar graphData según el proyecto seleccionado y agrupar hallazgos por SoftwareInstallation
   const filteredGraphData = useMemo(() => {
     if (!selectedProjectId || !graphData.nodes || graphData.nodes.length === 0) {
       return graphData;
     }
 
-    // 1. Nodo del proyecto seleccionado
     const projectNode = graphData.nodes.find(
       n => (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
           String(n.properties?.id ?? n.id) === String(selectedProjectId)
@@ -634,9 +620,58 @@ export function useInfrastructure() {
     const rels = graphData.relationships || [];
     const nodeMap = new Map(graphData.nodes.map(n => [n.id, n]));
 
+    // Inject software name into SoftwareInstallation nodes
+    rels.forEach(rel => {
+      if (rel.type === 'INSTANCE_OF') {
+        const sourceNode = nodeMap.get(rel.source);
+        const targetNode = nodeMap.get(rel.target);
+        if (sourceNode && targetNode && 
+           (sourceNode.primaryLabel === 'SoftwareInstallation' || sourceNode.labels?.includes('SoftwareInstallation')) && 
+           (targetNode.primaryLabel === 'Software' || targetNode.labels?.includes('Software'))) {
+          if (!sourceNode.properties) sourceNode.properties = {};
+          sourceNode.properties.software_name = targetNode.properties?.name || targetNode.name;
+        }
+      }
+    });
+
+    const routeFindingKeys = new Set();
+
+    (selectedExploitationPath?.steps || []).forEach(step => {
+      if (step.finding_id) routeFindingKeys.add(String(step.finding_id));
+      if (step.cve_id) routeFindingKeys.add(String(step.cve_id));
+      if (step.vulnerability) routeFindingKeys.add(String(step.vulnerability));
+
+      if (Array.isArray(step.finding_ids)) {
+        step.finding_ids.forEach(id => {
+          if (id) routeFindingKeys.add(String(id));
+        });
+      }
+
+      if (Array.isArray(step.findings)) {
+        step.findings.forEach(f => {
+          if (f.id) routeFindingKeys.add(String(f.id));
+          if (f.finding_id) routeFindingKeys.add(String(f.finding_id));
+          if (f.cve_id) routeFindingKeys.add(String(f.cve_id));
+          if (f.properties?.id) routeFindingKeys.add(String(f.properties.id));
+          if (f.properties?.cve_id) routeFindingKeys.add(String(f.properties.cve_id));
+        });
+      }
+    });
+
+    const isRouteFinding = (findingNode) => {
+      if (!findingNode || routeFindingKeys.size === 0) return false;
+
+      return (
+        routeFindingKeys.has(String(findingNode.id)) ||
+        routeFindingKeys.has(String(findingNode.properties?.id)) ||
+        routeFindingKeys.has(String(findingNode.properties?.finding_id)) ||
+        routeFindingKeys.has(String(findingNode.properties?.cve_id))
+      );
+    };
+
     const reachableIds = new Set();
     reachableIds.add(projectNode.id);
-    // 2. Endpoints y Redes pertenecientes a ESTE proyecto
+
     const projectEndpointIds = new Set();
     rels.forEach(rel => {
       const isSourceProject = rel.source === projectNode.id;
@@ -655,7 +690,6 @@ export function useInfrastructure() {
       }
     });
 
-    // 3. Nodos directamente vinculados a los Endpoints del proyecto (Hardware, Redes, Contenedores, Instalaciones de Software)
     const projectContainerIds = new Set();
     const projectInstallationIds = new Set();
 
@@ -671,11 +705,7 @@ export function useInfrastructure() {
         const primaryLabel = otherNode.primaryLabel || otherNode.labels?.[0];
         const labels = otherNode.labels || [];
 
-        const isProject = primaryLabel === 'Project' || labels.includes('Project');
-        const isOtherEndpoint = primaryLabel === 'Endpoint' || labels.includes('Endpoint');
-
-        // Evitar saltar a otros proyectos u otros endpoints
-        if (isProject || isOtherEndpoint) return;
+        if (primaryLabel === 'Project' || labels.includes('Project') || primaryLabel === 'Endpoint' || labels.includes('Endpoint')) return;
 
         if (primaryLabel === 'Container' || labels.includes('Container') || rel.type === 'HOSTS') {
           projectContainerIds.add(otherId);
@@ -684,13 +714,11 @@ export function useInfrastructure() {
           projectInstallationIds.add(otherId);
           reachableIds.add(otherId);
         } else {
-          // Hardware, Network, etc.
           reachableIds.add(otherId);
         }
       }
     });
 
-    // 4. Instalaciones de Software dentro de los Contenedores del proyecto y ContainerImage
     const projectContainerImageIds = new Set();
     rels.forEach(rel => {
       const sourceIsCont = projectContainerIds.has(rel.source);
@@ -716,8 +744,7 @@ export function useInfrastructure() {
       }
     });
 
-    // 5. Software (catálogo) y Findings de las Instalaciones del proyecto
-    const projectFindingIds = new Set();
+    const installationFindingsMap = new Map();
 
     rels.forEach(rel => {
       const sourceIsInst = projectInstallationIds.has(rel.source);
@@ -726,6 +753,9 @@ export function useInfrastructure() {
       const targetIsImage = projectContainerImageIds.has(rel.target);
 
       if (sourceIsInst || targetIsInst || sourceIsImage || targetIsImage) {
+        const instId = (sourceIsInst || targetIsInst)
+          ? (sourceIsInst ? rel.source : rel.target)
+          : (sourceIsImage ? rel.source : rel.target);
         const otherId = (sourceIsInst || sourceIsImage) ? rel.target : rel.source;
         const otherNode = nodeMap.get(otherId);
         if (!otherNode) return;
@@ -733,63 +763,109 @@ export function useInfrastructure() {
         const primaryLabel = otherNode.primaryLabel || otherNode.labels?.[0];
         const labels = otherNode.labels || [];
 
-        if (primaryLabel === 'Finding' || labels.includes('Finding') || rel.type === 'HAS_FINDING') {
-          projectFindingIds.add(otherId);
-          reachableIds.add(otherId);
+        if (primaryLabel === 'Finding' || labels.includes('Finding') || rel.type === 'HAS_FINDING' || primaryLabel === 'Vulnerability' || labels.includes('Vulnerability') || rel.type === 'HAS_VULNERABILITY') {
+          if (!installationFindingsMap.has(instId)) {
+            installationFindingsMap.set(instId, []);
+          }
+          installationFindingsMap.get(instId).push(otherNode);
         } else if (primaryLabel === 'Software' || labels.includes('Software') || rel.type === 'INSTANCE_OF') {
           reachableIds.add(otherId);
         }
       }
     });
 
-    // 6. Vulnerabilidades, Exploits, Remediaciones de los Findings y ContainerImages del proyecto
-    const projectRemediationIds = new Set();
+    const groupedFindingNodesMap = new Map();
+    const groupedFindingNodeIds = new Set();
+    const routeFindingNodes = new Map();
 
-    rels.forEach(rel => {
-      const sourceIsFinding = projectFindingIds.has(rel.source) || projectContainerImageIds.has(rel.source);
-      const targetIsFinding = projectFindingIds.has(rel.target) || projectContainerImageIds.has(rel.target);
+    installationFindingsMap.forEach((findingsList, instId) => {
+      if (findingsList.length === 0) return;
 
-      if (sourceIsFinding || targetIsFinding) {
-        const otherId = sourceIsFinding ? rel.target : rel.source;
-        const otherNode = nodeMap.get(otherId);
-        if (!otherNode) return;
+      const visibleFindings = findingsList.filter(isRouteFinding);
+      const groupedFindings = findingsList.filter(f => !isRouteFinding(f));
 
-        const primaryLabel = otherNode.primaryLabel || otherNode.labels?.[0];
-        const labels = otherNode.labels || [];
+      visibleFindings.forEach(finding => {
+        routeFindingNodes.set(finding.id, finding);
+        reachableIds.add(finding.id);
+      });
 
-        if (primaryLabel === 'Remediation' || labels.includes('Remediation') || rel.type === 'HAS_REMEDIATION') {
-          projectRemediationIds.add(otherId);
-          reachableIds.add(otherId);
-        } else if (primaryLabel === 'Vulnerability' || labels.includes('Vulnerability') || primaryLabel === 'Exploit' || labels.includes('Exploit') || rel.type === 'OF_VULNERABILITY' || rel.type === 'HAS_EXPLOIT' || rel.type === 'HAS_VULNERABILITY') {
-          reachableIds.add(otherId);
+      if (groupedFindings.length === 0) return;
+
+      const groupedNodeId = `findings-group-${instId}`;
+      groupedFindingNodeIds.add(groupedNodeId);
+
+      const groupedNode = {
+        id: groupedNodeId,
+        primaryLabel: 'Finding',
+        categoryId: 'hallazgo',
+        labels: ['Finding', 'FindingsGroup'],
+        name: `Hallazgos (${groupedFindings.length})`,
+        properties: {
+          id: groupedNodeId,
+          software_installation_id: instId,
+          findings: groupedFindings,
+          has_vulnerabilities: groupedFindings.some(f => Boolean(f.properties?.has_vulnerabilities))
         }
-      }
+      };
+
+      groupedFindingNodesMap.set(instId, groupedNode);
     });
 
-    // 7. Patches de las Remediaciones
     rels.forEach(rel => {
-      const sourceIsRem = projectRemediationIds.has(rel.source);
-      const targetIsRem = projectRemediationIds.has(rel.target);
+      const sourceIsRouteFinding = routeFindingNodes.has(rel.source);
+      const targetIsRouteFinding = routeFindingNodes.has(rel.target);
 
-      if (sourceIsRem || targetIsRem) {
-        const otherId = sourceIsRem ? rel.target : rel.source;
-        const otherNode = nodeMap.get(otherId);
-        if (!otherNode) return;
-
-        reachableIds.add(otherId);
+      if (rel.type === 'OF_VULNERABILITY' && (sourceIsRouteFinding || targetIsRouteFinding)) {
+        const vulnId = sourceIsRouteFinding ? rel.target : rel.source;
+        reachableIds.add(vulnId);
       }
     });
 
-    // 8. Generar aristas virtuales CONTAINS_NETWORK para anclar visualmente las Redes al Proyecto
-    // en caso de que la BD antigua no tenga los enlaces explícitos.
-    const finalRelationships = rels.filter(r => reachableIds.has(r.source) && reachableIds.has(r.target));
-    const finalNodes = graphData.nodes.filter(n => reachableIds.has(n.id));
+    const finalRelationships = rels.filter(r => {
+      const sourceNode = nodeMap.get(r.source);
+      const targetNode = nodeMap.get(r.target);
+
+      const sourceIsFinding = sourceNode?.primaryLabel === 'Finding' || sourceNode?.labels?.includes('Finding');
+      const targetIsFinding = targetNode?.primaryLabel === 'Finding' || targetNode?.labels?.includes('Finding');
+      const isFindingRel = sourceIsFinding || targetIsFinding;
+
+      const sourceIsRouteFinding = routeFindingNodes.has(r.source);
+      const targetIsRouteFinding = routeFindingNodes.has(r.target);
+      const isRouteFindingRel = sourceIsRouteFinding || targetIsRouteFinding;
+
+      if (isFindingRel && !isRouteFindingRel) return false;
+
+      return reachableIds.has(r.source) && reachableIds.has(r.target);
+    });
+
+    groupedFindingNodesMap.forEach((groupedNode, instId) => {
+      finalRelationships.push({
+        id: `rel-group-${instId}`,
+        source: instId,
+        target: groupedNode.id,
+        type: 'HAS_FINDING',
+        properties: { virtual: true }
+      });
+    });
+
+    const finalNodes = graphData.nodes.filter(n => {
+      const isFinding = n.primaryLabel === 'Finding' || n.labels?.includes('Finding');
+
+      if (isFinding && !routeFindingNodes.has(n.id)) {
+        return false;
+      }
+
+      return reachableIds.has(n.id);
+    });
+
+    groupedFindingNodesMap.forEach((groupedNode) => {
+      finalNodes.push(groupedNode);
+    });
 
     finalNodes.forEach(n => {
       if (n.primaryLabel === 'Network' || (n.labels && n.labels.includes('Network'))) {
-        // Verificar si ya existe una relación de pertenencia/contención con el proyecto
-        const hasProjectRel = finalRelationships.some(r => 
-          (r.source === projectNode.id && r.target === n.id) || 
+        const hasProjectRel = finalRelationships.some(r =>
+          (r.source === projectNode.id && r.target === n.id) ||
           (r.target === projectNode.id && r.source === n.id)
         );
         if (!hasProjectRel) {
@@ -808,9 +884,8 @@ export function useInfrastructure() {
       nodes: finalNodes,
       relationships: finalRelationships
     };
-  }, [graphData, selectedProjectId]);
+  }, [graphData, selectedProjectId, selectedExploitationPath]);
 
-  // Sincronizar el nodo seleccionado cuando se actualice el grafo para reflejar ediciones al momento
   useEffect(() => {
     if (selectedNode && filteredGraphData.nodes) {
       const freshNode = filteredGraphData.nodes.find(n => n.id === selectedNode.id);
@@ -824,7 +899,6 @@ export function useInfrastructure() {
     return filteredGraphData.nodes.filter(n => n.labels.includes(type)).length;
   }, [filteredGraphData]);
 
- // Derivar lista de instalaciones de software para el proyecto seleccionado
   const getSelectedProjectSoftwareInstallations = useCallback(() => {
     const nodes = filteredGraphData.nodes || [];
     const relationships = filteredGraphData.relationships || [];
@@ -843,16 +917,12 @@ export function useInfrastructure() {
           (r.source === installationNode.id || r.target === installationNode.id)
         );
 
-        if (!rel) {
-          return null;
-        }
+        if (!rel) return null;
 
         const softwareElementId = rel.source === installationNode.id ? rel.target : rel.source;
         const softwareNode = softwareByElementId.get(softwareElementId);
 
-        if (!softwareNode) {
-          return null;
-        }
+        if (!softwareNode) return null;
 
         return {
           installationId: installationNode.properties?.id || installationNode.properties?.installation_id,
@@ -864,25 +934,39 @@ export function useInfrastructure() {
       .filter(Boolean)
       .filter(item => item.installationId && item.softwareId);
   }, [filteredGraphData]);
+  const getSelectedProjectContainerImages = useCallback(() => {
+    return (filteredGraphData?.nodes || [])
+      .filter(n => n.primaryLabel === 'ContainerImage')
+      .map(n => ({
+        imageId: n.properties?.id,
+        // Usar el id canónico del nodo (ej: "httpd:2.4.49"), no el nombre construido
+        // por el getter de Node.js que podría añadir ":latest" extra.
+        imageName: n.properties?.id || n.properties?.name
+      }))
+      .filter(item => item.imageId);
+  }, [filteredGraphData]);
 
-
-  // Función para analizar vulnerabilidades de todas las instalaciones de software del proyecto seleccionado
+  // FUNCIÓN 1: Analizar vulnerabilidades + CÁLCULO AUTOMÁTICO DE RIESGO
   const analyzeProjectVulnerabilities = async () => {
-    if (!selectedProjectId || riskActionLoading) return;
+    if (!selectedProjectId || vulnScanLoading || riskComputeLoading) return;
 
-    setRiskActionLoading(true);
+    setVulnScanLoading(true);
     setRiskActionError(null);
 
+    let successCount = 0;
     try {
       const installations = getSelectedProjectSoftwareInstallations();
-      if (installations.length === 0) {
-        toast.warning('No hay software instalado en el proyecto seleccionado.', 'Análisis de Vulnerabilidades');
+      const containerImages = getSelectedProjectContainerImages();
+      
+      if (installations.length === 0 && containerImages.length === 0) {
+        toast.warning('No hay software instalado ni imágenes de contenedor en el proyecto seleccionado.', 'Análisis de Vulnerabilidades');
+        setVulnScanLoading(false);
         return;
       }
 
-      let successCount = 0;
-      const failedInstallations = [];
+      const failedItems = [];
 
+      // 1. Escanear instalaciones de software
       for (const installation of installations) {
         try {
           await scanInstallationVulnerabilitiesUseCase.execute(
@@ -892,19 +976,34 @@ export function useInfrastructure() {
           );
           successCount++;
         } catch (err) {
-          console.error(`Error analizando ${installation.softwareName || installation.installationId}:`, err);
-          failedInstallations.push(installation.softwareName || installation.installationId);
+          console.error(`Error analizando software ${installation.softwareName || installation.installationId}:`, err);
+          failedItems.push(`Soft: ${installation.softwareName || installation.installationId}`);
+        }
+      }
+
+      // 2. Escanear imágenes de contenedores con Docker Scout
+      for (const image of containerImages) {
+        try {
+          await scanContainerImageVulnerabilitiesUseCase.execute(
+            image.imageId,
+            image.imageName
+          );
+          successCount++;
+        } catch (err) {
+          console.error(`Error analizando imagen ${image.imageName || image.imageId}:`, err);
+          failedItems.push(`Img: ${image.imageName || image.imageId}`);
         }
       }
 
       await fetchInfrastructure(true);
 
-      if (failedInstallations.length === 0) {
-        toast.success(`Vulnerabilidades analizadas con éxito para ${successCount} instalación(es).`, 'Análisis Completado');
+      const totalItems = installations.length + containerImages.length;
+      if (failedItems.length === 0) {
+        toast.success(`Vulnerabilidades analizadas con éxito para ${successCount} elemento(s).`, 'Análisis Completado');
       } else if (successCount > 0) {
-        toast.warning(`Análisis completado para ${successCount} de ${installations.length} software(s). No se pudo analizar: ${failedInstallations.join(', ')}.`, 'Análisis Parcial');
+        toast.warning(`Análisis completado para ${successCount} de ${totalItems} elemento(s). No se pudo analizar: ${failedItems.join(', ')}.`, 'Análisis Parcial');
       } else {
-        const errorMsg = `No se pudo analizar ninguna instalación. Fallaron: ${failedInstallations.join(', ')}`;
+        const errorMsg = `No se pudo analizar ningún elemento. Fallaron: ${failedItems.join(', ')}`;
         setRiskActionError(errorMsg);
         toast.error(errorMsg, 'Falló el Análisis');
       }
@@ -913,17 +1012,20 @@ export function useInfrastructure() {
       setRiskActionError(err.message);
       toast.error(`Error inesperado analizando vulnerabilidades: ${err.message}`, 'Falló el Análisis');
     } finally {
-      setRiskActionLoading(false);
+      setVulnScanLoading(false);
+    }
+
+    // SI EL ANÁLISIS FUE EXITOSO, ENCADENAR CÁLCULO DE RIESGO AUTOMÁTICO
+    if (successCount > 0) {
+      await computeSelectedProjectRisk();
     }
   };
 
-
-
-  // Función para calcular el riesgo del proyecto seleccionado
+  // FUNCIÓN 2: Solo calcular riesgo del proyecto
   const computeSelectedProjectRisk = async () => {
-    if (!selectedProjectId || riskActionLoading) return;
+    if (!selectedProjectId || riskComputeLoading) return;
 
-    setRiskActionLoading(true);
+    setRiskComputeLoading(true);
     setRiskActionError(null);
 
     try {
@@ -935,14 +1037,12 @@ export function useInfrastructure() {
       setRiskActionError(err.message);
       toast.error(`Error calculando riesgo: ${err.message}`, 'Cálculo de Riesgo');
     } finally {
-      setRiskActionLoading(false);
+      setRiskComputeLoading(false);
     }
   };
 
-
-  // Función para recalcular el riesgo de todos los proyectos
   const computeAllProjectRisks = async () => {
-    setRiskActionLoading(true);
+    setRiskComputeLoading(true);
     setRiskActionError(null);
 
     try {
@@ -954,11 +1054,10 @@ export function useInfrastructure() {
       setRiskActionError(err.message);
       toast.error(`Error recalculando todos los proyectos: ${err.message}`, 'Cálculo Global de Riesgos');
     } finally {
-      setRiskActionLoading(false);
+      setRiskComputeLoading(false);
     }
   };
 
-  // Derivar el nodo del proyecto seleccionado para resaltar en el grafo
   const selectedProjectNode = useMemo(() => {
     return (graphData.nodes || []).find(n =>
       (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
@@ -1018,7 +1117,9 @@ export function useInfrastructure() {
     exportMitreNavigator,
     exportInventory,
     importProject,
-    riskActionLoading,
+    vulnScanLoading,
+    riskComputeLoading,
+    riskActionLoading: vulnScanLoading || riskComputeLoading,
     riskActionError,
     analyzeProjectVulnerabilities,
     computeSelectedProjectRisk,

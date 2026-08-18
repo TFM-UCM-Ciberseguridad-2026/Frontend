@@ -145,6 +145,15 @@ export class InfrastructureApiDataSource {
     return await res.json();
   }
 
+  async scanContainerImageVulnerabilities(imageId, imageName) {
+    const res = await fetch(`/api/containers/images/${encodeURIComponent(imageId)}/scan-vulns`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image_name: imageName })
+    });
+    return await this._handleResponse(res);
+  }
+
   async computeProjectRisk(projectId) {
     const res = await fetch(`/api/projects/${projectId}/compute-risk`, {
       method: 'POST'

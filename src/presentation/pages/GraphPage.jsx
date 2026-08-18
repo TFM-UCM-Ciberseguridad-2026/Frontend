@@ -24,6 +24,7 @@ export function GraphPage({
   getNodeCountByType,
   projects,
   endpoints,
+  containers,
   showToast,
   createEndpoint,
   createContainer,
@@ -35,14 +36,15 @@ export function GraphPage({
   deleteNode,
   renameProject,
   deleteProject,
-  riskActionLoading,
+  vulnScanLoading,
+  riskComputeLoading,
   analyzeProjectVulnerabilities,
   computeSelectedProjectRisk,
   fetchFindingVulnerabilities
 }) {
   return (
     <>
-      {/* PANEL IZQUIERDO: FILTROS COMPACTOS — grid column 1 (250px) */}
+      {/* PANEL IZQUIERDO: FILTROS COMPACTOS */}
       <GraphFilterSidebar
         graphData={graphData}
         filterType={filterType}
@@ -54,17 +56,19 @@ export function GraphPage({
         fetchExploitationPaths={fetchExploitationPaths}
         selectedExploitationPath={selectedExploitationPath}
         clearSelectedExploitationPath={clearSelectedExploitationPath}
-        riskActionLoading={riskActionLoading}
+        vulnScanLoading={vulnScanLoading}
+        riskComputeLoading={riskComputeLoading}
         analyzeProjectVulnerabilities={analyzeProjectVulnerabilities}
         computeSelectedProjectRisk={computeSelectedProjectRisk}
       />
 
-      {/* VISTA CENTRAL: GRAFO — grid column 2 (1fr) */}
+      {/* VISTA CENTRAL: GRAFO */}
       <main className="graph-stage">
 
         <AddAssetsButton
           projects={projects}
           endpoints={endpoints}
+          containers={containers}
           onCreated={() => fetchInfrastructure(true)}
           showToast={showToast}
           createEndpoint={createEndpoint}
@@ -90,9 +94,16 @@ export function GraphPage({
         />
       </main>
 
-
-      {/* PANEL DERECHO: INSPECTOR — grid column 3 (300px) */}
-      <NodeInspector selectedNode={selectedNode} updateNode={updateNode} deleteNode={deleteNode} fetchFindingVulnerabilities={fetchFindingVulnerabilities} renameProject={renameProject} deleteProject={deleteProject} />
+      {/* PANEL DERECHO: INSPECTOR */}
+      <NodeInspector
+        selectedNode={selectedNode}
+        updateNode={updateNode}
+        deleteNode={deleteNode}
+        fetchFindingVulnerabilities={fetchFindingVulnerabilities}
+        selectedExploitationPath={selectedExploitationPath}
+        renameProject={renameProject}
+        deleteProject={deleteProject}
+      />
     </>
   );
 }

@@ -11,7 +11,6 @@ import { ExportModal } from '../components/Archive/ExportModal';
 import { ImportModal } from '../components/Archive/ImportModal';
 import { PatchQueuePage } from './PatchQueuePage';
 
-
 export function DashboardPage({
   setShowDashboard,
   graphData,
@@ -32,7 +31,6 @@ export function DashboardPage({
   fetchInfrastructure,
   handleReset,
   fetchTopAPTs,
-  // Rutas de explotación
   showPathsModal,
   setShowPathsModal,
   exploitationPaths,
@@ -60,12 +58,11 @@ export function DashboardPage({
   exportMitreNavigator,
   exportInventory,
   importProject,
-  // Risk Analysis
-  riskActionLoading,
+  vulnScanLoading,
+  riskComputeLoading,
   analyzeProjectVulnerabilities,
   computeSelectedProjectRisk,
   selectedProjectNode,
-  // CVEs de un Finding
   fetchFindingVulnerabilities,
   closeFindingVulnsModal,
   showFindingVulnsModal,
@@ -73,7 +70,6 @@ export function DashboardPage({
   findingVulnsLoading,
   findingVulnsError,
   findingVulnsSourceNode,
-  // Patch Queue
   patchQueue,
   patchQueueCount,
   patchQueueLoading,
@@ -82,7 +78,7 @@ export function DashboardPage({
   refreshPatchesForCVE,
   focusPatchQueueItem
 }) {
-  const [activeNav, setActiveNav] = useState('grafo'); // 'grafo', 'inventario', 'redes'
+  const [activeNav, setActiveNav] = useState('grafo');
   const [showExportModal, setShowExportModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
 
@@ -107,9 +103,16 @@ export function DashboardPage({
 
   const endpoints = (graphData?.nodes || [])
     .filter(n => n.labels?.includes('Endpoint') || n.primaryLabel === 'Endpoint')
-    .map(n => ({ 
-      id: n.properties?.id ?? n.id, 
-      name: n.properties?.hostname || `Host #${n.properties?.id || n.id}` 
+    .map(n => ({
+      id: String(n.properties?.id ?? n.id),
+      name: n.properties?.name || n.properties?.hostname || `Endpoint ${String(n.properties?.id ?? n.id)}`
+    }));
+
+  const containers = (graphData?.nodes || [])
+    .filter(n => n.labels?.includes('Container') || n.primaryLabel === 'Container')
+    .map(n => ({
+      id: String(n.properties?.id ?? n.id),
+      name: n.properties?.name || n.properties?.hostname || String(n.properties?.id ?? n.id)
     }));
 
   return (
@@ -153,6 +156,7 @@ export function DashboardPage({
             getNodeCountByType={getNodeCountByType}
             projects={projects}
             endpoints={endpoints}
+            containers={containers}
             showToast={showToast}
             createEndpoint={createEndpoint}
             createContainer={createContainer}
@@ -160,12 +164,12 @@ export function DashboardPage({
             createSoftware={createSoftware}
             createContainerSoftware={createContainerSoftware}
             createNetwork={createNetwork}
-            createNetwork={createNetwork}
             updateNode={updateNode}
             deleteNode={deleteNode}
             renameProject={renameProject}
             deleteProject={deleteProject}
-            riskActionLoading={riskActionLoading}
+            vulnScanLoading={vulnScanLoading}
+            riskComputeLoading={riskComputeLoading}
             analyzeProjectVulnerabilities={analyzeProjectVulnerabilities}
             computeSelectedProjectRisk={computeSelectedProjectRisk}
             fetchFindingVulnerabilities={fetchFindingVulnerabilities}

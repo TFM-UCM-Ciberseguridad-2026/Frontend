@@ -9,7 +9,6 @@ export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploita
   return (
     <header className="hud-header">
       <div className="brand" style={{ cursor: 'pointer' }} onClick={() => setShowDashboard(false)}>
-        <div className="emblem"></div>
         <div>
           <h1 className="hud-title">Orquestador de Infraestructura</h1>
           <small>GRAFO DE ACTIVOS · VISTA HUD</small>
@@ -104,7 +103,6 @@ export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploita
           </span>
           Patch Queue
         </button>
-
 
         <button
           className={`nav-btn ${activeNav === 'redes' ? 'active' : ''}`}
