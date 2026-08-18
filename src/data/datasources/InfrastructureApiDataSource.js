@@ -300,6 +300,11 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
+  async fetchPatchesForVulnerability(cveId) {
+    const res = await fetch(`/api/vulnerabilities/${encodeURIComponent(cveId)}/patches`);
+    return await this._handleResponse(res);
+  }
+
   async declarePatchApplied(installationId, payload) {
     const res = await fetch(`/api/installations/${encodeURIComponent(installationId)}/applied-patches`, {
       method: 'POST',

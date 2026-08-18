@@ -28,6 +28,9 @@ import { DeleteNodeUseCase } from '../../domain/usecases/DeleteNodeUseCase';
 import { useToast } from '../context/ToastContext';
 import { GetPatchQueueUseCase } from '../../domain/usecases/GetPatchQueueUseCase';
 import { RefreshPatchesForVulnerabilityUseCase } from '../../domain/usecases/RefreshPatchesForVulnerabilityUseCase';
+import { DeclarePatchAppliedUseCase } from '../../domain/usecases/DeclarePatchAppliedUseCase';
+import { GetPatchesForVulnerabilityUseCase } from '../../domain/usecases/GetPatchesForVulnerabilityUseCase';
+
 
 export function useInfrastructure() {
   const toast = useToast();
@@ -73,6 +76,11 @@ export function useInfrastructure() {
   const [patchQueueCount, setPatchQueueCount] = useState(0);
   const [patchQueueLoading, setPatchQueueLoading] = useState(false);
   const [patchQueueError, setPatchQueueError] = useState(null);
+  const [patchApplyingKey, setPatchApplyingKey] = useState(null);
+  const [patchApplyError, setPatchApplyError] = useState(null);
+  const [patchesByCVE, setPatchesByCVE] = useState({});
+  const [patchDetailsLoading, setPatchDetailsLoading] = useState(false);
+  const [patchDetailsError, setPatchDetailsError] = useState(null);
 
   // Inyección de dependencias (Clean Architecture)
   const apiDataSource = useMemo(() => new InfrastructureApiDataSource(), []);
@@ -107,6 +115,8 @@ export function useInfrastructure() {
 
   const getPatchQueueUseCase = useMemo(() => new GetPatchQueueUseCase(repository), [repository]);
   const refreshPatchesForVulnerabilityUseCase = useMemo(() => new RefreshPatchesForVulnerabilityUseCase(repository), [repository]);
+  const declarePatchAppliedUseCase = useMemo(() => new DeclarePatchAppliedUseCase(repository), [repository]);
+  const getPatchesForVulnerabilityUseCase = useMemo(() => new GetPatchesForVulnerabilityUseCase(repository), [repository]);
 
   const showToast = (msg, type = 'info', title = null) => {
     toast.showToast(msg, type, title);
@@ -388,6 +398,11 @@ export function useInfrastructure() {
   const refreshPatchesForCVE = async (cveId) => {
     try {
       await refreshPatchesForVulnerabilityUseCase.execute(cveId);
+      setPatchesByCVE(prev => {
+        const next = { ...prev };
+        delete next[cveId];
+        return next;
+      });
       toast.success(`Parches actualizados para ${cveId}`, 'Patches actualizados');
       await fetchPatchQueue();
       await fetchInfrastructure(true);
@@ -396,6 +411,56 @@ export function useInfrastructure() {
       throw err;
     }
   };
+
+  const fetchPatchesForCVE = async (cveId, force = false) => {
+    if (!cveId) return [];
+    if (!force && patchesByCVE[cveId]) {
+      return patchesByCVE[cveId];
+    }
+
+    setPatchDetailsLoading(true);
+    setPatchDetailsError(null);
+
+    try {
+      const data = await getPatchesForVulnerabilityUseCase.execute(cveId);
+      const patches = data?.patches || [];
+      setPatchesByCVE(prev => ({
+        ...prev,
+        [cveId]: patches
+      }));
+      return patches;
+    } catch (err) {
+      setPatchDetailsError(err.message);
+      toast.error(err.message, 'Error cargando patches');
+      throw err;
+    } finally {
+      setPatchDetailsLoading(false);
+    }
+  };
+
+
+  const declarePatchApplied = async (installationId, payload, applyingKey = null) => {
+    setPatchApplyingKey(applyingKey);
+    setPatchApplyError(null);
+
+    try {
+      const result = await declarePatchAppliedUseCase.execute(installationId, payload);
+
+      toast.success('Parche declarado como aplicado', 'Patch aplicado');
+
+      await fetchPatchQueue();
+      await fetchInfrastructure(true);
+
+      return result;
+    } catch (err) {
+      setPatchApplyError(err.message);
+      toast.error(err.message, 'Error aplicando patch');
+      throw err;
+    } finally {
+      setPatchApplyingKey(null);
+    }
+  };
+
 
   const focusPatchQueueItem = (item) => {
     const findingNode = (graphData?.nodes || []).find(n =>
@@ -1138,7 +1203,15 @@ export function useInfrastructure() {
     patchQueueError,
     fetchPatchQueue,
     refreshPatchesForCVE,
-    focusPatchQueueItem
+    focusPatchQueueItem,
+    patchApplyLoading: patchApplyingKey !== null,
+    patchApplyError,
+    declarePatchApplied,
+    patchApplyingKey,
+    patchesByCVE,
+    patchDetailsLoading,
+    patchDetailsError,
+    fetchPatchesForCVE
   };
 
 }
