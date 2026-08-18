@@ -11,13 +11,17 @@ export class CreateSoftwareUseCase {
       throw new Error('El nombre del software es obligatorio.');
     }
 
-    const {
+    let {
       install_path,
       status,
       criticality_level,
       release_date,
       ...softwareFields
     } = softwareFormData;
+
+    if (softwareFields.version) {
+      softwareFields.version = softwareFields.version.replace(/^(versi[oó]n|v)[\s:]*/i, '').trim();
+    }
 
     const softwarePayload = { ...softwareFields };
     if (release_date) {

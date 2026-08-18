@@ -103,9 +103,16 @@ export function DashboardPage({
 
   const endpoints = (graphData?.nodes || [])
     .filter(n => n.labels?.includes('Endpoint') || n.primaryLabel === 'Endpoint')
-    .map(n => ({ 
-      id: n.properties?.id ?? n.id, 
-      name: n.properties?.hostname || `Host #${n.properties?.id || n.id}` 
+    .map(n => ({
+      id: String(n.properties?.id ?? n.id),
+      name: n.properties?.name || n.properties?.hostname || `Endpoint ${String(n.properties?.id ?? n.id)}`
+    }));
+
+  const containers = (graphData?.nodes || [])
+    .filter(n => n.labels?.includes('Container') || n.primaryLabel === 'Container')
+    .map(n => ({
+      id: String(n.properties?.id ?? n.id),
+      name: n.properties?.name || n.properties?.hostname || String(n.properties?.id ?? n.id)
     }));
 
   return (
@@ -149,6 +156,7 @@ export function DashboardPage({
             getNodeCountByType={getNodeCountByType}
             projects={projects}
             endpoints={endpoints}
+            containers={containers}
             showToast={showToast}
             createEndpoint={createEndpoint}
             createContainer={createContainer}

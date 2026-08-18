@@ -24,6 +24,7 @@ export function GraphPage({
   getNodeCountByType,
   projects,
   endpoints,
+  containers,
   showToast,
   createEndpoint,
   createContainer,
@@ -67,6 +68,7 @@ export function GraphPage({
         <AddAssetsButton
           projects={projects}
           endpoints={endpoints}
+          containers={containers}
           onCreated={() => fetchInfrastructure(true)}
           showToast={showToast}
           createEndpoint={createEndpoint}

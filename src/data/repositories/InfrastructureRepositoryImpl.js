@@ -81,6 +81,10 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     return await this.apiDataSource.scanInstallationVulnerabilities(installationId, softwareId, limit);
   }
 
+  async scanContainerImageVulnerabilities(imageId, imageName) {
+    return await this.apiDataSource.scanContainerImageVulnerabilities(imageId, imageName);
+  }
+
   async getFindingVulnerabilities(findingId) {
     const rawData = await this.apiDataSource.fetchFindingVulnerabilities(findingId);
     return (rawData?.vulnerabilities || []).map(v => new Vulnerability(v));

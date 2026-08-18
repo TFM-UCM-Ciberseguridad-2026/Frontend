@@ -29,6 +29,7 @@ const INITIAL_FORMS = {
     state: 'running',
     risk_score: 0,
     internet_exposed: false,
+    privileged: false,
     ips: []
   },
   hardware: {
@@ -67,6 +68,7 @@ const cloneInitialForm = (typeKey) => JSON.parse(JSON.stringify(INITIAL_FORMS[ty
 export function AddAssetButton({
   projects = [],
   endpoints = [],
+  containers = [],
   onCreated,
   createEndpoint,
   createContainer,
@@ -179,7 +181,9 @@ export function AddAssetButton({
           break;
         }
         case 'software': {
-          const { endpoint_id, is_container, ...rest } = data;
+          const { endpoint_id, ...rest } = data;
+          const is_container = containers.some(c => c.id === endpoint_id);
+          
           if (is_container) {
             if (createContainerSoftware) {
               await createContainerSoftware(endpoint_id, rest);
@@ -210,7 +214,6 @@ export function AddAssetButton({
     } catch (err) {
       console.error(err);
       setFormError(err.message);
-      toast.error(err.message, `Error registrando ${typeKey}`);
     } finally {
       setLoading(false);
     }
@@ -494,11 +497,11 @@ export function AddAssetButton({
               </div>
 
               <div>
-                <div className="asset-field-label">ID / Nombre de la Imagen (Opcional)</div>
+                <div className="asset-field-label">Nombre de la imagen</div>
                 <input
                   type="text"
                   className="asset-input"
-                  placeholder="sha256:abcd... o nginx:latest"
+                  placeholder="nginx:latest"
                   value={forms.container.image_id}
                   onChange={(e) => updateField('container', 'image_id', e.target.value)}
                 />
@@ -513,6 +516,18 @@ export function AddAssetButton({
                 />
                 <label htmlFor="cont_internet" className="asset-field-label asset-checkbox-label">
                   Expuesto a Internet
+                </label>
+              </div>
+
+              <div className="asset-checkbox-row" style={{marginBottom: '1rem'}}>
+                <input
+                  type="checkbox"
+                  id="cont_privileged"
+                  checked={forms.container.privileged}
+                  onChange={(e) => updateField('container', 'privileged', e.target.checked)}
+                />
+                <label htmlFor="cont_privileged" className="asset-field-label asset-checkbox-label" title="Si el contenedor corre en modo Privilegiado, las vulnerabilidades locales (LPE) podrán escapar al host">
+                  Ejecución en modo Privilegiado (Privileged)
                 </label>
               </div>
 
@@ -705,47 +720,27 @@ export function AddAssetButton({
             </div>
 
             <form onSubmit={(e) => handleSubmit(e, 'software')} className="asset-form">
-              <div className="asset-checkbox-row" style={{ marginBottom: '0.5rem', background: 'var(--bg-card)', padding: '0.5rem', borderRadius: '4px' }}>
-                <input
-                  type="checkbox"
-                  id="asset-is-container"
-                  checked={forms.software.is_container}
-                  onChange={(e) => updateField('software', 'is_container', e.target.checked)}
-                />
-                <label htmlFor="asset-is-container" className="asset-field-label asset-checkbox-label">
-                  El software está instalado en un Contenedor
-                </label>
-              </div>
-
-              {forms.software.is_container ? (
-                <div>
-                  <div className="asset-field-label">ID del Contenedor</div>
-                  <input
-                    type="text"
-                    className="asset-input"
-                    placeholder="Ej: d73j2..."
-                    value={forms.software.endpoint_id}
-                    onChange={(e) => updateField('software', 'endpoint_id', e.target.value)}
-                    required
-                  />
-                  <div className="asset-field-help">Introduce el ID alfanumérico del contenedor (puedes copiarlo desde el panel lateral al seleccionar el nodo en el grafo).</div>
-                </div>
-              ) : (
-                <div>
-                  <div className="asset-field-label">Endpoint</div>
-                  <select
-                    className="asset-input"
-                    value={forms.software.endpoint_id}
-                    onChange={(e) => updateField('software', 'endpoint_id', e.target.value)}
-                    required
-                  >
-                    <option value="">-- Selecciona un endpoint --</option>
+              <div>
+                <div className="asset-field-label">Host / Contenedor</div>
+                <select
+                  className="asset-input"
+                  value={forms.software.endpoint_id}
+                  onChange={(e) => updateField('software', 'endpoint_id', e.target.value)}
+                  required
+                >
+                  <option value="">-- Selecciona un Host o Contenedor --</option>
+                  <optgroup label="Endpoints (Hosts)">
                     {endpoints.map(ep => (
                       <option key={ep.id} value={ep.id}>{ep.name || ep.hostname}</option>
                     ))}
-                  </select>
-                </div>
-              )}
+                  </optgroup>
+                  <optgroup label="Contenedores">
+                    {containers.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </optgroup>
+                </select>
+              </div>
 
               <div>
                 <div className="asset-field-label">Nombre</div>

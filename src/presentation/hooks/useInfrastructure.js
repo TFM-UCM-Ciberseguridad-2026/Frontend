@@ -20,6 +20,7 @@ import { ScanInstallationVulnerabilitiesUseCase } from '../../domain/usecases/Sc
 import { GetFindingVulnerabilitiesUseCase } from '../../domain/usecases/GetFindingVulnerabilitiesUseCase';
 import { ComputeProjectRiskUseCase } from '../../domain/usecases/ComputeProjectRiskUseCase';
 import { ComputeAllProjectRisksUseCase } from '../../domain/usecases/ComputeAllProjectRisksUseCase';
+import { ScanContainerImageVulnerabilitiesUseCase } from '../../domain/usecases/ScanContainerImageVulnerabilitiesUseCase';
 import { RenameProjectUseCase } from '../../domain/usecases/RenameProjectUseCase';
 import { DeleteProjectUseCase } from '../../domain/usecases/DeleteProjectUseCase';
 import { UpdateNodeUseCase } from '../../domain/usecases/UpdateNodeUseCase';
@@ -99,6 +100,7 @@ export function useInfrastructure() {
   const importInfrastructureUseCase = useMemo(() => new ImportInfrastructureUseCase(repository), [repository]);
 
   const scanInstallationVulnerabilitiesUseCase = useMemo(() => new ScanInstallationVulnerabilitiesUseCase(repository), [repository]);
+  const scanContainerImageVulnerabilitiesUseCase = useMemo(() => new ScanContainerImageVulnerabilitiesUseCase(repository), [repository]);
   const getFindingVulnerabilitiesUseCase = useMemo(() => new GetFindingVulnerabilitiesUseCase(repository), [repository]);
   const computeProjectRiskUseCase = useMemo(() => new ComputeProjectRiskUseCase(repository), [repository]);
   const computeAllProjectRisksUseCase = useMemo(() => new ComputeAllProjectRisksUseCase(repository), [repository]);
@@ -618,6 +620,20 @@ export function useInfrastructure() {
     const rels = graphData.relationships || [];
     const nodeMap = new Map(graphData.nodes.map(n => [n.id, n]));
 
+    // Inject software name into SoftwareInstallation nodes
+    rels.forEach(rel => {
+      if (rel.type === 'INSTANCE_OF') {
+        const sourceNode = nodeMap.get(rel.source);
+        const targetNode = nodeMap.get(rel.target);
+        if (sourceNode && targetNode && 
+           (sourceNode.primaryLabel === 'SoftwareInstallation' || sourceNode.labels?.includes('SoftwareInstallation')) && 
+           (targetNode.primaryLabel === 'Software' || targetNode.labels?.includes('Software'))) {
+          if (!sourceNode.properties) sourceNode.properties = {};
+          sourceNode.properties.software_name = targetNode.properties?.name || targetNode.name;
+        }
+      }
+    });
+
     const routeFindingKeys = new Set();
 
     (selectedExploitationPath?.steps || []).forEach(step => {
@@ -747,7 +763,7 @@ export function useInfrastructure() {
         const primaryLabel = otherNode.primaryLabel || otherNode.labels?.[0];
         const labels = otherNode.labels || [];
 
-        if (primaryLabel === 'Finding' || labels.includes('Finding') || rel.type === 'HAS_FINDING') {
+        if (primaryLabel === 'Finding' || labels.includes('Finding') || rel.type === 'HAS_FINDING' || primaryLabel === 'Vulnerability' || labels.includes('Vulnerability') || rel.type === 'HAS_VULNERABILITY') {
           if (!installationFindingsMap.has(instId)) {
             installationFindingsMap.set(instId, []);
           }
@@ -918,6 +934,17 @@ export function useInfrastructure() {
       .filter(Boolean)
       .filter(item => item.installationId && item.softwareId);
   }, [filteredGraphData]);
+  const getSelectedProjectContainerImages = useCallback(() => {
+    return (filteredGraphData?.nodes || [])
+      .filter(n => n.primaryLabel === 'ContainerImage')
+      .map(n => ({
+        imageId: n.properties?.id,
+        // Usar el id canónico del nodo (ej: "httpd:2.4.49"), no el nombre construido
+        // por el getter de Node.js que podría añadir ":latest" extra.
+        imageName: n.properties?.id || n.properties?.name
+      }))
+      .filter(item => item.imageId);
+  }, [filteredGraphData]);
 
   // FUNCIÓN 1: Analizar vulnerabilidades + CÁLCULO AUTOMÁTICO DE RIESGO
   const analyzeProjectVulnerabilities = async () => {
@@ -929,14 +956,17 @@ export function useInfrastructure() {
     let successCount = 0;
     try {
       const installations = getSelectedProjectSoftwareInstallations();
-      if (installations.length === 0) {
-        toast.warning('No hay software instalado en el proyecto seleccionado.', 'Análisis de Vulnerabilidades');
+      const containerImages = getSelectedProjectContainerImages();
+      
+      if (installations.length === 0 && containerImages.length === 0) {
+        toast.warning('No hay software instalado ni imágenes de contenedor en el proyecto seleccionado.', 'Análisis de Vulnerabilidades');
         setVulnScanLoading(false);
         return;
       }
 
-      const failedInstallations = [];
+      const failedItems = [];
 
+      // 1. Escanear instalaciones de software
       for (const installation of installations) {
         try {
           await scanInstallationVulnerabilitiesUseCase.execute(
@@ -946,19 +976,34 @@ export function useInfrastructure() {
           );
           successCount++;
         } catch (err) {
-          console.error(`Error analizando ${installation.softwareName || installation.installationId}:`, err);
-          failedInstallations.push(installation.softwareName || installation.installationId);
+          console.error(`Error analizando software ${installation.softwareName || installation.installationId}:`, err);
+          failedItems.push(`Soft: ${installation.softwareName || installation.installationId}`);
+        }
+      }
+
+      // 2. Escanear imágenes de contenedores con Docker Scout
+      for (const image of containerImages) {
+        try {
+          await scanContainerImageVulnerabilitiesUseCase.execute(
+            image.imageId,
+            image.imageName
+          );
+          successCount++;
+        } catch (err) {
+          console.error(`Error analizando imagen ${image.imageName || image.imageId}:`, err);
+          failedItems.push(`Img: ${image.imageName || image.imageId}`);
         }
       }
 
       await fetchInfrastructure(true);
 
-      if (failedInstallations.length === 0) {
-        toast.success(`Vulnerabilidades analizadas con éxito para ${successCount} instalación(es).`, 'Análisis Completado');
+      const totalItems = installations.length + containerImages.length;
+      if (failedItems.length === 0) {
+        toast.success(`Vulnerabilidades analizadas con éxito para ${successCount} elemento(s).`, 'Análisis Completado');
       } else if (successCount > 0) {
-        toast.warning(`Análisis completado para ${successCount} de ${installations.length} software(s). No se pudo analizar: ${failedInstallations.join(', ')}.`, 'Análisis Parcial');
+        toast.warning(`Análisis completado para ${successCount} de ${totalItems} elemento(s). No se pudo analizar: ${failedItems.join(', ')}.`, 'Análisis Parcial');
       } else {
-        const errorMsg = `No se pudo analizar ninguna instalación. Fallaron: ${failedInstallations.join(', ')}`;
+        const errorMsg = `No se pudo analizar ningún elemento. Fallaron: ${failedItems.join(', ')}`;
         setRiskActionError(errorMsg);
         toast.error(errorMsg, 'Falló el Análisis');
       }
