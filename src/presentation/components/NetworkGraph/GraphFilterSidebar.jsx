@@ -63,13 +63,17 @@ export function GraphFilterSidebar({
         )}
       </div>
 
-      {/* BARRA DE BÚSQUEDA COMPACTA */}
+      {/* BARRA DE BÚSQUEDA COMPACTA CON ICONO SVG BLANCO */}
       <div className="compact-search-wrapper">
+        <svg className="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="11" cy="11" r="8" />
+          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </svg>
         <input
           id="search"
           type="text"
           className="compact-search-input"
-          placeholder="🔍 Buscar activo..."
+          placeholder="Buscar activo..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />

@@ -5,13 +5,13 @@
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(10, 14, 23, 0.82);
+  background: rgba(10, 14, 23, 0.75);
   backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 9999;
-  animation: archiveFadeIn 0.25s ease-out;
+  animation: archiveFadeIn 0.3s ease-out;
 }
 
 @keyframes archiveFadeIn {
