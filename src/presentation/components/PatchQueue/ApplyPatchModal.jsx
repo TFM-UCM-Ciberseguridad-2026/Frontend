@@ -134,25 +134,16 @@ export function ApplyPatchModal({
   const displayError = localError || error;
   const selectedPatch = patches.find(p => String(p.patch_id) === String(patchId)) || patches[0] || null;
   const fixedVersion = item.fixed_version || '';
-  const selectedPatchDescription = descriptionMatchesCurrentCVE(selectedPatch?.description, item.cve_id)
-    ? selectedPatch?.description
-    : '';
   const fixedVersionCandidates = getFixedVersionCandidates(fixedVersion, item.software_version, item.software_name);
   const selectedCandidate = fixedVersionCandidates.find(candidate => candidate.raw === selectedFixedVersion) || fixedVersionCandidates[0] || null;
   const recommendedFixedVersion = selectedCandidate?.raw || '';
   const patchActionType = getPatchActionType(recommendedFixedVersion, selectedPatch);
-  const proposedPatchTitle = recommendedFixedVersion
-    ? `Actualizar ${item.software_name || 'software'} a versión corregida`
-    : selectedPatch?.url
-      ? `Referencia oficial para ${item.cve_id}`
-      : `Patch oficial para ${item.cve_id}`;
+
   const patchRecommendation = recommendedFixedVersion
     ? `Actualizar ${item.software_name || 'el software'} desde ${item.software_version || 'la versión actual'} a ${recommendedFixedVersion}.`
-    : selectedPatchDescription
-      ? selectedPatchDescription
-      : selectedPatch?.url
-        ? `Revisar la referencia oficial y aplicar la corrección indicada por el proveedor para ${item.cve_id}. No hay fixed_version normalizada en el backend.`
-        : 'No hay recomendación accionable suficiente. Refresca patches o revisa el CVE manualmente antes de declarar el parche.';
+    : selectedPatch?.url
+      ? `Revisar la referencia oficial y aplicar la corrección indicada por el proveedor para ${item.cve_id}. No hay fixed_version normalizada en el backend.`
+      : 'No hay recomendación accionable suficiente. Refresca patches o revisa el CVE manualmente antes de declarar el parche.';
 
   const submit = async (event) => {
     event.preventDefault();
@@ -227,7 +218,7 @@ export function ApplyPatchModal({
           </section>
 
           <section className="apply-patch-section">
-            <h3>Propuesta de patch</h3>
+            <h3>Resumen y propuesta</h3>
             <div className="apply-patch-context-grid">
               <Field label="Patch oficial disponible" value={hasPatchAvailable ? 'Sí' : 'No'} />
               <Field label="Patch Priority" value={`${item.priority_tier || 'LOW'} · ${percent(item.priority_score)}`} />
@@ -243,30 +234,68 @@ export function ApplyPatchModal({
             )}
 
             {patchesLoading && (
-              <p className="apply-patch-help">Cargando detalle del patch propuesto...</p>
+              <p className="apply-patch-help">Cargando detalles de los parches registrados...</p>
             )}
 
             {patchesError && (
               <div className="apply-patch-error">⚠️ {patchesError}</div>
             )}
 
-            {selectedPatch && (
-              <div className="apply-patch-recommendation">
-                <span className="apply-patch-label">Patch propuesto</span>
-                <strong>{proposedPatchTitle}</strong>
-                {selectedPatchDescription && (
-                  <small>{selectedPatchDescription}</small>
-                )}
-                {selectedPatch.url && (
-                  <a href={selectedPatch.url} target="_blank" rel="noreferrer">
-                    Abrir referencia oficial
-                  </a>
-                )}
+            {/* MOSTRAR TODAS LAS PROPUESTAS DE PATCH REGISTRADAS CON SU ID */}
+            {patches.length > 0 && (
+              <div className="apply-patch-proposals-list">
+                {patches.map((patchItem) => {
+                  const isSelected = String(patchItem.patch_id) === String(patchId);
+                  const patchDesc = descriptionMatchesCurrentCVE(patchItem.description, item.cve_id)
+                    ? patchItem.description
+                    : 'Referencia oficial / aviso de seguridad';
+
+                  return (
+                    <div
+                      key={patchItem.patch_id}
+                      className={`apply-patch-recommendation ${isSelected ? 'is-selected' : ''}`}
+                      onClick={() => setPatchId(String(patchItem.patch_id))}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <div className="apply-patch-proposal-header">
+                        <span className="apply-patch-label">
+                          Propuesta de patch #{patchItem.patch_id}
+                        </span>
+                        {isSelected && (
+                          <span className="apply-patch-selected-badge">
+                            ✓ Seleccionado
+                          </span>
+                        )}
+                      </div>
+
+                      <strong>
+                        {recommendedFixedVersion
+                          ? `Actualizar ${item.software_name || 'software'} a versión ${recommendedFixedVersion}`
+                          : `Referencia oficial para ${item.cve_id}`}
+                      </strong>
+
+                      {patchDesc && (
+                        <small>{patchDesc}</small>
+                      )}
+
+                      {patchItem.url && (
+                        <a
+                          href={patchItem.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          Abrir referencia oficial ({patchItem.url})
+                        </a>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
 
             <div className="apply-patch-recommendation">
-              <span className="apply-patch-label">Recomendación</span>
+              <span className="apply-patch-label">Recomendación General</span>
               <strong>{patchRecommendation}</strong>
             </div>
 
@@ -287,16 +316,20 @@ export function ApplyPatchModal({
                 disabled={loading}
               >
                 <option value="">Resolver automáticamente si hay un único patch</option>
-                {patches.map(patch => (
-                  <option key={patch.patch_id} value={patch.patch_id}>
-                    {descriptionMatchesCurrentCVE(patch.description, item.cve_id)
-                      ? patch.description || `Patch #${patch.patch_id}`
-                      : `Patch #${patch.patch_id} · referencia oficial`}
-                  </option>
-                ))}
+                {patches.map(patch => {
+                  const patchDesc = descriptionMatchesCurrentCVE(patch.description, item.cve_id)
+                    ? patch.description || 'referencia oficial'
+                    : 'referencia oficial';
+                  const urlText = patch.url ? ` — ${patch.url}` : '';
+                  return (
+                    <option key={patch.patch_id} value={patch.patch_id}>
+                      {`Patch #${patch.patch_id} · ${patchDesc}${urlText}`}
+                    </option>
+                  );
+                })}
               </select>
               <small>
-                Puede quedar vacío si backend puede resolver un único patch para este CVE.
+                Puedes hacer clic en la tarjeta de propuesta de patch de arriba o seleccionarlo en este desplegable.
               </small>
             </label>
 
