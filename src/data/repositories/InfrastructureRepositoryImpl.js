@@ -26,6 +26,10 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     return (rawData || []).map(apt => new AptActor(apt));
   }
 
+  async getTTPMatrix(projectId) {
+    return await this.apiDataSource.fetchTTPMatrix(projectId);
+  }
+
   async getExploitationPaths(projectId) {
     const rawData = await this.apiDataSource.fetchExploitationPaths(projectId);
     return (rawData || []).map(path => new ExploitationPath(path));

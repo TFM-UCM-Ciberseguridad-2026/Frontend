@@ -4,6 +4,7 @@ import { InfrastructureRepositoryImpl } from '../../data/repositories/Infrastruc
 import { GetInfrastructureUseCase } from '../../domain/usecases/GetInfrastructureUseCase';
 import { PopulateInfrastructureUseCase } from '../../domain/usecases/PopulateInfrastructureUseCase';
 import { GetTopAptsUseCase } from '../../domain/usecases/GetTopAptsUseCase';
+import { GetTTPMatrixUseCase } from '../../domain/usecases/GetTTPMatrixUseCase';
 import { GetExploitationPathsUseCase } from '../../domain/usecases/GetExploitationPathsUseCase';
 import { CreateProjectUseCase } from '../../domain/usecases/CreateProjectUseCase';
 import { CreateEndpointUseCase } from '../../domain/usecases/CreateEndpointUseCase';
@@ -88,6 +89,7 @@ export function useInfrastructure() {
   const getInfrastructureUseCase = useMemo(() => new GetInfrastructureUseCase(repository), [repository]);
   const populateInfrastructureUseCase = useMemo(() => new PopulateInfrastructureUseCase(repository), [repository]);
   const getTopAptsUseCase = useMemo(() => new GetTopAptsUseCase(repository), [repository]);
+  const getTTPMatrixUseCase = useMemo(() => new GetTTPMatrixUseCase(repository), [repository]);
   const getExploitationPathsUseCase = useMemo(() => new GetExploitationPathsUseCase(repository), [repository]);
 
   const createProjectUseCase = useMemo(() => new CreateProjectUseCase(repository), [repository]);
@@ -152,6 +154,10 @@ export function useInfrastructure() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchTTPMatrix = async (projectId) => {
+    return await getTTPMatrixUseCase.execute(projectId);
   };
 
   const fetchTopAPTs = async () => {
@@ -1162,6 +1168,7 @@ export function useInfrastructure() {
     handleReset,
     fetchTopAPTs,
     fetchExploitationPaths,
+    fetchTTPMatrix,
     getNodeCountByType,
     projects,
     selectedProjectId,
