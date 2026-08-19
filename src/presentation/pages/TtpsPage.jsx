@@ -146,25 +146,39 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
   const [finalTtps, setFinalTtps] = useState([]);
 
   React.useEffect(() => {
-    if (fetchTTPMatrix) {
-      fetchTTPMatrix(selectedProjectId)
-        .then(res => {
-          const data = Array.isArray(res) ? res : (res?.data || res?.ttps || []);
-          if (Array.isArray(data)) {
-            // Normalizar tácticas usando la misma función
-            const processed = data.map(ttp => ({
-              ...ttp,
-              tactic: normalizeTacticKey(ttp.tactic),
+    const pid = selectedProjectId || 0;
+    
+    // 1. Si viene como prop la usamos, si no, hacemos el fetch directo a la API
+    const matrixPromise = fetchTTPMatrix 
+      ? fetchTTPMatrix(pid) 
+      : fetch(`/api/infrastructure/ttps?project_id=${pid}`).then(r => r.json());
+
+    matrixPromise
+      .then(res => {
+        console.log(">>> RESPUESTA TTP MATRIX RECIBIDA:", res);
+        const data = Array.isArray(res) ? res : (res?.data || res?.ttps || []);
+        
+        if (Array.isArray(data)) {
+          const processed = data.map(ttp => {
+            const rawTactic = ttp.tactic || ttp.Tactic || '';
+            return {
+              id: ttp.id || ttp.ID || '',
+              name: ttp.name || ttp.Name || '',
+              desc: ttp.desc || ttp.Desc || '',
+              cves: ttp.cves || ttp.CVEs || [],
+              tactic: normalizeTacticKey(rawTactic),
               remed: ['Implementar filtrado y monitorización de seguridad.']
-            }));
-            setFinalTtps(processed);
-          }
-        })
-        .catch(err => {
-          console.error("Error fetching TTP matrix:", err);
-          if (showToast) showToast(`Error al cargar TTPs: ${err.message}`, 'error');
-        });
-    }
+            };
+          }).filter(t => t.id !== '');
+
+          console.log(">>> TTPS TOTALES CARGADAS EN MATRIZ:", processed.length);
+          setFinalTtps(processed);
+        }
+      })
+      .catch(err => {
+        console.error("Error al cargar TTP Matrix:", err);
+        if (showToast) showToast(`Error al cargar TTPs: ${err.message}`, 'error');
+      });
   }, [fetchTTPMatrix, selectedProjectId, showToast]);
 
   // Filtrar TTPs por búsqueda
@@ -355,7 +369,7 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
             <div className="matrix-stats-footer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '24px', padding: '16px 20px', background: 'rgba(56, 19, 255, 0.05)', borderRadius: '12px', border: '1px solid var(--c700)', position: 'relative' }}>
                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                   <div style={{ width: '46px', height: '46px', borderRadius: '50%', background: 'rgba(51, 224, 138, 0.1)', border: '1px solid var(--ok)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ok)', fontSize: '18px', fontFamily: 'Orbitron, sans-serif', fontWeight: 'bold' }}>
-                     {finalTtps.length} (V:{vulNodes.length},N:{nodes.length})
+                     {finalTtps.length}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                      <span style={{ fontSize: '10px', color: 'var(--c400)', textTransform: 'uppercase', letterSpacing: '1.5px', fontFamily: '"Share Tech Mono", monospace' }}>Detectadas</span>

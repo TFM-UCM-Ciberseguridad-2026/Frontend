@@ -1103,6 +1103,7 @@ export function useInfrastructure() {
     handleReset,
     fetchTopAPTs,
     fetchExploitationPaths,
+    fetchTTPMatrix,
     getNodeCountByType,
     projects,
     selectedProjectId,
