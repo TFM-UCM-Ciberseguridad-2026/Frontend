@@ -24,6 +24,15 @@ export class InfrastructureApiDataSource {
     return await res.json();
   }
 
+  async fetchTTPMatrix(projectId) {
+    const url = projectId ? `/api/infrastructure/ttps?project_id=${projectId}` : '/api/infrastructure/ttps';
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`Error: ${res.statusText}`);
+    }
+    return await res.json();
+  }
+
   async fetchExploitationPaths(projectId) {
     const url = projectId
       ? `/api/infrastructure/exploitation-paths?project_id=${projectId}`

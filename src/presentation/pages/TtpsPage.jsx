@@ -70,12 +70,15 @@ const INFERRED_TTP_INFO = {
   'T1553.004': { name: 'Install Root Certificate', tactic: 'de' }
 };
 
-export function TtpsPage({ graphData, showToast, fetchInfrastructure }) {
+export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchInfrastructure, graphData }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTtpId, setSelectedTtpId] = useState(null);
   const [modalTtp, setModalTtp] = useState(null);
   const [totalMitreTTPs, setTotalMitreTTPs] = useState(0);
   const cellRefs = useRef({});
+
+  const nodes = graphData?.nodes || [];
+  const vulNodes = nodes.filter(n => n.labels?.includes('Vulnerability') || n.primaryLabel === 'Vulnerability');
 
   const [syncStatus, setSyncStatus] = useState({
     processing: false,
@@ -140,84 +143,29 @@ export function TtpsPage({ graphData, showToast, fetchInfrastructure }) {
     }
   }, [syncStatus.logs]);
 
-  // Leemos los atributos de las CVEs para extraer las TTPs
-  const vulNodes = (graphData?.nodes || []).filter(n => n.labels?.includes('Vulnerability') || n.primaryLabel === 'Vulnerability');
-  
-  const extractedTtpsMap = {};
-  
-  vulNodes.forEach(vul => {
-    const props = vul.properties || {};
-    
-    let ttps = [];
-    if (typeof props.ttps === 'string') {
-      try {
-        const parsed = JSON.parse(props.ttps);
-        if (Array.isArray(parsed)) {
-          ttps = parsed;
-        } else {
-          ttps = props.ttps.split(',').map(t => t.trim()).filter(Boolean);
-        }
-      } catch {
-        ttps = props.ttps.split(',').map(t => t.trim()).filter(Boolean);
-      }
-    } else if (Array.isArray(props.ttps)) {
-      ttps = props.ttps;
-    }
-    
-    ttps.forEach(ttpItem => {
-      const isObj = typeof ttpItem === 'object' && ttpItem !== null;
-      const ttpId = isObj ? (ttpItem.ttp_id || ttpItem.id) : ttpItem;
-      if (!ttpId) return;
+  const [finalTtps, setFinalTtps] = useState([]);
 
-      const ttpNameBackend = isObj ? ttpItem.name : null;
-      const ttpTacticBackend = isObj ? ttpItem.tactic : null;
-      const ttpDescBackend = isObj ? (ttpItem.description || ttpItem.desc) : null;
-
-      if (!extractedTtpsMap[ttpId]) {
-        const fallbackInfo = INFERRED_TTP_INFO[ttpId] || {};
-
-        const name = (ttpNameBackend && ttpNameBackend.trim()) || 
-                     fallbackInfo.name || 
-                     `TTP ${ttpId}`;
-
-        const rawTactic = ttpTacticBackend || 
-                          fallbackInfo.tactic || 
-                          'de';
-
-        const tactic = normalizeTacticKey(rawTactic);
-
-        const desc = ttpDescBackend || 
-                     `Extraída dinámicamente de ${props.cve_id || props.id || vul.id}`;
-
-        extractedTtpsMap[ttpId] = {
-          id: ttpId,
-          name: name,
-          tactic: tactic,
-          desc: desc,
-          cves: [{
-            id: props.cve_id || props.id || vul.id,
-            cvss: props.cvss_score || 'N/A',
-            desc: props.description || ''
-          }],
-          remed: ['Implementar filtrado y monitorización de seguridad.']
-        };
-      } else {
-        const currentCveId = props.cve_id || props.id || vul.id;
-        if (currentCveId) {
-          const exists = extractedTtpsMap[ttpId].cves.some(c => c.id === currentCveId);
-          if (!exists) {
-            extractedTtpsMap[ttpId].cves.push({
-              id: currentCveId,
-              cvss: props.cvss_score || 'N/A',
-              desc: props.description || ''
-            });
+  React.useEffect(() => {
+    if (fetchTTPMatrix) {
+      fetchTTPMatrix(selectedProjectId)
+        .then(res => {
+          const data = Array.isArray(res) ? res : (res?.data || res?.ttps || []);
+          if (Array.isArray(data)) {
+            // Normalizar tácticas usando la misma función
+            const processed = data.map(ttp => ({
+              ...ttp,
+              tactic: normalizeTacticKey(ttp.tactic),
+              remed: ['Implementar filtrado y monitorización de seguridad.']
+            }));
+            setFinalTtps(processed);
           }
-        }
-      }
-    });
-  });
-
-  const finalTtps = Object.values(extractedTtpsMap);
+        })
+        .catch(err => {
+          console.error("Error fetching TTP matrix:", err);
+          if (showToast) showToast(`Error al cargar TTPs: ${err.message}`, 'error');
+        });
+    }
+  }, [fetchTTPMatrix, selectedProjectId, showToast]);
 
   // Filtrar TTPs por búsqueda
   const filteredTtps = finalTtps.filter(t => 
@@ -407,7 +355,7 @@ export function TtpsPage({ graphData, showToast, fetchInfrastructure }) {
             <div className="matrix-stats-footer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '24px', padding: '16px 20px', background: 'rgba(56, 19, 255, 0.05)', borderRadius: '12px', border: '1px solid var(--c700)', position: 'relative' }}>
                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                   <div style={{ width: '46px', height: '46px', borderRadius: '50%', background: 'rgba(51, 224, 138, 0.1)', border: '1px solid var(--ok)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ok)', fontSize: '18px', fontFamily: 'Orbitron, sans-serif', fontWeight: 'bold' }}>
-                     {finalTtps.length}
+                     {finalTtps.length} (V:{vulNodes.length},N:{nodes.length})
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                      <span style={{ fontSize: '10px', color: 'var(--c400)', textTransform: 'uppercase', letterSpacing: '1.5px', fontFamily: '"Share Tech Mono", monospace' }}>Detectadas</span>

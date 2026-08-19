@@ -37,6 +37,7 @@ export function DashboardPage({
   pathsLoading,
   pathsError,
   selectedExploitationPath,
+  fetchTTPMatrix,
   fetchExploitationPaths,
   selectExploitationPath,
   clearSelectedExploitationPath,
@@ -206,9 +207,10 @@ export function DashboardPage({
 
         {activeNav === 'ttps' && (
           <TtpsPage
-            graphData={graphData}
             showToast={showToast}
-            fetchInfrastructure={fetchInfrastructure}
+            fetchTTPMatrix={fetchTTPMatrix}
+            selectedProjectId={selectedProjectId}
+            graphData={graphData}
           />
         )}
       </div>
