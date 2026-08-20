@@ -28,7 +28,11 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
 
   async getExploitationPaths(projectId) {
     const rawData = await this.apiDataSource.fetchExploitationPaths(projectId);
-    return (rawData || []).map(path => new ExploitationPath(path));
+    const paths = (rawData.paths || []).map(path => new ExploitationPath(path));
+    return {
+      paths,
+      warning: rawData.warning
+    };
   }
 
   async createProject(payload) {
