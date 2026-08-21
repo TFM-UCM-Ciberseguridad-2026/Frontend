@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { RiskSummary } from '../Risk/RiskSummary';
 import { EditNodeModal } from './EditNodeModal';
+import { DeleteNodeModal } from './DeleteNodeModal';
 import { RiskScoreGauge } from '../Risk/RiskScoreGauge';
 import { toPercent } from '../Risk/riskFormat';
 import { RenameProjectModal, DeleteProjectModal } from '../HudHeader/ProjectActionModals';
@@ -26,12 +27,11 @@ export function NodeInspector({
   deleteProject
 }) {
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showRenameProjectModal, setShowRenameProjectModal] = useState(false);
   const [showDeleteProjectModal, setShowDeleteProjectModal] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const [expandedFindingId, setExpandedFindingId] = useState(null);
 
-  // Extraer lista de hallazgos asociados al nodo seleccionado
   const findingsList = useMemo(() => {
     if (!selectedNode) return [];
     if (Array.isArray(selectedNode.properties?.findings) && selectedNode.properties.findings.length > 0) {
@@ -44,7 +44,6 @@ export function NodeInspector({
     return [];
   }, [selectedNode]);
 
-  // Ordenación única por RIESGO (descendente: mayor riesgo primero)
   const sortedFindings = useMemo(() => {
     if (findingsList.length === 0) return [];
     return [...findingsList].sort((a, b) => {
@@ -54,7 +53,6 @@ export function NodeInspector({
     });
   }, [findingsList]);
 
-  // Identificar con precisión el hallazgo objetivo de la ruta de ataque activa
   const targetPathFindingId = useMemo(() => {
     if (!selectedExploitationPath?.steps || sortedFindings.length === 0) return null;
 
@@ -68,7 +66,6 @@ export function NodeInspector({
         const fPropId = String(f.properties?.id ?? '').trim();
         const fCveId = String(f.properties?.cve_id || f.properties?.cve || '').trim().toLowerCase();
 
-        // Match por ID (elementId o ID numérico de propiedad)
         const isIdMatch = Boolean(
           sFindingId && (
             fNodeId === sFindingId ||
@@ -79,11 +76,9 @@ export function NodeInspector({
           )
         );
 
-        // Match por CVE
         const isCveMatch = Boolean(sVuln && fCveId && (fCveId === sVuln || fCveId.includes(sVuln)));
 
         if (isIdMatch || isCveMatch) {
-          // Devolver el ID en el mismo formato exacto que fId en el map loop (props.id ?? f.id)
           return String(f.properties?.id ?? f.id);
         }
       }
@@ -92,10 +87,9 @@ export function NodeInspector({
     return null;
   }, [selectedExploitationPath, sortedFindings]);
 
-  // Auto-desplegar: Prioriza el hallazgo de la ruta de ataque objetivo; si no hay, abre el de mayor riesgo
   useEffect(() => {
-    setConfirmDelete(false);
     setShowEditModal(false);
+    setShowDeleteModal(false);
 
     if (targetPathFindingId) {
       setExpandedFindingId(targetPathFindingId);
@@ -123,7 +117,7 @@ export function NodeInspector({
 
   const categoryLabel = selectedNode.primaryLabel || selectedNode.labels?.[0] || 'Unknown';
   const nodeName = selectedNode.name || selectedNode.properties?.title || selectedNode.properties?.nombre || 'Sin Nombre';
-  const isManageableAsset = ['Endpoint', 'Network', 'Hardware', 'Container'].includes(categoryLabel);
+  const isManageableAsset = ['Endpoint', 'Network', 'Hardware', 'Container', 'Software', 'SoftwareInstallation'].includes(categoryLabel);
   const canEdit = isManageableAsset && typeof updateNode === 'function';
   const canDelete = isManageableAsset && typeof deleteNode === 'function';
   const isProject = categoryLabel === 'Project';
@@ -143,7 +137,7 @@ export function NodeInspector({
         <span className="badge">{categoryLabel.toUpperCase()}</span>
         <h2 className="node-title">{nodeName}</h2>
 
-        {/* ACCIONES DE GESTIÓN DE NODO */}
+        {/* ACCIONES DE GESTIÓN */}
         {(canDelete || canEdit || canEditProject || canDeleteProject) && (
           <div className="node-actions-group">
             {canEdit && (
@@ -168,41 +162,13 @@ export function NodeInspector({
             )}
 
             {canDelete && (
-              !confirmDelete ? (
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-node-action btn-node-delete"
-                  onClick={() => setConfirmDelete(true)}
-                >
-                  🗑️ Eliminar
-                </button>
-              ) : (
-                <div className="delete-confirm-box">
-                  <div className="delete-confirm-title">
-                    ⚠️ ¿Eliminar de forma permanente?
-                  </div>
-                  <div className="delete-confirm-actions">
-                    <button
-                      type="button"
-                      className="btn btn-confirm-delete"
-                      onClick={() => {
-                        setConfirmDelete(false);
-                        const idToDelete = selectedNode.properties?.id ?? selectedNode.id;
-                        deleteNode(categoryLabel, idToDelete);
-                      }}
-                    >
-                      Sí, Eliminar
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-cancel-delete"
-                      onClick={() => setConfirmDelete(false)}
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-                </div>
-              )
+              <button
+                type="button"
+                className="btn btn-secondary btn-node-action btn-node-delete"
+                onClick={() => setShowDeleteModal(true)}
+              >
+                🗑️ Eliminar
+              </button>
             )}
 
             {canDeleteProject && (
@@ -235,7 +201,6 @@ export function NodeInspector({
 
               return (
                 <div key={fId} className={`finding-accordion-card ${isPathTarget ? 'is-path-target' : ''}`}>
-                  {/* CABECERA PLEGADA */}
                   <div
                     className={`finding-accordion-header ${isExpanded ? 'is-expanded' : ''}`}
                     onClick={() => toggleFinding(fId)}
@@ -261,7 +226,6 @@ export function NodeInspector({
                     </div>
                   </div>
 
-                  {/* CONTENIDO DESPLEGADO */}
                   {isExpanded && (
                     <div className="finding-accordion-body">
                       <div className="finding-gauges-row">
@@ -303,7 +267,6 @@ export function NodeInspector({
             })}
           </div>
         ) : (
-          /* VISTA SECUNDARIA PARA OTROS NODOS */
           <>
             <RiskSummary node={selectedNode} />
 
@@ -339,6 +302,15 @@ export function NodeInspector({
           node={selectedNode}
           onClose={() => setShowEditModal(false)}
           updateNode={updateNode}
+        />
+      )}
+
+      {showDeleteModal && (
+        <DeleteNodeModal
+          node={selectedNode}
+          isOpen={showDeleteModal}
+          onClose={() => setShowDeleteModal(false)}
+          onDelete={deleteNode}
         />
       )}
 

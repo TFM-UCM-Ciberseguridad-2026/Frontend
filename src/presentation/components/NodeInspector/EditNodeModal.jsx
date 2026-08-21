@@ -4,13 +4,12 @@ import '../AddAssets/AddAssetsButton.css';
 export function EditNodeModal({ node, onClose, updateNode }) {
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState(null);
-  const [formData, setFormData] = useState({});
+  const [formData, setFormData] = useState({ justification: '' });
 
   useEffect(() => {
     if (!node || !node.properties) return;
     const props = { ...node.properties };
     const label = node.primaryLabel;
-    console.debug('[EditNodeModal] Abriendo nodo:', label, 'props.ips=', props.ips, 'props.id=', props.id);
 
     if (label === 'Endpoint') {
       const fetchIPs = async () => {
@@ -26,7 +25,6 @@ export function EditNodeModal({ node, onClose, updateNode }) {
               });
             }
           } else {
-            // Fallback to props.ips if API fails
             if (Array.isArray(props.ips)) {
               initialIps = props.ips.map(entry => {
                 if (typeof entry === 'string') return { ip: entry, vlan_id: '' };
@@ -35,7 +33,7 @@ export function EditNodeModal({ node, onClose, updateNode }) {
             }
           }
         } catch (e) {
-          console.error("Failed to fetch IPs:", e);
+          console.error('Failed to fetch IPs:', e);
         }
 
         setFormData(prev => ({
@@ -48,11 +46,11 @@ export function EditNodeModal({ node, onClose, updateNode }) {
           confidentiality_req: props.confidentiality_req || props.confidentiality_requirement || 'HIGH',
           integrity_req: props.integrity_req || props.integrity_requirement || 'HIGH',
           availability_req: props.availability_req || props.availability_requirement || 'HIGH',
+          justification: '',
           ips: initialIps
         }));
       };
 
-      // Initialize without IPs while loading
       setFormData({
         hostname: props.hostname || '',
         tipo: props.tipo || props.type || 'Server',
@@ -62,6 +60,7 @@ export function EditNodeModal({ node, onClose, updateNode }) {
         confidentiality_req: props.confidentiality_req || props.confidentiality_requirement || 'HIGH',
         integrity_req: props.integrity_req || props.integrity_requirement || 'HIGH',
         availability_req: props.availability_req || props.availability_requirement || 'HIGH',
+        justification: '',
         ips: []
       });
 
@@ -80,6 +79,7 @@ export function EditNodeModal({ node, onClose, updateNode }) {
         image_id: props.image_id || '',
         internet_exposed: Boolean(props.internet_exposed),
         privileged: Boolean(props.privileged),
+        justification: '',
         ips: initialIps
       });
     } else if (label === 'Network') {
@@ -88,16 +88,18 @@ export function EditNodeModal({ node, onClose, updateNode }) {
         cidr: props.cidr || '',
         gateway: props.gateway || '',
         vlan_id: props.vlan_id ?? 0,
-        descripcion: props.descripcion || props.description || ''
+        descripcion: props.descripcion || props.description || '',
+        justification: ''
       });
     } else if (label === 'Hardware') {
       setFormData({
         manufacturer: props.manufacturer || '',
-        modelo: props.model || '',
+        modelo: props.model || props.modelo || '',
         cpu: props.cpu || '4',
-        ram_gb: props.ram ?? 8,
-        storage_gb: props.storage ?? 100,
-        tipo: props.type || 'x86_64'
+        ram_gb: props.ram ?? props.ram_gb ?? 8,
+        storage_gb: props.storage ?? props.storage_gb ?? 100,
+        tipo: props.type || props.tipo || 'x86_64',
+        justification: ''
       });
     } else if (label === 'SoftwareInstallation') {
       setFormData({
@@ -105,7 +107,8 @@ export function EditNodeModal({ node, onClose, updateNode }) {
         install_path: props.install_path || '',
         status: props.status || 'active',
         detected_by: props.detected_by || '',
-        package_manager: props.package_manager || ''
+        package_manager: props.package_manager || '',
+        justification: ''
       });
     } else if (label === 'Software') {
       setFormData({
@@ -114,10 +117,11 @@ export function EditNodeModal({ node, onClose, updateNode }) {
         vendor: props.vendor || '',
         version: props.version || '',
         type: props.type || 'a',
-        cpe: props.cpe || ''
+        cpe: props.cpe || '',
+        justification: ''
       });
     } else {
-      setFormData(props);
+      setFormData({ ...props, justification: '' });
     }
   }, [node]);
 
@@ -128,7 +132,6 @@ export function EditNodeModal({ node, onClose, updateNode }) {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  // Gestión de array de IPs para Endpoints
   const addIp = () => {
     setFormData(prev => ({ ...prev, ips: [...(prev.ips || []), { ip: '', vlan_id: '' }] }));
   };
@@ -147,6 +150,11 @@ export function EditNodeModal({ node, onClose, updateNode }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!formData.justification || formData.justification.trim() === '') {
+      setFormError('El motivo/justificación técnica es obligatorio para registrar la modificación.');
+      return;
+    }
+
     setLoading(true);
     setFormError(null);
 
@@ -171,8 +179,7 @@ export function EditNodeModal({ node, onClose, updateNode }) {
             <div className="asset-modal-subtitle">
               {['Endpoint', 'Network', 'Container'].includes(label)
                 ? 'Modifica las propiedades y reevalúa los enlaces de red de este activo'
-                : 'Modifica las propiedades de este activo en la topología'
-              }
+                : 'Modifica las propiedades de este activo en la topología'}
             </div>
           </div>
           <button className="asset-modal-close" onClick={onClose} disabled={loading}>×</button>
@@ -180,6 +187,28 @@ export function EditNodeModal({ node, onClose, updateNode }) {
 
         <div className="asset-modal-body">
           <form onSubmit={handleSubmit} className="asset-form">
+            {/* BLOQUE HUD OBLIGATORIO: JUSTIFICACIÓN */}
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(77, 59, 255, 0.12), rgba(17, 0, 119, 0.25))',
+              border: '1px solid var(--c500)',
+              borderRadius: '8px',
+              padding: '12px',
+              boxShadow: '0 0 15px rgba(77, 59, 255, 0.15)'
+            }}>
+              <div className="asset-field-label" style={{ color: 'var(--c200)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>📝</span> JUSTIFICACIÓN DEL CAMBIO (OBLIGATORIO)
+              </div>
+              <textarea
+                className="asset-input asset-textarea"
+                placeholder="Motivo técnico, ticket de cambio o justificación del ajuste..."
+                rows={2}
+                value={formData.justification || ''}
+                onChange={(e) => updateField('justification', e.target.value)}
+                required
+                style={{ marginTop: '4px', borderColor: 'var(--c600)' }}
+              />
+            </div>
+
             {/* CAMPOS PARA ENDPOINT */}
             {label === 'Endpoint' && (
               <>
@@ -301,7 +330,7 @@ export function EditNodeModal({ node, onClose, updateNode }) {
                             type="number"
                             min="0"
                             className="asset-input ip-row-vlan"
-                            placeholder="VLAN ID (opcional)"
+                            placeholder="VLAN ID"
                             value={ipRow.vlan_id ?? ''}
                             onChange={(e) => {
                               const val = e.target.value;
@@ -323,9 +352,6 @@ export function EditNodeModal({ node, onClose, updateNode }) {
                   <button type="button" className="btn btn-secondary asset-add-ip-btn" onClick={addIp}>
                     + Añadir Dirección IP
                   </button>
-                  <div className="asset-field-help">
-                    Al guardar, el sistema actualizará los nodos IP y re-enlazará el Endpoint con las redes cuyo rango CIDR coincida y compartan VLAN.
-                  </div>
                 </div>
               </>
             )}
@@ -367,11 +393,11 @@ export function EditNodeModal({ node, onClose, updateNode }) {
                   />
                 </div>
 
-                <div className="asset-checkbox-row" style={{marginBottom: '1rem'}}>
+                <div className="asset-checkbox-row">
                   <input
                     type="checkbox"
                     id="edit_cont_internet"
-                    checked={formData.internet_exposed || false}
+                    checked={Boolean(formData.internet_exposed)}
                     onChange={(e) => updateField('internet_exposed', e.target.checked)}
                   />
                   <label htmlFor="edit_cont_internet" className="asset-field-label asset-checkbox-label">
@@ -379,14 +405,14 @@ export function EditNodeModal({ node, onClose, updateNode }) {
                   </label>
                 </div>
 
-                <div className="asset-checkbox-row" style={{marginBottom: '1rem'}}>
+                <div className="asset-checkbox-row">
                   <input
                     type="checkbox"
                     id="edit_cont_privileged"
-                    checked={formData.privileged || false}
+                    checked={Boolean(formData.privileged)}
                     onChange={(e) => updateField('privileged', e.target.checked)}
                   />
-                  <label htmlFor="edit_cont_privileged" className="asset-field-label asset-checkbox-label" title="Si el contenedor corre en modo Privilegiado, las vulnerabilidades locales (LPE) podrán escapar al host">
+                  <label htmlFor="edit_cont_privileged" className="asset-field-label asset-checkbox-label">
                     Ejecución en modo Privilegiado (Privileged)
                   </label>
                 </div>
@@ -495,12 +521,8 @@ export function EditNodeModal({ node, onClose, updateNode }) {
                     onChange={(e) => updateField('descripcion', e.target.value)}
                   />
                 </div>
-                <div className="asset-field-help">
-                  Al actualizar, se recalcularán los enlaces y los Endpoints que entren en el nuevo rango CIDR/VLAN quedarán automáticamente asociados.
-                </div>
               </>
             )}
-
 
             {/* CAMPOS PARA HARDWARE */}
             {label === 'Hardware' && (
@@ -584,7 +606,6 @@ export function EditNodeModal({ node, onClose, updateNode }) {
                     className="asset-input"
                     value={formData.associated_endpoint || 'N/A'}
                     disabled
-                    title="Esta propiedad se define mediante los enlaces del grafo y no se puede editar aquí"
                   />
                 </div>
 
@@ -595,7 +616,6 @@ export function EditNodeModal({ node, onClose, updateNode }) {
                     className="asset-input"
                     value={formData.associated_software || 'N/A'}
                     disabled
-                    title="Esta propiedad se define mediante los enlaces del grafo y no se puede editar aquí"
                   />
                 </div>
 
@@ -611,41 +631,18 @@ export function EditNodeModal({ node, onClose, updateNode }) {
                 </div>
 
                 <div>
-                  <div className="asset-field-label">Estado (status)</div>
+                  <div className="asset-field-label">Estado</div>
                   <input
                     type="text"
                     className="asset-input"
-                    placeholder="active, deprecated, disabled..."
                     value={formData.status || ''}
                     onChange={(e) => updateField('status', e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <div className="asset-field-label">Detectado por (detected_by)</div>
-                  <input
-                    type="text"
-                    className="asset-input"
-                    placeholder="agent, nmap, manual..."
-                    value={formData.detected_by || ''}
-                    onChange={(e) => updateField('detected_by', e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <div className="asset-field-label">Gestor de Paquetes (package_manager)</div>
-                  <input
-                    type="text"
-                    className="asset-input"
-                    placeholder="dpkg, rpm, apt, npm, pip..."
-                    value={formData.package_manager || ''}
-                    onChange={(e) => updateField('package_manager', e.target.value)}
                   />
                 </div>
               </>
             )}
 
-            {/* CAMPOS PARA SOFTWARE (CATÁLOGO) */}
+            {/* CAMPOS PARA SOFTWARE */}
             {label === 'Software' && (
               <>
                 <div>
@@ -681,24 +678,10 @@ export function EditNodeModal({ node, onClose, updateNode }) {
                 </div>
 
                 <div>
-                  <div className="asset-field-label">Tipo (a: app, o: OS, h: hardware)</div>
-                  <select
-                    className="asset-input"
-                    value={formData.type || 'a'}
-                    onChange={(e) => updateField('type', e.target.value)}
-                  >
-                    <option value="a">Aplicación (a)</option>
-                    <option value="o">Sistema Operativo (o)</option>
-                    <option value="h">Hardware (h)</option>
-                  </select>
-                </div>
-
-                <div>
                   <div className="asset-field-label">CPE</div>
                   <input
                     type="text"
                     className="asset-input"
-                    placeholder="cpe:2.3:a:vendor:name:version..."
                     value={formData.cpe || ''}
                     onChange={(e) => updateField('cpe', e.target.value)}
                   />
@@ -717,8 +700,7 @@ export function EditNodeModal({ node, onClose, updateNode }) {
                   ? 'Guardando Cambios...'
                   : ['Endpoint', 'Network'].includes(label)
                     ? 'Guardar y Re-enlazar'
-                    : 'Guardar Cambios'
-                }
+                    : 'Guardar Cambios'}
               </button>
             </div>
           </form>

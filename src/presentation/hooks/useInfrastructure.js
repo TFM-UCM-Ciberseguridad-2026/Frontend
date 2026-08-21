@@ -32,7 +32,6 @@ import { RefreshPatchesForVulnerabilityUseCase } from '../../domain/usecases/Ref
 import { DeclarePatchAppliedUseCase } from '../../domain/usecases/DeclarePatchAppliedUseCase';
 import { GetPatchesForVulnerabilityUseCase } from '../../domain/usecases/GetPatchesForVulnerabilityUseCase';
 
-
 export function useInfrastructure() {
   const toast = useToast();
   const [showDashboard, setShowDashboard] = useState(false);
@@ -219,9 +218,9 @@ export function useInfrastructure() {
     setSelectedExploitationPath(null);
   };
 
-  const renameProject = async (projectId, newName) => {
+  const renameProject = async (projectId, newName, justification) => {
     try {
-      const res = await renameProjectUseCase.execute(projectId, newName);
+      const res = await renameProjectUseCase.execute(projectId, newName, justification);
       showToast('¡Proyecto renombrado con éxito!');
       await fetchInfrastructure(true);
       return res;
@@ -231,9 +230,9 @@ export function useInfrastructure() {
     }
   };
 
-  const deleteProject = async (projectId) => {
+  const deleteProject = async (projectId, justification) => {
     try {
-      await deleteProjectUseCase.execute(projectId);
+      await deleteProjectUseCase.execute(projectId, justification);
       showToast('¡Proyecto eliminado con éxito!');
       await fetchInfrastructure(true);
       if (String(projectId) === String(selectedProjectId)) {
@@ -360,7 +359,7 @@ export function useInfrastructure() {
   const updateNode = async (category, id, data, selectedProjectId) => {
     try {
       const res = await updateNodeUseCase.execute(category, id, data, selectedProjectId);
-      toast.success('¡Activo actualizado!', 'Edición Guardada');
+      toast.success('¡Activo actualizado y auditado!', 'Edición Guardada');
       await fetchInfrastructure(true);
       return res;
     } catch (err) {
@@ -369,10 +368,10 @@ export function useInfrastructure() {
     }
   };
 
-  const deleteNode = async (category, id) => {
+  const deleteNode = async (category, id, justification = '') => {
     try {
-      const res = await deleteNodeUseCase.execute(category, id);
-      toast.success('¡El activo fue eliminado del grafo!', 'Activo Eliminado');
+      const res = await deleteNodeUseCase.execute(category, id, justification);
+      toast.success('¡El activo fue eliminado del grafo y auditado!', 'Activo Eliminado');
       if (selectedNode) {
         setSelectedNode(null);
       }
@@ -444,19 +443,15 @@ export function useInfrastructure() {
     }
   };
 
-
   const declarePatchApplied = async (installationId, payload, applyingKey = null) => {
     setPatchApplyingKey(applyingKey);
     setPatchApplyError(null);
 
     try {
       const result = await declarePatchAppliedUseCase.execute(installationId, payload);
-
       toast.success('Parche declarado como aplicado', 'Patch aplicado');
-
       await fetchPatchQueue();
       await fetchInfrastructure(true);
-
       return result;
     } catch (err) {
       setPatchApplyError(err.message);
@@ -466,7 +461,6 @@ export function useInfrastructure() {
       setPatchApplyingKey(null);
     }
   };
-
 
   const focusPatchQueueItem = (item) => {
     const findingNode = (graphData?.nodes || []).find(n =>
@@ -568,7 +562,7 @@ export function useInfrastructure() {
 
       if (options.overwrite && options.targetProjectId) {
         try {
-          await repository.deleteProject(options.targetProjectId);
+          await repository.deleteProject(options.targetProjectId, 'Sobrescritura por importación');
         } catch (delErr) {
           console.warn('Aviso limpiando proyecto anterior:', delErr);
         }
@@ -674,7 +668,6 @@ export function useInfrastructure() {
     setShowFindingVulnsModal(false);
   }, [selectedProjectId]);
 
-  // Filtrar graphData según el proyecto seleccionado y agrupar hallazgos por SoftwareInstallation
   const filteredGraphData = useMemo(() => {
     if (!selectedProjectId || !graphData.nodes || graphData.nodes.length === 0) {
       return graphData;
@@ -691,7 +684,6 @@ export function useInfrastructure() {
     const rels = graphData.relationships || [];
     const nodeMap = new Map(graphData.nodes.map(n => [n.id, n]));
 
-    // Inject software name into SoftwareInstallation nodes
     rels.forEach(rel => {
       if (rel.type === 'INSTANCE_OF') {
         const sourceNode = nodeMap.get(rel.source);
@@ -1005,19 +997,17 @@ export function useInfrastructure() {
       .filter(Boolean)
       .filter(item => item.installationId && item.softwareId);
   }, [filteredGraphData]);
+
   const getSelectedProjectContainerImages = useCallback(() => {
     return (filteredGraphData?.nodes || [])
       .filter(n => n.primaryLabel === 'ContainerImage')
       .map(n => ({
         imageId: n.properties?.id,
-        // Usar el id canónico del nodo (ej: "httpd:2.4.49"), no el nombre construido
-        // por el getter de Node.js que podría añadir ":latest" extra.
         imageName: n.properties?.id || n.properties?.name
       }))
       .filter(item => item.imageId);
   }, [filteredGraphData]);
 
-  // FUNCIÓN 1: Analizar vulnerabilidades + CÁLCULO AUTOMÁTICO DE RIESGO
   const analyzeProjectVulnerabilities = async () => {
     if (!selectedProjectId || vulnScanLoading || riskComputeLoading) return;
 
@@ -1037,7 +1027,6 @@ export function useInfrastructure() {
 
       const failedItems = [];
 
-      // 1. Escanear instalaciones de software
       for (const installation of installations) {
         try {
           await scanInstallationVulnerabilitiesUseCase.execute(
@@ -1052,7 +1041,6 @@ export function useInfrastructure() {
         }
       }
 
-      // 2. Escanear imágenes de contenedores con Docker Scout
       for (const image of containerImages) {
         try {
           await scanContainerImageVulnerabilitiesUseCase.execute(
@@ -1086,13 +1074,11 @@ export function useInfrastructure() {
       setVulnScanLoading(false);
     }
 
-    // SI EL ANÁLISIS FUE EXITOSO, ENCADENAR CÁLCULO DE RIESGO AUTOMÁTICO
     if (successCount > 0) {
       await computeSelectedProjectRisk();
     }
   };
 
-  // FUNCIÓN 2: Solo calcular riesgo del proyecto
   const computeSelectedProjectRisk = async () => {
     if (!selectedProjectId || riskComputeLoading) return;
 
@@ -1220,5 +1206,4 @@ export function useInfrastructure() {
     patchDetailsError,
     fetchPatchesForCVE
   };
-
 }
