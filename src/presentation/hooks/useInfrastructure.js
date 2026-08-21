@@ -182,7 +182,10 @@ export function useInfrastructure() {
     setPathsError(null);
     try {
       const data = await getExploitationPathsUseCase.execute(selectedProjectId);
-      setExploitationPaths(data || []);
+      setExploitationPaths(data.paths || []);
+      if (data.warning) {
+        toast.warning(data.warning, 'Análisis en Segundo Plano');
+      }
     } catch (err) {
       console.error(err);
       setPathsError(err.message);

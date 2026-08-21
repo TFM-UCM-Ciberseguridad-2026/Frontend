@@ -41,7 +41,16 @@ export class InfrastructureApiDataSource {
     if (!res.ok) {
       throw new Error(`Error: ${res.statusText}`);
     }
-    return await res.json();
+    const paths = await res.json();
+    const isPending = res.headers.get("X-Analysis-Pending") === "true";
+    const rawWarning = res.headers.get("X-Analysis-Warning");
+    // decodeURIComponent doesn't decode '+' to spaces, so we replace them explicitly
+    const warning = rawWarning ? decodeURIComponent(rawWarning.replace(/\+/g, '%20')) : null;
+    
+    return {
+      paths,
+      warning: isPending ? warning : null
+    };
   }
 
   async createProject(payload) {
