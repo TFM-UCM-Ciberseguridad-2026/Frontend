@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { useTTPSocket } from '../hooks/useTTPSocket';
 import './TtpsPage.css';
 
 export const TACTICS = [
@@ -101,41 +102,28 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
       .catch(err => console.error("Error fetching MITRE TTP count:", err));
   }, []);
 
-  React.useEffect(() => {
-    let intervalId = null;
-
-    const checkStatus = () => {
-      fetch('/api/infrastructure/ttp-sync-status')
-        .then(res => res.json())
-        .then(data => {
-          if (data) {
-            setSyncStatus(data);
-            if (data.processing) {
-              if (!intervalId) {
-                intervalId = setInterval(checkStatus, 1500);
-              }
-            } else {
-              if (intervalId) {
-                clearInterval(intervalId);
-                intervalId = null;
-                if (fetchInfrastructure) {
-                  fetchInfrastructure();
-                }
-              }
-            }
-          }
-        })
-        .catch(err => console.error("Error fetching TTP sync status:", err));
-    };
-
-    checkStatus();
-
-    return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
-    };
-  }, [fetchInfrastructure]);
+  // Notificaciones en tiempo real del worker de TTPs.
+  // El hook se conecta al WebSocket filtrando por el proyecto activo:
+  //   - onSyncStatus: actualiza el estado completo al conectar/reconectar
+  //   - onEvent: recibe cada CVE_MAPPED en tiempo real sin polling
+  // El servidor (WSHub) garantiza que project_id=X no recibe eventos de project_id=Y.
+  useTTPSocket({
+    projectId: selectedProjectId,
+    onSyncStatus: (data) => {
+      if (data) setSyncStatus(data);
+    },
+    onEvent: (event) => {
+      // Actualizar logs y estado de procesamiento en tiempo real
+      setSyncStatus(prev => ({
+        ...prev,
+        processing: true,
+        current_cve: event.cve_id,
+        logs: [...(prev.logs || []), event.log].slice(-200), // cap a 200 líneas
+      }));
+      // Recargar el grafo en background para que aparezcan las nuevas relaciones
+      if (fetchInfrastructure) fetchInfrastructure();
+    },
+  });
 
   React.useEffect(() => {
     if (logsEndRef.current) {
@@ -215,7 +203,14 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
   };
 
   const handleMapTTPs = () => {
-    fetch('/api/infrastructure/map-ttps', { method: 'POST' })
+    // Enviar project_id para que el sweep sea acotado al proyecto activo.
+    // El hub WS entregará los eventos SOLO a los clientes de este proyecto.
+    const pid = Number(selectedProjectId) || 0;
+    fetch('/api/infrastructure/map-ttps', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project_id: pid }),
+    })
       .then(res => res.json())
       .then(data => {
         if (showToast) {
