@@ -108,7 +108,13 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
+  async searchCPE(query) {
+    const res = await fetch(`/api/cpe/search?query=${encodeURIComponent(query)}`);
+    return await this._handleResponse(res);
+  }
+
   async createNetwork(payload) {
+
     // Ya no cuelga de un endpoint: se crea a nivel de infraestructura y el
     // backend enlaza los endpoints compatibles por CIDR + VLAN.
     const res = await fetch('/api/networks', {

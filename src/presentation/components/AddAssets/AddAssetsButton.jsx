@@ -90,6 +90,11 @@ export function AddAssetButton({
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState(null);
 
+  // --- Estados para el flujo en 2 pasos de CPE Software ---
+  const [softwareStep, setSoftwareStep] = useState('form'); // 'form' | 'checking' | 'suggestions'
+  const [cpeSuggestions, setCpeSuggestions] = useState([]);
+  const [selectedCpe, setSelectedCpe] = useState('');
+
   const openTypeSelect = () => {
     setShowTypeSelect(true);
     setFormError(null);
@@ -99,16 +104,28 @@ export function AddAssetButton({
     setShowTypeSelect(false);
     setActiveType(null);
     setFormError(null);
+    setSoftwareStep('form');
+    setCpeSuggestions([]);
+    setSelectedCpe('');
   };
 
   const chooseType = (typeKey) => {
     setActiveType(typeKey);
     setShowTypeSelect(false);
+    setFormError(null);
+    if (typeKey === 'software') {
+      setSoftwareStep('form');
+      setCpeSuggestions([]);
+      setSelectedCpe('');
+    }
   };
 
   const backToTypeSelect = () => {
     setActiveType(null);
     setShowTypeSelect(true);
+    setSoftwareStep('form');
+    setCpeSuggestions([]);
+    setSelectedCpe('');
   };
 
   const updateField = (typeKey, field, value) => {
@@ -120,7 +137,13 @@ export function AddAssetButton({
 
   const resetForm = (typeKey) => {
     setForms(prev => ({ ...prev, [typeKey]: cloneInitialForm(typeKey) }));
+    if (typeKey === 'software') {
+      setSoftwareStep('form');
+      setCpeSuggestions([]);
+      setSelectedCpe('');
+    }
   };
+
 
   // --- Manejo de IPs ---
   const addIp = (typeKey) => {
@@ -152,8 +175,8 @@ export function AddAssetButton({
     }));
   };
 
-  const submitAsset = async (typeKey) => {
-    const data = forms[typeKey];
+  const submitAsset = async (typeKey, overrideData) => {
+    const data = overrideData || forms[typeKey];
     setLoading(true);
     setFormError(null);
 
@@ -219,7 +242,95 @@ export function AddAssetButton({
     }
   };
 
+  const handleCheckSoftware = async (e) => {
+    if (e) e.preventDefault();
+    setFormError(null);
+
+    const sw = forms.software;
+    if (!sw.endpoint_id) {
+      setFormError('Debes seleccionar un Host o Contenedor.');
+      return;
+    }
+    if (!sw.install_path) {
+      setFormError('El campo Install Path es obligatorio.');
+      return;
+    }
+    const hasAnyField = (sw.name && sw.name.trim()) || (sw.vendor && sw.vendor.trim()) || (sw.version && sw.version.trim());
+    if (!hasAnyField) {
+      setFormError('Debes rellenar al menos un campo identificativo del software (Nombre, Fabricante o Versión).');
+      return;
+    }
+
+    setSoftwareStep('checking');
+    try {
+      const queryParts = [sw.vendor, sw.name, sw.version].filter(p => p && p.trim()).map(p => p.trim());
+      const query = queryParts.join(' ');
+
+      const res = await fetch(`/api/cpe/search?query=${encodeURIComponent(query)}`);
+      if (!res.ok) {
+        throw new Error('Error al consultar la API de sugerencias CPE.');
+      }
+      const data = await res.json();
+      const results = Array.isArray(data) ? data : [];
+
+      setCpeSuggestions(results);
+
+      // CPE sintético por defecto para la opción personalizada
+      const cleanVendor = (sw.vendor || 'custom').toLowerCase().replace(/[^a-z0-9]/g, '_');
+      const cleanProduct = (sw.name || 'app').toLowerCase().replace(/[^a-z0-9]/g, '_');
+      const cleanVersion = (sw.version || '*').toLowerCase().replace(/[^a-z0-9.]/g, '_');
+      const customCPE = `cpe:2.3:${sw.type || 'a'}:${cleanVendor}:${cleanProduct}:${cleanVersion}:*:*:*:*:*:*:*`;
+
+      if (results.length > 0) {
+        setSelectedCpe(results[0].cpe || results[0].CPE || customCPE);
+      } else {
+        setSelectedCpe(customCPE);
+      }
+
+      setSoftwareStep('suggestions');
+    } catch (err) {
+      console.error(err);
+      setFormError(err.message || 'Error al comprobar coincidencia de CPE.');
+      setSoftwareStep('form');
+    }
+  };
+
+  const handleFinalSubmitSoftware = async (e) => {
+    if (e) e.preventDefault();
+
+    let vendor = forms.software.vendor;
+    let name = forms.software.name;
+    let version = forms.software.version;
+    const cpe = selectedCpe || forms.software.cpe;
+
+    if (cpe && cpe.startsWith('cpe:2.3:')) {
+      const parts = cpe.split(':');
+      if (parts.length >= 6) {
+        if (!vendor || !vendor.trim()) {
+          vendor = (parts[3] && parts[3] !== '*') ? parts[3] : 'custom';
+        }
+        if (!name || !name.trim()) {
+          name = (parts[4] && parts[4] !== '*') ? parts[4] : name;
+        }
+        if (!version || !version.trim()) {
+          version = (parts[5] && parts[5] !== '*') ? parts[5] : version;
+        }
+      }
+    }
+
+    const finalSoftwarePayload = {
+      ...forms.software,
+      vendor: vendor || 'custom',
+      name: name || 'software',
+      version: version || '1.0',
+      cpe: cpe
+    };
+    await submitAsset('software', finalSoftwarePayload);
+  };
+
+
   const handleSubmit = (e, typeKey) => {
+
     e.preventDefault();
     submitAsset(typeKey);
   };
@@ -714,168 +825,245 @@ export function AddAssetButton({
             <div className="asset-modal-header">
               <div>
                 <h2>📦 Nuevo Software</h2>
-                <div className="asset-modal-subtitle">Registra una aplicación y su instalación en un endpoint</div>
+                <div className="asset-modal-subtitle">
+                  {softwareStep === 'form' && 'Paso 1: Registra los datos de la aplicación e instalación'}
+                  {softwareStep === 'checking' && 'Comprobando CPE...'}
+                  {softwareStep === 'suggestions' && 'Paso 2: Selecciona la coincidencia de CPE correcta'}
+                </div>
               </div>
               <button className="asset-modal-close" onClick={closeAll}>✕</button>
             </div>
 
-            <form onSubmit={(e) => handleSubmit(e, 'software')} className="asset-form">
-              <div>
-                <div className="asset-field-label">Host / Contenedor</div>
-                <select
-                  className="asset-input"
-                  value={forms.software.endpoint_id}
-                  onChange={(e) => updateField('software', 'endpoint_id', e.target.value)}
-                  required
-                >
-                  <option value="">-- Selecciona un Host o Contenedor --</option>
-                  <optgroup label="Endpoints (Hosts)">
-                    {endpoints.map(ep => (
-                      <option key={ep.id} value={ep.id}>{ep.name || ep.hostname}</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Contenedores">
-                    {containers.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </optgroup>
-                </select>
-              </div>
-
-              <div>
-                <div className="asset-field-label">Nombre</div>
-                <input
-                  type="text"
-                  className="asset-input"
-                  placeholder="Nginx"
-                  value={forms.software.name}
-                  onChange={(e) => updateField('software', 'name', e.target.value)}
-                  required
-                />
-              </div>
-
-              <div>
-                <div className="asset-field-label">Versión</div>
-                <input
-                  type="text"
-                  className="asset-input"
-                  placeholder="1.18.0"
-                  value={forms.software.version}
-                  onChange={(e) => updateField('software', 'version', e.target.value)}
-                  required
-                />
-              </div>
-
-              <div>
-                <div className="asset-field-label">Tipo</div>
-                <select
-                  className="asset-input"
-                  value={forms.software.type}
-                  onChange={(e) => updateField('software', 'type', e.target.value)}
-                >
-                  <option value="a">Aplicación / Servicio (a)</option>
-                  <option value="o">Sistema Operativo (o)</option>
-                  <option value="h">Hardware / Firmware (h)</option>
-                </select>
-              </div>
-
-              <div>
-                <div className="asset-field-label">CPE</div>
-                <input
-                  type="text"
-                  className="asset-input"
-                  placeholder="cpe:2.3:a:nginx:nginx:1.18.0..."
-                  value={forms.software.cpe}
-                  onChange={(e) => updateField('software', 'cpe', e.target.value)}
-                />
-                <div className="asset-field-help">
-                  * Si no se especifica este campo, se calculará automáticamente con los datos introducidos.
+            {/* PASO 1: FORMULARIO */}
+            {softwareStep === 'form' && (
+              <form onSubmit={handleCheckSoftware} className="asset-form">
+                <div>
+                  <div className="asset-field-label">Host / Contenedor</div>
+                  <select
+                    className="asset-input"
+                    value={forms.software.endpoint_id}
+                    onChange={(e) => updateField('software', 'endpoint_id', e.target.value)}
+                    required
+                  >
+                    <option value="">-- Selecciona un Host o Contenedor --</option>
+                    <optgroup label="Endpoints (Hosts)">
+                      {endpoints.map(ep => (
+                        <option key={ep.id} value={ep.id}>{ep.name || ep.hostname}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Contenedores">
+                      {containers.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </optgroup>
+                  </select>
                 </div>
-              </div>
 
-              <div>
-                <div className="asset-field-label">Fabricante</div>
-                <input
-                  type="text"
-                  className="asset-input"
-                  placeholder="f5, nginx, apache..."
-                  value={forms.software.vendor}
-                  onChange={(e) => updateField('software', 'vendor', e.target.value)}
-                  required
-                />
-                <div className="asset-field-help">
-                  * Obligatorio para la búsqueda precisa de vulnerabilidades en la API de NIST NVD.
+                <div>
+                  <div className="asset-field-label">Nombre</div>
+                  <input
+                    type="text"
+                    className="asset-input"
+                    placeholder="Nginx"
+                    value={forms.software.name}
+                    onChange={(e) => updateField('software', 'name', e.target.value)}
+                  />
                 </div>
-              </div>
 
-              <div>
-                <div className="asset-field-label">Fecha de Lanzamiento</div>
-                <input
-                  type="date"
-                  className="asset-input"
-                  value={forms.software.release_date}
-                  onChange={(e) => updateField('software', 'release_date', e.target.value)}
-                />
-              </div>
-
-              <div className="asset-form-divider">Instalación</div>
-
-              <div>
-                <div className="asset-field-label">Install Path</div>
-                <input
-                  type="text"
-                  className="asset-input"
-                  placeholder="/usr/local/nginx/sbin"
-                  value={forms.software.install_path}
-                  onChange={(e) => updateField('software', 'install_path', e.target.value)}
-                  required
-                />
-              </div>
-
-              <div>
-                <div className="asset-field-label">Criticidad de la instalación</div>
-                <select
-                  className="asset-input"
-                  value={forms.software.criticality_level || 'STANDARD'}
-                  onChange={(e) => updateField('software', 'criticality_level', e.target.value)}
-                >
-                  <option value="LOW">LOW · utilidad menor</option>
-                  <option value="STANDARD">STANDARD · por defecto</option>
-                  <option value="HIGH">HIGH · servicio relevante</option>
-                  <option value="CRITICAL">CRITICAL · BBDD, auth, secretos, pagos</option>
-                </select>
-                <div className="asset-field-help">
-                  Afecta a la prioridad de parcheo, no al riesgo técnico de la vulnerabilidad.
+                <div>
+                  <div className="asset-field-label">Versión</div>
+                  <input
+                    type="text"
+                    className="asset-input"
+                    placeholder="1.18.0"
+                    value={forms.software.version}
+                    onChange={(e) => updateField('software', 'version', e.target.value)}
+                  />
                 </div>
-              </div>
 
-              <div>
-                <div className="asset-field-label">Status</div>
-                <select
-                  className="asset-input"
-                  value={forms.software.status}
-                  onChange={(e) => updateField('software', 'status', e.target.value)}
-                >
-                  <option value="active">active</option>
-                  <option value="inactive">inactive</option>
-                  <option value="deprecated">deprecated</option>
-                </select>
-              </div>
+                <div>
+                  <div className="asset-field-label">Tipo</div>
+                  <select
+                    className="asset-input"
+                    value={forms.software.type}
+                    onChange={(e) => updateField('software', 'type', e.target.value)}
+                  >
+                    <option value="a">Aplicación / Servicio (a)</option>
+                    <option value="o">Sistema Operativo (o)</option>
+                    <option value="h">Hardware / Firmware (h)</option>
+                  </select>
+                </div>
 
-              {formError && <p className="asset-error-text">⚠️ {formError}</p>}
+                <div>
+                  <div className="asset-field-label">Fabricante</div>
+                  <input
+                    type="text"
+                    className="asset-input"
+                    placeholder="f5, nginx, apache..."
+                    value={forms.software.vendor}
+                    onChange={(e) => updateField('software', 'vendor', e.target.value)}
+                  />
+                  <div className="asset-field-help">
+                    * Al menos uno de los campos (Nombre, Fabricante o Versión) debe completarse.
+                  </div>
+                </div>
 
-              <div className="asset-form-actions">
-                <button type="button" className="btn btn-secondary" onClick={backToTypeSelect}>
-                  ← Cambiar tipo
-                </button>
-                <button type="submit" className="btn btn-accent asset-submit-btn" disabled={loading}>
-                  {loading ? 'Guardando...' : 'Guardar Software'}
-                </button>
+                <div>
+                  <div className="asset-field-label">Fecha de Lanzamiento</div>
+                  <input
+                    type="date"
+                    className="asset-input"
+                    value={forms.software.release_date}
+                    onChange={(e) => updateField('software', 'release_date', e.target.value)}
+                  />
+                </div>
+
+                <div className="asset-form-divider">Instalación</div>
+
+                <div>
+                  <div className="asset-field-label">Install Path</div>
+                  <input
+                    type="text"
+                    className="asset-input"
+                    placeholder="/usr/local/nginx/sbin"
+                    value={forms.software.install_path}
+                    onChange={(e) => updateField('software', 'install_path', e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <div className="asset-field-label">Criticidad de la instalación</div>
+                  <select
+                    className="asset-input"
+                    value={forms.software.criticality_level || 'STANDARD'}
+                    onChange={(e) => updateField('software', 'criticality_level', e.target.value)}
+                  >
+                    <option value="LOW">LOW · utilidad menor</option>
+                    <option value="STANDARD">STANDARD · por defecto</option>
+                    <option value="HIGH">HIGH · servicio relevante</option>
+                    <option value="CRITICAL">CRITICAL · BBDD, auth, secretos, pagos</option>
+                  </select>
+                  <div className="asset-field-help">
+                    Afecta a la prioridad de parcheo, no al riesgo técnico de la vulnerabilidad.
+                  </div>
+                </div>
+
+                <div>
+                  <div className="asset-field-label">Status</div>
+                  <select
+                    className="asset-input"
+                    value={forms.software.status}
+                    onChange={(e) => updateField('software', 'status', e.target.value)}
+                  >
+                    <option value="active">active</option>
+                    <option value="inactive">inactive</option>
+                    <option value="deprecated">deprecated</option>
+                  </select>
+                </div>
+
+                {formError && <p className="asset-error-text">⚠️ {formError}</p>}
+
+                <div className="asset-form-actions">
+                  <button type="button" className="btn btn-secondary" onClick={backToTypeSelect}>
+                    ← Cambiar tipo
+                  </button>
+                  <button type="submit" className="btn btn-accent asset-submit-btn">
+                    🔍 Comprobar Software
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* PASO COMPROBANDO (CARGANDO) */}
+            {softwareStep === 'checking' && (
+              <div className="cpe-checking-container">
+                <div className="cpe-spinner"></div>
+                <p className="cpe-checking-title">Consultando servicio CPE Guesser y NIST NVD...</p>
+                <p className="cpe-checking-desc">Analizando tokens de producto, fabricante y versión.</p>
               </div>
-            </form>
+            )}
+
+            {/* PASO 2: VISTA DE SUGERENCIAS */}
+            {softwareStep === 'suggestions' && (
+              <form onSubmit={handleFinalSubmitSoftware} className="asset-form">
+                <div className="cpe-suggestions-container">
+                  <div className="cpe-suggestions-list">
+                    {cpeSuggestions.map((item, idx) => {
+                      const itemCpe = item.cpe || item.CPE;
+                      const isSelected = selectedCpe === itemCpe;
+                      return (
+                        <div
+                          key={idx}
+                          className={`cpe-suggestion-card ${isSelected ? 'selected' : ''}`}
+                          onClick={() => setSelectedCpe(itemCpe)}
+                        >
+                          <div className="cpe-card-header">
+                            <input
+                              type="radio"
+                              name="cpe-selection"
+                              checked={isSelected}
+                              onChange={() => setSelectedCpe(itemCpe)}
+                            />
+                            <span className="cpe-card-title">{item.title || `${item.vendor || ''} ${item.product || ''}`}</span>
+                            {item.match_type && <span className="cpe-badge">{item.match_type}</span>}
+                          </div>
+                          <div className="cpe-card-cpe"><code>{itemCpe}</code></div>
+                        </div>
+                      );
+                    })}
+
+                    {/* OPCIÓN CUSTOM / PERSONALIZADA */}
+                    {(() => {
+                      const sw = forms.software;
+                      const cleanVendor = (sw.vendor || 'custom').toLowerCase().replace(/[^a-z0-9]/g, '_');
+                      const cleanProduct = (sw.name || 'app').toLowerCase().replace(/[^a-z0-9]/g, '_');
+                      const cleanVersion = (sw.version || '*').toLowerCase().replace(/[^a-z0-9.]/g, '_');
+                      const customCPE = `cpe:2.3:${sw.type || 'a'}:${cleanVendor}:${cleanProduct}:${cleanVersion}:*:*:*:*:*:*:*`;
+                      const isSelected = selectedCpe === customCPE;
+
+                      return (
+                        <div
+                          className={`cpe-suggestion-card cpe-custom-card ${isSelected ? 'selected' : ''}`}
+                          onClick={() => setSelectedCpe(customCPE)}
+                        >
+                          <div className="cpe-card-header">
+                            <input
+                              type="radio"
+                              name="cpe-selection"
+                              checked={isSelected}
+                              onChange={() => setSelectedCpe(customCPE)}
+                            />
+                            <span className="cpe-card-title">🛠️ Software Interno / Personalizado</span>
+                            <span className="cpe-badge cpe-badge--custom">CUSTOM</span>
+                          </div>
+                          <div className="cpe-card-cpe"><code>{customCPE}</code></div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+
+                {formError && <p className="asset-error-text">⚠️ {formError}</p>}
+
+                <div className="asset-form-actions">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setSoftwareStep('form')}
+                  >
+                    ← Volver a Editar
+                  </button>
+                  <button type="submit" className="btn btn-accent asset-submit-btn" disabled={loading}>
+                    {loading ? 'Guardando...' : 'Guardar Software'}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}
+
 
       {/* RED */}
       {activeType === 'network' && (
