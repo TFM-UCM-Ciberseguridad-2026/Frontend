@@ -318,15 +318,20 @@ export function AddAssetButton({
       }
     }
 
+    const matchedSuggestion = cpeSuggestions.find(s => (s.cpe || s.CPE) === cpe);
+    const softwareUrl = matchedSuggestion?.url || forms.software.url || '';
+
     const finalSoftwarePayload = {
       ...forms.software,
       vendor: vendor || 'custom',
       name: name || 'software',
       version: version || '1.0',
-      cpe: cpe
+      cpe: cpe,
+      url: softwareUrl
     };
     await submitAsset('software', finalSoftwarePayload);
   };
+
 
 
   const handleSubmit = (e, typeKey) => {
@@ -1008,10 +1013,24 @@ export function AddAssetButton({
                             <span className="cpe-card-title">{item.title || `${item.vendor || ''} ${item.product || ''}`}</span>
                             {item.match_type && <span className="cpe-badge">{item.match_type}</span>}
                           </div>
-                          <div className="cpe-card-cpe"><code>{itemCpe}</code></div>
+                          <div className="cpe-card-cpe">
+                            <code>{itemCpe}</code>
+                            {item.url && (
+                              <a
+                                href={item.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="cpe-card-url-link"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                🌐 Sitio Web / Referencia
+                              </a>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
+
 
                     {/* OPCIÓN CUSTOM / PERSONALIZADA */}
                     {(() => {

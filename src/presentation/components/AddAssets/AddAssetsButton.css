@@ -429,3 +429,19 @@
   border-style: dashed;
   margin-top: 0.5rem;
 }
+
+.cpe-card-url-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  color: #60a5fa;
+  text-decoration: none;
+  margin-left: 0.6rem;
+  transition: color 0.2s ease;
+}
+
+.cpe-card-url-link:hover {
+  color: #93c5fd;
+  text-decoration: underline;
+}
