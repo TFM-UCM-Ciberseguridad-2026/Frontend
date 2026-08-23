@@ -75,6 +75,7 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTtpId, setSelectedTtpId] = useState(null);
   const [modalTtp, setModalTtp] = useState(null);
+  const [isModalClosed, setIsModalClosed] = useState(false);
   const [totalMitreTTPs, setTotalMitreTTPs] = useState(0);
   const cellRefs = useRef({});
 
@@ -124,6 +125,12 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
       if (fetchInfrastructure) fetchInfrastructure();
     },
   });
+
+  React.useEffect(() => {
+    if (!syncStatus.processing) {
+      setIsModalClosed(false);
+    }
+  }, [syncStatus.processing]);
 
   React.useEffect(() => {
     if (logsEndRef.current) {
@@ -203,6 +210,8 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
   };
 
   const handleMapTTPs = () => {
+    setIsModalClosed(false);
+    
     // Enviar project_id para que el sweep sea acotado al proyecto activo.
     // El hub WS entregará los eventos SOLO a los clientes de este proyecto.
     const pid = Number(selectedProjectId) || 0;
@@ -213,8 +222,18 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
     })
       .then(res => res.json())
       .then(data => {
-        if (showToast) {
-          showToast(data.message || 'Mapeo de TTPs iniciado en segundo plano', 'success');
+        if (data.enqueued > 0) {
+          // Si realmente se encolaron tareas, activamos el modal
+          setSyncStatus(prev => ({
+            ...prev,
+            processing: true,
+            current_cve: 'Iniciando análisis...',
+            logs: ['Conectando con el motor de IA en segundo plano...']
+          }));
+          if (showToast) showToast(`Mapeo de ${data.enqueued} vulnerabilidades iniciado`, 'success');
+        } else {
+          // Si no hay tareas, avisamos y no bloqueamos la UI
+          if (showToast) showToast('Todas las vulnerabilidades ya han sido mapeadas en este proyecto.', 'info');
         }
       })
       .catch(err => {
@@ -235,41 +254,80 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
         </p>
       </section>
 
-      {syncStatus.processing ? (
-        <section className="workspace-loading">
-          <div className="loading-card">
-            <div className="spinner-container">
-              <div className="glow-spinner"></div>
-              <span className="spinner-text">Procesando TTPs de vulnerabilidades en segundo plano...</span>
-            </div>
-            
-            {/* NOTA PARA FUSIÓN CON lucas_dev: Este cambio en progress-container elimina los contadores X/Y por simplificación de cola continua */}
-            <div className="progress-container">
-              <div className="progress-bar-bg">
-                <div className="progress-bar-fill-indeterminate"></div>
+      {/* BOTÓN FLOTANTE PARA REABRIR MODAL (SI ESTÁ CERRADO PERO PROCESANDO) */}
+      {syncStatus.processing && isModalClosed && (
+        <button 
+          onClick={() => setIsModalClosed(false)} 
+          className="btn btn-outline" 
+          style={{ 
+            position: 'fixed', 
+            bottom: '30px', 
+            right: '30px', 
+            zIndex: 9000, 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '10px', 
+            padding: '12px 20px', 
+            fontSize: '13px', 
+            background: 'var(--panel-1)',
+            borderColor: 'var(--c400)', 
+            color: 'var(--c50)',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.5), 0 0 15px rgba(122, 115, 255, 0.3)',
+            borderRadius: '12px'
+          }}
+        >
+          <div className="glow-spinner" style={{ width: '16px', height: '16px', borderWidth: '2px', borderTopColor: 'var(--c50)' }}></div>
+          Ver proceso de IA
+        </button>
+      )}
+
+      {syncStatus.processing && !isModalClosed && (
+        <div className="ttp-modal-backdrop" onClick={() => setIsModalClosed(true)} style={{ zIndex: 9999 }}>
+          <div className="ttp-modal" onClick={(e) => e.stopPropagation()} style={{ width: '90%', maxWidth: '800px', padding: '24px' }}>
+            <div className="modal-head" style={{ marginBottom: '20px' }}>
+              <div>
+                <p className="eyebrow">Progreso de Inteligencia Artificial</p>
+                <h3>Procesando TTPs en segundo plano</h3>
               </div>
-              {syncStatus.current_cve && (
-                <div className="current-cve-status">
-                  Mapeando CVE: <strong className="cve-highlight">{syncStatus.current_cve}</strong>
-                </div>
-              )}
+              <button className="modal-close" onClick={() => setIsModalClosed(true)}>
+                ✕
+              </button>
             </div>
 
-            <div className="logs-container">
-              <h4>Consola de Inferencia (Logs de Ollama)</h4>
-              <div className="logs-terminal">
-                {syncStatus.logs.map((logLine, idx) => (
-                  <div key={idx} className="log-line">{logLine}</div>
-                ))}
-                <div ref={logsEndRef} />
+            <div className="loading-card" style={{ background: 'transparent', border: 'none', padding: 0 }}>
+              <div className="spinner-container" style={{ marginBottom: '20px' }}>
+                <div className="glow-spinner"></div>
+                <span className="spinner-text">Procesando TTPs de vulnerabilidades en segundo plano...</span>
+              </div>
+              
+              <div className="progress-container">
+                <div className="progress-bar-bg">
+                  <div className="progress-bar-fill-indeterminate"></div>
+                </div>
+                {syncStatus.current_cve && (
+                  <div className="current-cve-status">
+                    Mapeando CVE: <strong className="cve-highlight">{syncStatus.current_cve}</strong>
+                  </div>
+                )}
+              </div>
+
+              <div className="logs-container">
+                <h4>Consola de Inferencia (Logs de Ollama)</h4>
+                <div className="logs-terminal" style={{ maxHeight: '300px' }}>
+                  {syncStatus.logs.map((logLine, idx) => (
+                    <div key={idx} className="log-line">{logLine}</div>
+                  ))}
+                  <div ref={logsEndRef} />
+                </div>
               </div>
             </div>
           </div>
-        </section>
-      ) : (
-        <section className="workspace">
-          {/* LISTADO DE TTPs (IZQUIERDA) */}
-          <div className="list-panel">
+        </div>
+      )}
+
+      <section className="workspace">
+        {/* LISTADO DE TTPs (IZQUIERDA) */}
+        <div className="list-panel">
             <h3>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                 <path d="M4 6h16M4 12h16M4 18h10" />
@@ -384,16 +442,22 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
                   </div>
                </div>
 
-               <button onClick={handleMapTTPs} className="btn btn-primary" style={{ position: 'absolute', right: '20px', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', fontSize: '12px' }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: '14px', height: '14px' }}>
-                     <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                  </svg>
-                  Calcular TTPs (IA)
-               </button>
+               {syncStatus.processing ? (
+                 <button onClick={() => setIsModalClosed(false)} className="btn btn-outline" style={{ position: 'absolute', right: '20px', display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 16px', fontSize: '12px', border: '1px solid var(--c500)', color: 'var(--c50)' }}>
+                    <div className="glow-spinner" style={{ width: '14px', height: '14px', borderWidth: '2px', borderTopColor: 'var(--c50)' }}></div>
+                    Ver progreso de IA
+                 </button>
+               ) : (
+                 <button onClick={handleMapTTPs} className="btn btn-primary" style={{ position: 'absolute', right: '20px', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', fontSize: '12px' }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: '14px', height: '14px' }}>
+                       <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                    </svg>
+                    Calcular TTPs (IA)
+                 </button>
+               )}
             </div>
           </div>
         </section>
-      )}
 
       {/* MODAL DETALLE DE TTP */}
       {modalTtp && (

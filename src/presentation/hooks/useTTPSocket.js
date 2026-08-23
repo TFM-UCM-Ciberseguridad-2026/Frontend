@@ -32,7 +32,9 @@ export function useTTPSocket({ projectId, onEvent, onSyncStatus, enabled = true 
   // ── Sincronización REST ──────────────────────────────────────────────────────
   const syncFromREST = useCallback(async () => {
     try {
-      const res  = await fetch('/api/infrastructure/ttp-sync-status');
+      const pid = Number(projectId);
+      const pidParam = pid > 0 ? `?project_id=${pid}` : '';
+      const res  = await fetch(`/api/infrastructure/ttp-sync-status${pidParam}`);
       const data = await res.json();
       if (onSyncStatus) onSyncStatus(data);
     } catch (e) {
