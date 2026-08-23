@@ -574,7 +574,7 @@ main.ttps {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(2, 2, 16, 0.72);
+  background: rgba(2, 2, 16, 0.75);
   backdrop-filter: blur(4px);
   padding: 20px;
 }

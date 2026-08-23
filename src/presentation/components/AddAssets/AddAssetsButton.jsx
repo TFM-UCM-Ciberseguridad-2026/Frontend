@@ -767,7 +767,7 @@ export function AddAssetButton({
               </div>
 
               <div>
-                <div className="asset-field-label">Tipo (convención CPE)</div>
+                <div className="asset-field-label">Tipo</div>
                 <select
                   className="asset-input"
                   value={forms.software.type}
@@ -777,9 +777,6 @@ export function AddAssetButton({
                   <option value="o">Sistema Operativo (o)</option>
                   <option value="h">Hardware / Firmware (h)</option>
                 </select>
-                <div className="asset-field-help">
-                  Clasificación CPE 2.3 para la búsqueda automatizada de vulnerabilidades en NIST NVD.
-                </div>
               </div>
 
               <div>

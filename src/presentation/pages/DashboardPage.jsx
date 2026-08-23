@@ -77,7 +77,16 @@ export function DashboardPage({
   patchQueueError,
   fetchPatchQueue,
   refreshPatchesForCVE,
-  focusPatchQueueItem
+  focusPatchQueueItem,
+  patchApplyLoading,
+  patchApplyError,
+  declarePatchApplied,
+  patchApplyingKey,
+  patchesByCVE,
+  patchDetailsLoading,
+  patchDetailsError,
+  fetchPatchesForCVE,
+  isAnalysisPending
 }) {
   const [activeNav, setActiveNav] = useState('grafo');
   const [showExportModal, setShowExportModal] = useState(false);
@@ -174,6 +183,7 @@ export function DashboardPage({
             analyzeProjectVulnerabilities={analyzeProjectVulnerabilities}
             computeSelectedProjectRisk={computeSelectedProjectRisk}
             fetchFindingVulnerabilities={fetchFindingVulnerabilities}
+            isAnalysisPending={isAnalysisPending}
           />
         )}
 
@@ -194,6 +204,14 @@ export function DashboardPage({
             fetchPatchQueue={fetchPatchQueue}
             refreshPatchesForCVE={refreshPatchesForCVE}
             focusPatchQueueItem={focusPatchQueueItem}
+            patchApplyLoading={patchApplyLoading}
+            patchApplyError={patchApplyError}
+            declarePatchApplied={declarePatchApplied}
+            patchApplyingKey={patchApplyingKey}
+            patchesByCVE={patchesByCVE}
+            patchDetailsLoading={patchDetailsLoading}
+            patchDetailsError={patchDetailsError}
+            fetchPatchesForCVE={fetchPatchesForCVE}
             setActiveNav={setActiveNav}
           />
         )}

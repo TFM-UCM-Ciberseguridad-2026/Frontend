@@ -14,7 +14,8 @@ export function GraphFilterSidebar({
   vulnScanLoading,
   riskComputeLoading,
   analyzeProjectVulnerabilities,
-  computeSelectedProjectRisk
+  computeSelectedProjectRisk,
+  isAnalysisPending
 }) {
   const [openSections, setOpenSections] = useState({
     categories: true,
@@ -63,13 +64,17 @@ export function GraphFilterSidebar({
         )}
       </div>
 
-      {/* BARRA DE BÚSQUEDA COMPACTA */}
+      {/* BARRA DE BÚSQUEDA COMPACTA CON ICONO SVG BLANCO */}
       <div className="compact-search-wrapper">
+        <svg className="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="11" cy="11" r="8" />
+          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </svg>
         <input
           id="search"
           type="text"
           className="compact-search-input"
-          placeholder="🔍 Buscar activo..."
+          placeholder="Buscar activo..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />
@@ -83,6 +88,16 @@ export function GraphFilterSidebar({
           </button>
         )}
       </div>
+
+      {/* BANNER: ENRIQUECIMIENTO NVD EN SEGUNDO PLANO */}
+      {isAnalysisPending && (
+        <div className="nvd-pending-banner" title="El enriquecimiento de vulnerabilidades con datos de NVD está en curso. El grafo se actualizará automáticamente al finalizar.">
+          <svg className="spin-icon nvd-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+          </svg>
+          <span>Enriqueciendo CVEs con NVD…<br/><small>El grafo se actualizará solo</small></span>
+        </div>
+      )}
 
       {/* BOTONES DE ACCIÓN RÁPIDA EN EL SIDEBAR */}
       <div className="sidebar-action-group">

@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { ApplyPatchModal } from '../components/PatchQueue/ApplyPatchModal';
 import './PatchQueuePage.css';
 
 const percent = (value) => `${Math.round(Number(value || 0) * 100)}%`;
@@ -16,11 +17,27 @@ export function PatchQueuePage({
   fetchPatchQueue,
   refreshPatchesForCVE,
   focusPatchQueueItem,
+  patchApplyLoading,
+  patchApplyingKey,
+  patchApplyError,
+  declarePatchApplied,
+  patchesByCVE,
+  patchDetailsLoading,
+  patchDetailsError,
+  fetchPatchesForCVE,
   setActiveNav
 }) {
+
+  const [selectedPatchItem, setSelectedPatchItem] = useState(null);
+
   useEffect(() => {
     fetchPatchQueue?.();
   }, [selectedProjectId]);
+
+  useEffect(() => {
+    if (!selectedPatchItem?.cve_id) return;
+    fetchPatchesForCVE?.(selectedPatchItem.cve_id);
+  }, [selectedPatchItem?.cve_id]);
 
   const openInGraph = (item) => {
     const found = focusPatchQueueItem?.(item);
@@ -28,6 +45,29 @@ export function PatchQueuePage({
       setActiveNav?.('grafo');
     }
   };
+
+
+  const getPatchQueueItemKey = (item) =>
+    `${item.installation_id}-${item.cve_id}-${item.finding_id}`;
+
+  const selectedPatchItemKey = selectedPatchItem ? getPatchQueueItemKey(selectedPatchItem) : null;
+  const currentSelectedPatchItem = selectedPatchItemKey
+    ? patchQueue.find(item => getPatchQueueItemKey(item) === selectedPatchItemKey) || selectedPatchItem
+    : null;
+
+  const submitPatchApplication = async (payload) => {
+    if (!currentSelectedPatchItem) return;
+
+    await declarePatchApplied?.(
+      currentSelectedPatchItem.installation_id,
+      payload,
+      getPatchQueueItemKey(currentSelectedPatchItem)
+    );
+
+    setSelectedPatchItem(null);
+  };  
+
+
 
   return (
     <section className="patch-queue-page">
@@ -46,6 +86,9 @@ export function PatchQueuePage({
 
       {patchQueueError && (
         <div className="patch-queue-error">⚠️ {patchQueueError}</div>
+      )}
+      {patchApplyError && (
+        <div className="patch-queue-error">⚠️ {patchApplyError}</div>
       )}
 
       <div className="patch-queue-summary">
@@ -81,8 +124,13 @@ export function PatchQueuePage({
               </tr>
             )}
 
-            {!patchQueueLoading && patchQueue.map(item => (
-              <tr key={`${item.installation_id}-${item.cve_id}-${item.finding_id}`}>
+            {!patchQueueLoading && patchQueue.map(item => {
+              const itemKey = getPatchQueueItemKey(item);
+              const isApplyingThisRow = patchApplyingKey === itemKey;
+              const hasPatchAvailable = Boolean(item.patch_available);
+
+              return (
+              <tr key={itemKey}>
                 <td>{item.position}</td>
                 <td>
                   <span className={tierClass(item.priority_tier)}>
@@ -121,13 +169,35 @@ export function PatchQueuePage({
                     <button type="button" onClick={() => refreshPatchesForCVE?.(item.cve_id)}>
                       Refresh patches
                     </button>
+                    {hasPatchAvailable && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPatchItem(item)}
+                        disabled={isApplyingThisRow}
+                        title="Aplicar patch a esta instalación"
+                      >
+                        {isApplyingThisRow ? 'Aplicando...' : 'Aplicar patch'}
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
+      <ApplyPatchModal
+        isOpen={Boolean(currentSelectedPatchItem)}
+        item={currentSelectedPatchItem}
+        patches={currentSelectedPatchItem ? patchesByCVE?.[currentSelectedPatchItem.cve_id] || [] : []}
+        patchesLoading={patchDetailsLoading}
+        patchesError={patchDetailsError}
+        loading={patchApplyLoading}
+        error={patchApplyError}
+        onClose={() => setSelectedPatchItem(null)}
+        onSubmit={submitPatchApplication}
+      />
     </section>
   );
 }
