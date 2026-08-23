@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef } from 'react';
 
 /**
  * useTTPSocket — Hook que gestiona la conexión WebSocket con el backend para recibir
@@ -25,89 +25,114 @@ import { useEffect, useRef, useCallback } from 'react';
  * @param {boolean}      [options.enabled]     — Si false, no conecta
  */
 export function useTTPSocket({ projectId, onEvent, onSyncStatus, enabled = true }) {
-  const wsRef        = useRef(null);
-  const pollingRef   = useRef(null);
-  const reconnectRef = useRef(null);
+  // Referencias mutables para los callbacks (evita ciclos de dependencias infinitos)
+  const onEventRef = useRef(onEvent);
+  const onSyncStatusRef = useRef(onSyncStatus);
 
-  // ── Sincronización REST ──────────────────────────────────────────────────────
-  const syncFromREST = useCallback(async () => {
-    try {
-      const pid = Number(projectId);
-      const pidParam = pid > 0 ? `?project_id=${pid}` : '';
-      const res  = await fetch(`/api/infrastructure/ttp-sync-status${pidParam}`);
-      const data = await res.json();
-      if (onSyncStatus) onSyncStatus(data);
-    } catch (e) {
-      console.warn('[useTTPSocket] Error en sincronización REST:', e);
-    }
-  }, [onSyncStatus]);
+  // Mantener las referencias siempre actualizadas con los callbacks más recientes en cada render
+  useEffect(() => {
+    onEventRef.current = onEvent;
+    onSyncStatusRef.current = onSyncStatus;
+  });
 
-  // ── Fallback polling ─────────────────────────────────────────────────────────
-  const startPolling = useCallback(() => {
-    if (pollingRef.current) return;
-    pollingRef.current = setInterval(syncFromREST, 1500);
-  }, [syncFromREST]);
-
-  const stopPolling = useCallback(() => {
-    clearInterval(pollingRef.current);
-    pollingRef.current = null;
-  }, []);
-
-  // ── Conexión WebSocket ───────────────────────────────────────────────────────
-  const connect = useCallback(() => {
-    // Construir URL con project_id solo si es un número válido > 0
-    const pid = Number(projectId);
-    const pidParam = pid > 0 ? `?project_id=${pid}` : '';
-    const wsURL = `ws://${window.location.host}/api/ws/ttps${pidParam}`;
-
-    try {
-      const ws = new WebSocket(wsURL);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        console.log(`[useTTPSocket] WebSocket conectado (project_id=${pid || 'global'})`);
-        stopPolling();    // WebSocket activo → desactivar polling
-        syncFromREST();   // Sincronizar estado completo al conectar/reconectar
-      };
-
-      ws.onmessage = (e) => {
-        try {
-          const msg = JSON.parse(e.data);
-          if (msg.type === 'CVE_MAPPED' && onEvent) {
-            onEvent(msg.event);
-          }
-        } catch { /* JSON inválido, ignorar */ }
-      };
-
-      ws.onerror = () => {
-        console.warn('[useTTPSocket] Error en WebSocket, activando fallback polling');
-        startPolling();
-      };
-
-      ws.onclose = () => {
-        console.log('[useTTPSocket] WebSocket cerrado, reintentando en 3s...');
-        startPolling(); // Cobertura mientras reconecta
-        reconnectRef.current = setTimeout(connect, 3000);
-      };
-    } catch (e) {
-      console.warn('[useTTPSocket] WebSocket no disponible, usando polling:', e);
-      startPolling();
-    }
-  }, [projectId, onEvent, syncFromREST, startPolling, stopPolling]);
-
-  // ── Ciclo de vida ────────────────────────────────────────────────────────────
+  // ── Ciclo de vida y Conexión ──────────────────────────────────────────────────
   useEffect(() => {
     if (!enabled) return;
-    connect();
-    return () => {
-      clearTimeout(reconnectRef.current);
-      stopPolling();
-      if (wsRef.current) {
-        // Evitar que onclose dispare una reconexión al desmontar
-        wsRef.current.onclose = null;
-        wsRef.current.close();
-        wsRef.current = null;
+
+    let isUnmounted = false;
+    let ws = null;
+    let pollingInterval = null;
+    let reconnectTimeout = null;
+
+    const stopPolling = () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
       }
     };
-  }, [enabled, connect, stopPolling]);
+
+    const syncFromREST = async () => {
+      if (isUnmounted) return;
+      try {
+        const pid = Number(projectId);
+        const pidParam = pid > 0 ? `?project_id=${pid}` : '';
+        const res = await fetch(`/api/infrastructure/ttp-sync-status${pidParam}`);
+        const data = await res.json();
+        
+        if (!isUnmounted && onSyncStatusRef.current) {
+          onSyncStatusRef.current(data);
+        }
+      } catch (e) {
+        console.warn('[useTTPSocket] Error en sincronización REST:', e);
+      }
+    };
+
+    const startPolling = () => {
+      if (pollingInterval || isUnmounted) return;
+      pollingInterval = setInterval(syncFromREST, 1500);
+    };
+
+    const connect = () => {
+      if (isUnmounted) return;
+
+      const pid = Number(projectId);
+      const pidParam = pid > 0 ? `?project_id=${pid}` : '';
+      const wsURL = `ws://${window.location.host}/api/ws/ttps${pidParam}`;
+
+      try {
+        ws = new WebSocket(wsURL);
+
+        ws.onopen = () => {
+          if (isUnmounted) return;
+          console.log(`[useTTPSocket] WebSocket conectado (project_id=${pid || 'global'})`);
+          stopPolling();    // WebSocket activo → desactivar polling
+          syncFromREST();   // Sincronizar estado completo al conectar/reconectar
+        };
+
+        ws.onmessage = (e) => {
+          if (isUnmounted) return;
+          try {
+            const msg = JSON.parse(e.data);
+            if (msg.type === 'CVE_MAPPED' && onEventRef.current) {
+              onEventRef.current(msg.event);
+            }
+          } catch { /* JSON inválido, ignorar */ }
+        };
+
+        ws.onerror = () => {
+          if (isUnmounted) return;
+          console.warn('[useTTPSocket] Error en WebSocket, activando fallback polling');
+          startPolling();
+        };
+
+        ws.onclose = () => {
+          if (isUnmounted) return;
+          console.log('[useTTPSocket] WebSocket cerrado, reintentando en 3s...');
+          startPolling(); // Cobertura mientras reconecta
+          reconnectTimeout = setTimeout(connect, 3000);
+        };
+      } catch (e) {
+        console.warn('[useTTPSocket] WebSocket no disponible, usando polling:', e);
+        startPolling();
+      }
+    };
+
+    // Iniciar conexión inicial
+    connect();
+
+    // Limpieza al desmontar o al cambiar las dependencias [projectId, enabled]
+    return () => {
+      isUnmounted = true;
+      stopPolling();
+      
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
+      
+      if (ws) {
+        ws.onclose = null; // Evitar reconexiones huérfanas
+        ws.close();
+      }
+    };
+  }, [projectId, enabled]);
 }
