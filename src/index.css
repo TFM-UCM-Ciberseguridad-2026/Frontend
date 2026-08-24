@@ -409,6 +409,31 @@ nav.hud-nav {
   animation: spinSimple 1s linear infinite;
 }
 
+.nvd-pending-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 10px 0;
+  color: #fbbf24;
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+
+.nvd-pending-banner .nvd-spin {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.nvd-pending-banner small {
+  color: #9ca3af;
+  font-size: 0.72rem;
+}
+
 .clockwrap {
   display: flex;
   align-items: center;

@@ -85,7 +85,8 @@ export function DashboardPage({
   patchesByCVE,
   patchDetailsLoading,
   patchDetailsError,
-  fetchPatchesForCVE
+  fetchPatchesForCVE,
+  isAnalysisPending
 }) {
   const [activeNav, setActiveNav] = useState('grafo');
   const [showExportModal, setShowExportModal] = useState(false);
@@ -182,6 +183,7 @@ export function DashboardPage({
             analyzeProjectVulnerabilities={analyzeProjectVulnerabilities}
             computeSelectedProjectRisk={computeSelectedProjectRisk}
             fetchFindingVulnerabilities={fetchFindingVulnerabilities}
+            isAnalysisPending={isAnalysisPending}
           />
         )}
 

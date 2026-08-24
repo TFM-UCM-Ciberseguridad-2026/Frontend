@@ -26,7 +26,19 @@ export class InfrastructureApiDataSource {
       ? `/api/infrastructure/exploitation-paths?project_id=${projectId}`
       : '/api/infrastructure/exploitation-paths';
     const res = await fetch(url);
-    return await this._handleResponse(res);
+    if (!res.ok) {
+      throw new Error(`Error: ${res.statusText}`);
+    }
+    const paths = await res.json();
+    const isPending = res.headers.get("X-Analysis-Pending") === "true";
+    const rawWarning = res.headers.get("X-Analysis-Warning");
+    // decodeURIComponent doesn't decode '+' to spaces, so we replace them explicitly
+    const warning = rawWarning ? decodeURIComponent(rawWarning.replace(/\+/g, '%20')) : null;
+    
+    return {
+      paths,
+      warning: isPending ? warning : null
+    };
   }
 
   async createProject(payload) {
@@ -83,7 +95,14 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
+  async searchCPE(query) {
+    const res = await fetch(`/api/cpe/search?query=${encodeURIComponent(query)}`);
+    return await this._handleResponse(res);
+  }
+
   async createNetwork(payload) {
+    // Ya no cuelga de un endpoint: se crea a nivel de infraestructura y el
+    // backend enlaza los endpoints compatibles por CIDR + VLAN.
     const res = await fetch('/api/networks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
