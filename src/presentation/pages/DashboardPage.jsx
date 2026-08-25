@@ -73,6 +73,9 @@ export function DashboardPage({
   findingVulnsSourceNode,
   patchQueue,
   patchQueueCount,
+  patchQueuePage,
+  patchQueueTotal,
+  patchQueueTotalPages,
   patchQueueLoading,
   patchQueueError,
   fetchPatchQueue,
@@ -203,6 +206,9 @@ export function DashboardPage({
             selectedProjectId={selectedProjectId}
             patchQueue={patchQueue}
             patchQueueCount={patchQueueCount}
+            patchQueuePage={patchQueuePage}
+            patchQueueTotal={patchQueueTotal}
+            patchQueueTotalPages={patchQueueTotalPages}
             patchQueueLoading={patchQueueLoading}
             patchQueueError={patchQueueError}
             fetchPatchQueue={fetchPatchQueue}

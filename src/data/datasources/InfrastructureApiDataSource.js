@@ -336,9 +336,10 @@ export class InfrastructureApiDataSource {
     }
   }
 
-  async fetchPatchQueue(projectId, limit = 20) {
+  async fetchPatchQueue(projectId, page = 1, limit = 20) {
     const params = new URLSearchParams();
     if (projectId) params.set('project_id', projectId);
+    if (page) params.set('page', String(page));
     if (limit) params.set('limit', String(limit));
 
     const res = await fetch(`/api/patch-queue?${params.toString()}`);

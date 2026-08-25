@@ -78,6 +78,10 @@ export function useInfrastructure() {
   // Estados para la cola de parches
   const [patchQueue, setPatchQueue] = useState([]);
   const [patchQueueCount, setPatchQueueCount] = useState(0);
+  const [patchQueuePage, setPatchQueuePage] = useState(1);
+  const [patchQueueLimit, setPatchQueueLimit] = useState(20);
+  const [patchQueueTotal, setPatchQueueTotal] = useState(0);
+  const [patchQueueTotalPages, setPatchQueueTotalPages] = useState(1);
   const [patchQueueLoading, setPatchQueueLoading] = useState(false);
   const [patchQueueError, setPatchQueueError] = useState(null);
   const [patchApplyingKey, setPatchApplyingKey] = useState(null);
@@ -443,13 +447,17 @@ export function useInfrastructure() {
     }
   };
 
-  const fetchPatchQueue = async (limit = 20) => {
+  const fetchPatchQueue = async (page = 1, limit = 20) => {
     setPatchQueueLoading(true);
     setPatchQueueError(null);
     try {
-      const data = await getPatchQueueUseCase.execute(selectedProjectId, limit);
+      const data = await getPatchQueueUseCase.execute(selectedProjectId, page, limit);
       setPatchQueue(data.queue);
-      setPatchQueueCount(data.count);
+      setPatchQueueTotal(data.total);
+      setPatchQueueCount(data.total);
+      setPatchQueuePage(data.page);
+      setPatchQueueLimit(data.limit);
+      setPatchQueueTotalPages(data.totalPages);
       return data;
     } catch (err) {
       setPatchQueueError(err.message);
@@ -1338,6 +1346,10 @@ export function useInfrastructure() {
     findingVulnsSourceNode,
     patchQueue,
     patchQueueCount,
+    patchQueuePage,
+    patchQueueLimit,
+    patchQueueTotal,
+    patchQueueTotalPages,
     patchQueueLoading,
     patchQueueError,
     fetchPatchQueue,

@@ -10,8 +10,11 @@ function tierClass(tier) {
 
 export function PatchQueuePage({
   selectedProjectId,
-  patchQueue,
-  patchQueueCount,
+  patchQueue = [],
+  patchQueueCount = 0,
+  patchQueuePage = 1,
+  patchQueueTotal = 0,
+  patchQueueTotalPages = 1,
   patchQueueLoading,
   patchQueueError,
   fetchPatchQueue,
@@ -35,7 +38,7 @@ export function PatchQueuePage({
   const [selectedPatchItem, setSelectedPatchItem] = useState(null);
 
   useEffect(() => {
-    fetchPatchQueue?.();
+    fetchPatchQueue?.(1, 20);
   }, [selectedProjectId]);
 
   useEffect(() => {
@@ -49,7 +52,6 @@ export function PatchQueuePage({
       setActiveNav?.('grafo');
     }
   };
-
 
   const getPatchQueueItemKey = (item) =>
     `${item.installation_id}-${item.cve_id}-${item.finding_id}`;
@@ -69,9 +71,41 @@ export function PatchQueuePage({
     );
 
     setSelectedPatchItem(null);
-  };  
+  };
 
+  const handlePageChange = (newPage) => {
+    if (newPage < 1 || newPage > patchQueueTotalPages || newPage === patchQueuePage) return;
+    fetchPatchQueue?.(newPage, 20);
+  };
 
+  const totalItems = patchQueueTotal || patchQueueCount || patchQueue.length;
+  const startItem = totalItems === 0 ? 0 : (patchQueuePage - 1) * 20 + 1;
+  const endItem = Math.min(patchQueuePage * 20, totalItems);
+
+  const renderPageNumbers = () => {
+    const pages = [];
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, patchQueuePage - 2);
+    let endPage = Math.min(patchQueueTotalPages, startPage + maxVisiblePages - 1);
+
+    if (endPage - startPage < maxVisiblePages - 1) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(
+        <button
+          key={i}
+          className={`patch-pagination-page ${i === patchQueuePage ? 'active' : ''}`}
+          onClick={() => handlePageChange(i)}
+          disabled={patchQueueLoading}
+        >
+          {i}
+        </button>
+      );
+    }
+    return pages;
+  };
 
   return (
     <section className="patch-queue-page">
@@ -103,7 +137,9 @@ export function PatchQueuePage({
       )}
 
       <div className="patch-queue-summary">
-        <span>{patchQueueCount || patchQueue.length} elementos pendientes</span>
+        <span>
+          Mostrando {startItem} - {endItem} de {totalItems} parches pendientes
+        </span>
         {patchProjectRefreshProgress && (
           <span className="patch-queue-refresh-progress">
             Refrescando patches... {patchProjectRefreshProgress.processed}/{patchProjectRefreshProgress.total || '?'}
@@ -203,6 +239,35 @@ export function PatchQueuePage({
           </tbody>
         </table>
       </div>
+
+      {patchQueueTotalPages > 1 && (
+        <div className="patch-pagination-container">
+          <button
+            className="patch-pagination-btn"
+            onClick={() => handlePageChange(patchQueuePage - 1)}
+            disabled={patchQueuePage <= 1 || patchQueueLoading}
+          >
+            &laquo; Anterior
+          </button>
+
+          <div className="patch-pagination-pages">
+            {renderPageNumbers()}
+          </div>
+
+          <button
+            className="patch-pagination-btn"
+            onClick={() => handlePageChange(patchQueuePage + 1)}
+            disabled={patchQueuePage >= patchQueueTotalPages || patchQueueLoading}
+          >
+            Siguiente &raquo;
+          </button>
+
+          <span className="patch-pagination-info">
+            Página {patchQueuePage} de {patchQueueTotalPages}
+          </span>
+        </div>
+      )}
+
       <ApplyPatchModal
         isOpen={Boolean(currentSelectedPatchItem)}
         item={currentSelectedPatchItem}
