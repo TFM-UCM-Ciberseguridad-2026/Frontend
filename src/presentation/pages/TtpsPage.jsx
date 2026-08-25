@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useTTPSocket } from '../hooks/useTTPSocket';
 import './TtpsPage.css';
+import TTPDashboard from '../components/TTPDashboard/TTPDashboard.jsx';
 
 export const TACTICS = [
   { key: 'reco', id: 'TA0043', label: 'Reconnaissance' },
@@ -75,6 +76,7 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTtpId, setSelectedTtpId] = useState(null);
   const [modalTtp, setModalTtp] = useState(null);
+  const [viewMode, setViewMode] = useState('matrix');
   const [isModalClosed, setIsModalClosed] = useState(false);
   const [totalMitreTTPs, setTotalMitreTTPs] = useState(0);
   const cellRefs = useRef({});
@@ -254,6 +256,33 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
         </p>
       </section>
 
+      {/* TABS DE VISTA */}
+      <div className="view-tabs" style={{ display: 'flex', gap: '20px', marginBottom: '30px', paddingLeft: '20px', paddingRight: '20px' }}>
+        <button 
+          className={`nav-btn ${viewMode === 'matrix' ? 'active' : ''}`} 
+          onClick={() => setViewMode('matrix')}
+        >
+          <span className="ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <rect x="3.5" y="4.5" width="17" height="15" rx="1.5" />
+              <path d="M3.5 9h17M8 9v11" />
+            </svg>
+          </span>
+          Matriz MITRE
+        </button>
+        <button 
+          className={`nav-btn ${viewMode === 'dashboard' ? 'active' : ''}`} 
+          onClick={() => setViewMode('dashboard')}
+        >
+          <span className="ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M18 20V10M12 20V4M6 20v-6" />
+            </svg>
+          </span>
+          Dashboard
+        </button>
+      </div>
+
       {/* BOTÓN FLOTANTE PARA REABRIR MODAL (SI ESTÁ CERRADO PERO PROCESANDO) */}
       {syncStatus.processing && isModalClosed && (
         <button 
@@ -325,6 +354,13 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
         </div>
       )}
 
+      {viewMode === 'dashboard' && (
+        <div style={{ padding: '0 20px' }}>
+          <TTPDashboard projectId={selectedProjectId} finalTtps={finalTtps} />
+        </div>
+      )}
+
+      {viewMode === 'matrix' && (
       <section className="workspace">
         {/* LISTADO DE TTPs (IZQUIERDA) */}
         <div className="list-panel">
@@ -458,6 +494,7 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
             </div>
           </div>
         </section>
+      )}
 
       {/* MODAL DETALLE DE TTP */}
       {modalTtp && (

@@ -1,0 +1,223 @@
+.ttp-dashboard {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    padding: 0 0 2rem 0;
+    width: 100%;
+}
+
+.ttp-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1rem;
+}
+
+.ttp-kpi-card {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgba(122, 115, 255, 0.05), rgba(5, 6, 30, 0.35));
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.2s ease-in-out;
+}
+
+.ttp-kpi-card:hover {
+    border-color: var(--c400);
+    background: rgba(122, 115, 255, 0.09);
+    transform: translateY(-2px);
+}
+
+.ttp-kpi-title {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    color: var(--c300);
+    text-transform: uppercase;
+}
+
+.ttp-kpi-value {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 700;
+    font-size: 24px;
+    color: var(--c50);
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-top: 2px;
+}
+
+.ttp-kpi-subtext {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: 'Rajdhani', sans-serif;
+}
+
+.ttp-charts-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 1.5rem;
+}
+
+@media (max-width: 1024px) {
+    .ttp-charts-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.ttp-chart-card {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgba(122, 115, 255, 0.05), rgba(5, 6, 30, 0.35));
+    padding: 20px 22px;
+    display: flex;
+    flex-direction: column;
+}
+
+.ttp-chart-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 12px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--c50);
+    margin: 0 0 20px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ttp-chart-container {
+    height: 350px;
+    width: 100%;
+}
+
+/* ---------- ATT&CK HEATMAP ---------- */
+.ttp-heatmap-card {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgba(122, 115, 255, 0.05), rgba(5, 6, 30, 0.35));
+    padding: 20px 22px;
+    display: flex;
+    flex-direction: column;
+}
+
+.ttp-heatmap-scroll {
+    overflow-x: auto;
+    padding-bottom: 6px;
+    width: 100%;
+}
+
+.ttp-heatmap-grid {
+    display: grid;
+    grid-template-columns: repeat(14, minmax(0, 1fr));
+    gap: 5px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.heatmap-tactic-col {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 110px;
+}
+
+.heatmap-tactic-head {
+    font-family: 'Share Tech Mono', monospace;
+    background: linear-gradient(135deg, rgba(56, 19, 255, 0.35), rgba(56, 19, 255, 0.08));
+    border: 1px solid var(--c700);
+    border-radius: 6px;
+    padding: 6px 3px;
+    text-align: center;
+    line-height: 1.2;
+    box-shadow: inset 0 0 10px rgba(122, 115, 255, 0.12);
+    min-width: 0;
+    overflow: hidden;
+    color: var(--c100);
+    font-size: 10px;
+    text-transform: uppercase;
+}
+
+.heatmap-tactic-head small {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 700;
+    font-size: 8.5px;
+    color: var(--c50);
+    display: block;
+    margin-top: 2px;
+}
+
+.heatmap-cell {
+    position: relative;
+    border-radius: 5px;
+    border: 1px solid transparent;
+    padding: 5px 4px 14px 4px; /* padding inferior para el contador */
+    min-width: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    cursor: default;
+}
+
+.heatmap-cell:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 255, 255, 0.25);
+    z-index: 10;
+}
+
+.hm-cid {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 8.5px;
+    display: block;
+    margin-bottom: 2px;
+}
+
+.hm-cname {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.15;
+    display: block;
+    word-break: break-word;
+}
+
+.hm-count {
+    position: absolute;
+    bottom: 2px;
+    right: 4px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 8.5px;
+    font-weight: 700;
+}
+
+.heatmap-empty-cell {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    color: var(--c800);
+    text-align: center;
+    padding: 10px 0;
+    border: 1px dashed var(--c800);
+    border-radius: 5px;
+    background: rgba(122, 115, 255, 0.02);
+}
+
+/* Custom Tooltip styling to match theme */
+.ttp-recharts-tooltip {
+    background: rgba(13, 17, 23, 0.95) !important; /* GitHub dark theme bg */
+    border: 1px solid var(--border) !important;
+    border-radius: 6px;
+    padding: 10px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3), 0 0 10px var(--glow);
+    color: var(--text);
+}
+
+.ttp-recharts-tooltip .recharts-tooltip-label {
+    color: var(--c500);
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.9rem;
+    margin-bottom: 5px;
+}
