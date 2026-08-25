@@ -77,7 +77,8 @@ export function useTTPSocket({ projectId, onEvent, onSyncStatus, enabled = true 
 
       const pid = Number(projectId);
       const pidParam = pid > 0 ? `?project_id=${pid}` : '';
-      const wsURL = `ws://${window.location.host}/api/ws/ttps${pidParam}`;
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsURL = `${protocol}//${window.location.host}/api/ws/ttps${pidParam}`;
 
       try {
         ws = new WebSocket(wsURL);
