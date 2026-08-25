@@ -270,3 +270,25 @@
   padding: 2px 8px;
   border-radius: 6px;
 }
+
+.apply-patch-proposal-badges {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.apply-patch-remediation-badge {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--c100);
+  background: rgba(121, 115, 255, 0.16);
+  border: 1px solid rgba(121, 115, 255, 0.38);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.apply-patch-field-full {
+  grid-column: 1 / -1;
+}

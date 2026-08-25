@@ -336,9 +336,10 @@ export class InfrastructureApiDataSource {
     }
   }
 
-  async fetchPatchQueue(projectId, limit = 100) {
+  async fetchPatchQueue(projectId, page = 1, limit = 20) {
     const params = new URLSearchParams();
     if (projectId) params.set('project_id', projectId);
+    if (page) params.set('page', String(page));
     if (limit) params.set('limit', String(limit));
 
     const res = await fetch(`/api/patch-queue?${params.toString()}`);
@@ -365,4 +366,17 @@ export class InfrastructureApiDataSource {
     });
     return await this._handleResponse(res);
   }
+
+
+  async refreshPatchesForProject(projectId, { limit = 20, offset = 0 } = {}) {
+    const params = new URLSearchParams();
+    params.set('limit', String(limit));
+    params.set('offset', String(offset));
+
+    const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/patches/refresh?${params.toString()}`, {
+      method: 'POST'
+    });
+    return await this._handleResponse(res);
+  }
+
 }

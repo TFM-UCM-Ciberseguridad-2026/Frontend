@@ -65,7 +65,7 @@ export class InfrastructureRepository {
     throw new Error('Method computeAllProjectRisks not implemented');
   }
 
-  async getPatchQueue(projectId, limit) {
+  async getPatchQueue(projectId, page, limit) {
     throw new Error('Method getPatchQueue not implemented');
   }
 
@@ -79,6 +79,10 @@ export class InfrastructureRepository {
 
   async declarePatchApplied(installationId, payload) {
     throw new Error('Method declarePatchApplied not implemented');
+  }
+
+  async refreshPatchesForProject(projectId, options) {
+    throw new Error('Method refreshPatchesForProject not implemented');
   }
 
   async updateEndpoint(id, payload) { throw new Error('Not implemented'); }

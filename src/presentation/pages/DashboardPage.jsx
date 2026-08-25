@@ -73,6 +73,9 @@ export function DashboardPage({
   findingVulnsSourceNode,
   patchQueue,
   patchQueueCount,
+  patchQueuePage,
+  patchQueueTotal,
+  patchQueueTotalPages,
   patchQueueLoading,
   patchQueueError,
   fetchPatchQueue,
@@ -86,7 +89,11 @@ export function DashboardPage({
   patchDetailsLoading,
   patchDetailsError,
   fetchPatchesForCVE,
-  isAnalysisPending
+  isAnalysisPending,
+  refreshPatchesForProject,
+  patchProjectRefreshLoading,
+  patchProjectRefreshError,
+  patchProjectRefreshProgress
 }) {
   const [activeNav, setActiveNav] = useState('grafo');
   const [showExportModal, setShowExportModal] = useState(false);
@@ -199,6 +206,9 @@ export function DashboardPage({
             selectedProjectId={selectedProjectId}
             patchQueue={patchQueue}
             patchQueueCount={patchQueueCount}
+            patchQueuePage={patchQueuePage}
+            patchQueueTotal={patchQueueTotal}
+            patchQueueTotalPages={patchQueueTotalPages}
             patchQueueLoading={patchQueueLoading}
             patchQueueError={patchQueueError}
             fetchPatchQueue={fetchPatchQueue}
@@ -212,6 +222,10 @@ export function DashboardPage({
             patchDetailsLoading={patchDetailsLoading}
             patchDetailsError={patchDetailsError}
             fetchPatchesForCVE={fetchPatchesForCVE}
+            refreshPatchesForProject={refreshPatchesForProject}
+            patchProjectRefreshLoading={patchProjectRefreshLoading}
+            patchProjectRefreshError={patchProjectRefreshError}
+            patchProjectRefreshProgress={patchProjectRefreshProgress}
             setActiveNav={setActiveNav}
           />
         )}
