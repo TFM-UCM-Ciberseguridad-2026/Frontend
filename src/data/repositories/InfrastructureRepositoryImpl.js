@@ -77,12 +77,12 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     return await this.apiDataSource.importInfrastructure(exportData);
   }
 
-  async renameProject(projectId, newName) {
-    return await this.apiDataSource.renameProject(projectId, newName);
+  async renameProject(projectId, newName, justification) {
+    return await this.apiDataSource.renameProject(projectId, newName, justification);
   }
 
-  async deleteProject(projectId) {
-    return await this.apiDataSource.deleteProject(projectId);
+  async deleteProject(projectId, justification) {
+    return await this.apiDataSource.deleteProject(projectId, justification);
   }
 
   async scanInstallationVulnerabilities(installationId, softwareId, limit) {
@@ -123,18 +123,18 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
   }
 
   async updateEndpoint(id, payload) { return await this.apiDataSource.updateEndpoint(id, payload); }
-  async deleteEndpoint(id) { return await this.apiDataSource.deleteEndpoint(id); }
+  async deleteEndpoint(id, justification) { return await this.apiDataSource.deleteEndpoint(id, justification); }
   async updateNetwork(id, payload) { return await this.apiDataSource.updateNetwork(id, payload); }
-  async deleteNetwork(id) { return await this.apiDataSource.deleteNetwork(id); }
+  async deleteNetwork(id, justification) { return await this.apiDataSource.deleteNetwork(id, justification); }
   async updateHardware(id, payload) { return await this.apiDataSource.updateHardware(id, payload); }
-  async deleteHardware(id) { return await this.apiDataSource.deleteHardware(id); }
+  async deleteHardware(id, justification) { return await this.apiDataSource.deleteHardware(id, justification); }
   async updateSoftware(id, payload) { return await this.apiDataSource.updateSoftware(id, payload); }
-  async deleteSoftware(id) { return await this.apiDataSource.deleteSoftware(id); }
+  async deleteSoftware(id, justification) { return await this.apiDataSource.deleteSoftware(id, justification); }
   async updateSoftwareInstallation(id, payload) { return await this.apiDataSource.updateSoftwareInstallation(id, payload); }
-  async deleteSoftwareInstallation(id) { return await this.apiDataSource.deleteSoftwareInstallation(id); }
+  async deleteSoftwareInstallation(id, justification) { return await this.apiDataSource.deleteSoftwareInstallation(id, justification); }
   async updateContainer(id, payload) { return await this.apiDataSource.updateContainer(id, payload); }
-  async deleteContainer(id) { return await this.apiDataSource.deleteContainer(id); }
-  async deleteNode(id) { return await this.apiDataSource.deleteNode(id); }
+  async deleteContainer(id, justification) { return await this.apiDataSource.deleteContainer(id, justification); }
+  async deleteNode(id, justification) { return await this.apiDataSource.deleteNode(id, justification); }
   async getEndpointIPs(id) { return await this.apiDataSource.getEndpointIPs(id); }
   async exportProject(id) { return await this.apiDataSource.exportProject(id); }
 }

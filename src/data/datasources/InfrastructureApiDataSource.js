@@ -1,36 +1,24 @@
 export class InfrastructureApiDataSource {
   async fetchInfrastructure() {
     const res = await fetch('/api/infrastructure');
-    if (!res.ok) {
-      throw new Error(`Error en el servidor: ${res.statusText}`);
-    }
-    return await res.json();
+    return await this._handleResponse(res);
   }
 
   async populateInfrastructure() {
     const res = await fetch('/api/infrastructure/populate', { method: 'POST' });
-    if (!res.ok) {
-      throw new Error(`Error de red: ${res.statusText}`);
-    }
-    return await res.json();
+    return await this._handleResponse(res);
   }
 
   async fetchTopApts(projectId) {
     const url = projectId ? `/api/infrastructure/top-apts?project_id=${projectId}` : '/api/infrastructure/top-apts';
     const res = await fetch(url);
-    if (!res.ok) {
-      throw new Error(`Error: ${res.statusText}`);
-    }
-    return await res.json();
+    return await this._handleResponse(res);
   }
 
   async fetchTTPMatrix(projectId) {
     const url = projectId ? `/api/infrastructure/ttps?project_id=${projectId}` : '/api/infrastructure/ttps';
     const res = await fetch(url);
-    if (!res.ok) {
-      throw new Error(`Error: ${res.statusText}`);
-    }
-    return await res.json();
+    return await this._handleResponse(res);
   }
 
   async fetchExploitationPaths(projectId) {
@@ -61,7 +49,6 @@ export class InfrastructureApiDataSource {
     });
     return await this._handleResponse(res);
   }
-
 
   async createEndpoint(projectId, payload) {
     const res = await fetch(`/api/projects/${projectId}/endpoints`, {
@@ -108,6 +95,11 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
+  async searchCPE(query) {
+    const res = await fetch(`/api/cpe/search?query=${encodeURIComponent(query)}`);
+    return await this._handleResponse(res);
+  }
+
   async createNetwork(payload) {
     // Ya no cuelga de un endpoint: se crea a nivel de infraestructura y el
     // backend enlaza los endpoints compatibles por CIDR + VLAN.
@@ -118,7 +110,7 @@ export class InfrastructureApiDataSource {
     });
     return await this._handleResponse(res);
   }
-  
+
   async importInfrastructure(payload) {
     const res = await fetch('/api/infrastructure/import', {
       method: 'POST',
@@ -128,18 +120,21 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
-  async deleteProject(projectId) {
-    const res = await fetch(`/api/projects/${projectId}`, {
-      method: 'DELETE'
+  async deleteProject(projectId, justification = '') {
+    const query = justification ? `?justification=${encodeURIComponent(justification)}` : '';
+    const res = await fetch(`/api/projects/${projectId}${query}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ justification })
     });
     return await this._handleResponse(res);
   }
 
-  async renameProject(projectId, newName) {
+  async renameProject(projectId, newName, justification = '') {
     const res = await fetch(`/api/projects/${projectId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newName })
+      body: JSON.stringify({ name: newName, justification })
     });
     return await this._handleResponse(res);
   }
@@ -157,10 +152,7 @@ export class InfrastructureApiDataSource {
 
   async fetchFindingVulnerabilities(findingId) {
     const res = await fetch(`/api/findings/${findingId}/vulnerabilities`);
-    if (!res.ok) {
-      throw new Error(`Error: ${res.statusText}`);
-    }
-    return await res.json();
+    return await this._handleResponse(res);
   }
 
   async scanContainerImageVulnerabilities(imageId, imageName) {
@@ -195,8 +187,13 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
-  async deleteEndpoint(id) {
-    const res = await fetch(`/api/endpoints/${id}`, { method: 'DELETE' });
+  async deleteEndpoint(id, justification = '') {
+    const query = justification ? `?justification=${encodeURIComponent(justification)}` : '';
+    const res = await fetch(`/api/endpoints/${id}${query}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ justification })
+    });
     return await this._handleResponse(res);
   }
 
@@ -209,8 +206,13 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
-  async deleteNetwork(id) {
-    const res = await fetch(`/api/networks/${id}`, { method: 'DELETE' });
+  async deleteNetwork(id, justification = '') {
+    const query = justification ? `?justification=${encodeURIComponent(justification)}` : '';
+    const res = await fetch(`/api/networks/${id}${query}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ justification })
+    });
     return await this._handleResponse(res);
   }
 
@@ -223,8 +225,13 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
-  async deleteHardware(id) {
-    const res = await fetch(`/api/hardware/${id}`, { method: 'DELETE' });
+  async deleteHardware(id, justification = '') {
+    const query = justification ? `?justification=${encodeURIComponent(justification)}` : '';
+    const res = await fetch(`/api/hardware/${id}${query}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ justification })
+    });
     return await this._handleResponse(res);
   }
 
@@ -237,8 +244,13 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
-  async deleteSoftware(id) {
-    const res = await fetch(`/api/software/${id}`, { method: 'DELETE' });
+  async deleteSoftware(id, justification = '') {
+    const query = justification ? `?justification=${encodeURIComponent(justification)}` : '';
+    const res = await fetch(`/api/software/${id}${query}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ justification })
+    });
     return await this._handleResponse(res);
   }
 
@@ -251,8 +263,13 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
-  async deleteSoftwareInstallation(id) {
-    const res = await fetch(`/api/installations/${id}`, { method: 'DELETE' });
+  async deleteSoftwareInstallation(id, justification = '') {
+    const query = justification ? `?justification=${encodeURIComponent(justification)}` : '';
+    const res = await fetch(`/api/installations/${id}${query}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ justification })
+    });
     return await this._handleResponse(res);
   }
 
@@ -265,15 +282,26 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
-  async deleteContainer(id) {
-    const res = await fetch(`/api/containers/${id}`, { method: 'DELETE' });
+  async deleteContainer(id, justification = '') {
+    const query = justification ? `?justification=${encodeURIComponent(justification)}` : '';
+    const res = await fetch(`/api/containers/${id}${query}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ justification })
+    });
     return await this._handleResponse(res);
   }
 
-  async deleteNode(id) {
-    const res = await fetch(`/api/nodes/${id}`, { method: 'DELETE' });
+  async deleteNode(id, justification = '') {
+    const query = justification ? `?justification=${encodeURIComponent(justification)}` : '';
+    const res = await fetch(`/api/nodes/${id}${query}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ justification })
+    });
     return await this._handleResponse(res);
   }
+
   async getEndpointIPs(id) {
     const res = await fetch(`/api/endpoints/${id}/ips`);
     return await this._handleResponse(res);
@@ -286,17 +314,23 @@ export class InfrastructureApiDataSource {
 
   async _handleResponse(res) {
     if (!res.ok) {
-      let backendMessage = res.statusText;
+      let backendMessage = res.statusText || 'Error en la petición';
       try {
-        const errBody = await res.json();
-        backendMessage = errBody.error || errBody.message || JSON.stringify(errBody);
-      } catch {
-        // Not JSON
-      }
+        const text = await res.text();
+        if (text) {
+          try {
+            const errBody = JSON.parse(text);
+            backendMessage = errBody.error || errBody.message || JSON.stringify(errBody);
+          } catch {
+            backendMessage = text.trim();
+          }
+        }
+      } catch {}
       throw new Error(backendMessage);
     }
     try {
-      return await res.json();
+      const text = await res.text();
+      return text ? JSON.parse(text) : null;
     } catch {
       return null;
     }
@@ -331,5 +365,4 @@ export class InfrastructureApiDataSource {
     });
     return await this._handleResponse(res);
   }
-
 }
