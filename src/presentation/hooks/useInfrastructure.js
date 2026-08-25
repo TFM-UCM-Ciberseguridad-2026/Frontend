@@ -32,6 +32,7 @@ import { RefreshPatchesForVulnerabilityUseCase } from '../../domain/usecases/Ref
 import { DeclarePatchAppliedUseCase } from '../../domain/usecases/DeclarePatchAppliedUseCase';
 import { GetPatchesForVulnerabilityUseCase } from '../../domain/usecases/GetPatchesForVulnerabilityUseCase';
 
+
 export function useInfrastructure() {
   const toast = useToast();
   const [showDashboard, setShowDashboard] = useState(false);
@@ -84,6 +85,9 @@ export function useInfrastructure() {
   const [patchesByCVE, setPatchesByCVE] = useState({});
   const [patchDetailsLoading, setPatchDetailsLoading] = useState(false);
   const [patchDetailsError, setPatchDetailsError] = useState(null);
+  const [patchProjectRefreshLoading, setPatchProjectRefreshLoading] = useState(false);
+  const [patchProjectRefreshError, setPatchProjectRefreshError] = useState(null);
+  const [patchProjectRefreshProgress, setPatchProjectRefreshProgress] = useState(null);
 
   // Inyección de dependencias (Clean Architecture)
   const apiDataSource = useMemo(() => new InfrastructureApiDataSource(), []);
@@ -121,6 +125,7 @@ export function useInfrastructure() {
   const refreshPatchesForVulnerabilityUseCase = useMemo(() => new RefreshPatchesForVulnerabilityUseCase(repository), [repository]);
   const declarePatchAppliedUseCase = useMemo(() => new DeclarePatchAppliedUseCase(repository), [repository]);
   const getPatchesForVulnerabilityUseCase = useMemo(() => new GetPatchesForVulnerabilityUseCase(repository), [repository]);
+
 
   const showToast = (msg, type = 'info', title = null) => {
     toast.showToast(msg, type, title);
@@ -438,7 +443,7 @@ export function useInfrastructure() {
     }
   };
 
-  const fetchPatchQueue = async (limit = 100) => {
+  const fetchPatchQueue = async (limit = 20) => {
     setPatchQueueLoading(true);
     setPatchQueueError(null);
     try {
@@ -1183,6 +1188,85 @@ export function useInfrastructure() {
     ) || null;
   }, [graphData, selectedProjectId]);
 
+
+  const refreshPatchesForProject = async () => {
+    if (!selectedProjectId) {
+      const message = 'Selecciona un proyecto antes de refrescar patches';
+      setPatchProjectRefreshError(message);
+      toast.error(message, 'Error refrescando patches');
+      throw new Error(message);
+    }
+
+    setPatchProjectRefreshLoading(true);
+    setPatchProjectRefreshError(null);
+    setPatchProjectRefreshProgress(null);
+
+    try {
+      const visibleCVEs = [
+        ...new Set(
+          patchQueue
+            .map(item => item.cve_id)
+            .filter(Boolean)
+        )
+      ];
+
+      if (visibleCVEs.length === 0) {
+        toast.info('No hay CVEs visibles en la Patch Queue', 'Patch Queue');
+        return { total_cves: 0, refreshed: 0, failed: 0, not_found: 0, processed: 0 };
+      }
+
+      let refreshed = 0;
+      let failed = 0;
+      let notFound = 0;
+      let processed = 0;
+
+      for (const cveId of visibleCVEs) {
+        try {
+          const result = await refreshPatchesForVulnerabilityUseCase.execute(cveId);
+          if (result?.found === false) {
+            notFound += 1;
+          } else {
+            refreshed += 1;
+          }
+        } catch (err) {
+          failed += 1;
+          console.warn(`Error refrescando patches para ${cveId}`, err);
+        }
+
+        processed += 1;
+
+        setPatchProjectRefreshProgress({
+          processed,
+          total: visibleCVEs.length,
+          failed,
+          notFound
+        });
+
+        if (processed < visibleCVEs.length) {
+          await new Promise(resolve => setTimeout(resolve, 1200));
+        }
+      }
+
+      setPatchesByCVE({});
+      await fetchPatchQueue();
+      await fetchInfrastructure(true);
+
+      toast.success(
+        `Patches refrescados: ${refreshed}/${visibleCVEs.length}. Fallidos: ${failed}. Sin datos: ${notFound}.`,
+        'Patch Queue actualizada'
+      );
+
+      return { total_cves: visibleCVEs.length, refreshed, failed, not_found: notFound, processed };
+    } catch (err) {
+      setPatchProjectRefreshError(err.message);
+      toast.error(err.message, 'Error refrescando patches del proyecto');
+      throw err;
+    } finally {
+      setPatchProjectRefreshLoading(false);
+      setPatchProjectRefreshProgress(null);
+    }
+  };
+
   return {
     showDashboard,
     setShowDashboard,
@@ -1266,6 +1350,10 @@ export function useInfrastructure() {
     patchesByCVE,
     patchDetailsLoading,
     patchDetailsError,
-    fetchPatchesForCVE
+    fetchPatchesForCVE,
+    refreshPatchesForProject,
+    patchProjectRefreshLoading,
+    patchProjectRefreshError,
+    patchProjectRefreshProgress
   };
 }

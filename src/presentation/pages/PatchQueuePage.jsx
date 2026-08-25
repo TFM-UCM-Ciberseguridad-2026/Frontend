@@ -25,7 +25,11 @@ export function PatchQueuePage({
   patchDetailsLoading,
   patchDetailsError,
   fetchPatchesForCVE,
-  setActiveNav
+  setActiveNav,
+  refreshPatchesForProject,
+  patchProjectRefreshLoading,
+  patchProjectRefreshError,
+  patchProjectRefreshProgress
 }) {
 
   const [selectedPatchItem, setSelectedPatchItem] = useState(null);
@@ -79,8 +83,12 @@ export function PatchQueuePage({
             Findings pendientes ordenados por prioridad de parcheo.
           </p>
         </div>
-        <button className="btn btn-secondary" onClick={() => fetchPatchQueue?.()} disabled={patchQueueLoading}>
-          {patchQueueLoading ? 'Actualizando...' : 'Refrescar cola'}
+        <button
+          className="btn btn-secondary"
+          onClick={() => refreshPatchesForProject?.()}
+          disabled={patchQueueLoading || patchProjectRefreshLoading}
+        >
+          {patchProjectRefreshLoading ? 'Refrescando patches...' : 'Refrescar cola'}
         </button>
       </div>
 
@@ -90,9 +98,17 @@ export function PatchQueuePage({
       {patchApplyError && (
         <div className="patch-queue-error">⚠️ {patchApplyError}</div>
       )}
+      {patchProjectRefreshError && (
+        <div className="patch-queue-error">⚠️ {patchProjectRefreshError}</div>
+      )}
 
       <div className="patch-queue-summary">
         <span>{patchQueueCount || patchQueue.length} elementos pendientes</span>
+        {patchProjectRefreshProgress && (
+          <span className="patch-queue-refresh-progress">
+            Refrescando patches... {patchProjectRefreshProgress.processed}/{patchProjectRefreshProgress.total || '?'}
+          </span>
+        )}
       </div>
 
       <div className="patch-queue-table-wrap">
@@ -167,7 +183,7 @@ export function PatchQueuePage({
                       Ver
                     </button>
                     <button type="button" onClick={() => refreshPatchesForCVE?.(item.cve_id)}>
-                      Refresh patches
+                      Refresh CVE
                     </button>
                     {hasPatchAvailable && (
                       <button

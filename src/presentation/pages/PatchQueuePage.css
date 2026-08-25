@@ -28,6 +28,11 @@
   color: var(--c100);
 }
 
+.patch-queue-refresh-progress {
+  margin-left: 0.75rem;
+  color: var(--c300);
+}
+
 .patch-queue-error {
   margin-bottom: 0.75rem;
   padding: 0.75rem;

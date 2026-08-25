@@ -81,6 +81,10 @@ export class InfrastructureRepository {
     throw new Error('Method declarePatchApplied not implemented');
   }
 
+  async refreshPatchesForProject(projectId, options) {
+    throw new Error('Method refreshPatchesForProject not implemented');
+  }
+
   async updateEndpoint(id, payload) { throw new Error('Not implemented'); }
   async deleteEndpoint(id) { throw new Error('Not implemented'); }
   async updateNetwork(id, payload) { throw new Error('Not implemented'); }

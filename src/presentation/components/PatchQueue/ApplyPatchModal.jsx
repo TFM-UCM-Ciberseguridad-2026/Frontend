@@ -5,6 +5,13 @@ const percent = (value) => `${Math.round(Number(value || 0) * 100)}%`;
 
 const cvePattern = /CVE-\d{4}-\d{4,}/gi;
 
+const REMEDIATION_LEVEL_HELP = {
+  OFFICIAL_FIX: 'Parche oficial del proveedor. Normalmente reduce el riesgo del finding a 0.',
+  TEMPORARY_FIX: 'Corrección temporal. Reduce parcialmente el riesgo, pero no cierra definitivamente la vulnerabilidad.',
+  WORKAROUND: 'Mitigación operativa o configuración compensatoria.',
+  UNAVAILABLE: 'No hay parche aplicable todavía. Se registra la decisión, pero no reduce el riesgo.'
+};
+
 function parseVersionSegments(version) {
   return String(version || '')
     .split(/[.-]/)
@@ -44,24 +51,24 @@ function parseFixedVersionEntry(entry) {
   };
 }
 
-function getFixedVersionCandidates(fixedVersion, currentVersion, softwareName) {
+function getFixedVersionCandidates(fixedVersion, currentVersion) {
   const current = String(currentVersion || '').trim();
-  if (!fixedVersion || !current) return [];
+  if (!fixedVersion) return [];
 
-  const normalizedSoftwareName = String(softwareName || '').toLowerCase().trim();
   const entries = String(fixedVersion)
     .split(',')
     .map(parseFixedVersionEntry)
     .filter(Boolean);
 
+  if (!current) {
+    return entries;
+  }
+
   return entries
-    .filter(entry => {
-      const packageMatches = !normalizedSoftwareName ||
-        entry.packageName.toLowerCase().includes(normalizedSoftwareName);
-      return packageMatches && compareVersions(entry.version, current) > 0;
-    })
+    .filter(entry => compareVersions(entry.version, current) > 0)
     .sort((a, b) => compareVersions(a.version, b.version));
 }
+
 
 function descriptionMatchesCurrentCVE(description, cveId) {
   if (!description || !cveId) return true;
@@ -74,6 +81,38 @@ function getPatchActionType(fixedVersion, selectedPatch) {
   if (fixedVersion) return 'Actualización de versión';
   if (selectedPatch?.url) return 'Referencia oficial / advisory';
   return 'Sin acción concreta disponible';
+}
+
+function inferRemediationLevelFromPatch(patch) {
+  const text = `${patch?.description || ''} ${patch?.url || ''}`.toLowerCase();
+
+  if (
+    text.includes('workaround') ||
+    text.includes('mitigation') ||
+    text.includes('mitigación') ||
+    text.includes('configuration') ||
+    text.includes('configuración')
+  ) {
+    return 'WORKAROUND';
+  }
+
+  if (
+    text.includes('temporary') ||
+    text.includes('temporal') ||
+    text.includes('hotfix')
+  ) {
+    return 'TEMPORARY_FIX';
+  }
+
+  if (
+    text.includes('unavailable') ||
+    text.includes('no patch') ||
+    text.includes('sin parche')
+  ) {
+    return 'UNAVAILABLE';
+  }
+
+  return 'OFFICIAL_FIX';
 }
 
 function Field({ label, value }) {
@@ -120,8 +159,7 @@ export function ApplyPatchModal({
     if (!isOpen || !item || selectedFixedVersion) return;
     const candidates = getFixedVersionCandidates(
       item.fixed_version,
-      item.software_version,
-      item.software_name
+      item.software_version
     );
     if (candidates.length > 0) {
       setSelectedFixedVersion(candidates[0].raw);
@@ -133,17 +171,39 @@ export function ApplyPatchModal({
   const hasPatchAvailable = Boolean(item.patch_available);
   const displayError = localError || error;
   const selectedPatch = patches.find(p => String(p.patch_id) === String(patchId)) || patches[0] || null;
+  const selectedRemediationLevel = inferRemediationLevelFromPatch(selectedPatch);
   const fixedVersion = item.fixed_version || '';
-  const fixedVersionCandidates = getFixedVersionCandidates(fixedVersion, item.software_version, item.software_name);
-  const selectedCandidate = fixedVersionCandidates.find(candidate => candidate.raw === selectedFixedVersion) || fixedVersionCandidates[0] || null;
+  const fixedVersionCandidates = getFixedVersionCandidates(
+    fixedVersion,
+    item.software_version
+  );
+  const selectedCandidate =
+    fixedVersionCandidates.find(candidate => candidate.raw === selectedFixedVersion) ||
+    fixedVersionCandidates[0] ||
+    null;
+
   const recommendedFixedVersion = selectedCandidate?.raw || '';
+  const hasMultipleFixedVersionCandidates = fixedVersionCandidates.length > 1;
   const patchActionType = getPatchActionType(recommendedFixedVersion, selectedPatch);
 
-  const patchRecommendation = recommendedFixedVersion
-    ? `Actualizar ${item.software_name || 'el software'} desde ${item.software_version || 'la versión actual'} a ${recommendedFixedVersion}.`
-    : selectedPatch?.url
-      ? `Revisar la referencia oficial y aplicar la corrección indicada por el proveedor para ${item.cve_id}. No hay fixed_version normalizada en el backend.`
-      : 'No hay recomendación accionable suficiente. Refresca patches o revisa el CVE manualmente antes de declarar el parche.';
+  const patchRecommendation = (() => {
+    if (hasMultipleFixedVersionCandidates) {
+      return `Hay ${fixedVersionCandidates.length} versiones corregidas candidatas para ${item.software_name ||
+        'este software'}. Selecciona la versión aplicable al paquete instalado antes de declarar el parche.`;
+    }
+
+    if (recommendedFixedVersion) {
+      return `Actualizar ${item.software_name || 'el software'} desde ${item.software_version || 'la versión actual'} a ${recommendedFixedVersion}.`;
+    }
+
+    if (selectedPatch?.url) {
+      return `Revisar la referencia oficial y aplicar la corrección indicada por el proveedor para ${item.cve_id}.
+        No hay fixed_version normalizada en el backend.`;
+    }
+
+    return 'No hay recomendación accionable suficiente. Refresca patches o revisa el CVE manualmente antes de declarar el parche.';
+  })();
+
 
   const submit = async (event) => {
     event.preventDefault();
@@ -155,32 +215,40 @@ export function ApplyPatchModal({
     }
 
     if (!hasPatchAvailable) {
-      setLocalError('No hay patch registrado para este CVE. Usa Refresh patches primero.');
+      setLocalError(
+        'No hay patch registrado para este CVE. Usa Refresh patches primero antes de declarar una remediación.'
+      );
+      return;
+    }
+
+    if (!patchId) {
+      setLocalError('Selecciona una referencia de patch antes de declarar la remediación.');
+      return;
+    }
+
+    const numericPatchId = Number(patchId);
+
+    if (!Number.isInteger(numericPatchId) || numericPatchId <= 0) {
+      setLocalError('El patch seleccionado no es válido.');
       return;
     }
 
     const payload = {
       cve_id: item.cve_id,
-      remediation_level: 'OFFICIAL_FIX',
+      patch_id: numericPatchId,
+      remediation_level: selectedRemediationLevel,
       applied_by: appliedBy.trim() || 'operator',
       notes: [
         notes.trim() || 'Declarado desde Patch Queue',
-        recommendedFixedVersion ? `Versión corregida seleccionada: ${recommendedFixedVersion}` : ''
+        selectedFixedVersion ? `Versión corregida seleccionada: ${selectedFixedVersion}` : '',
+        selectedPatch?.description ? `Patch seleccionado: ${selectedPatch.description}` : '',
+        selectedPatch?.url ? `Referencia: ${selectedPatch.url}` : ''
       ].filter(Boolean).join('\n')
     };
 
-    const trimmedPatchId = patchId.trim();
-    if (trimmedPatchId !== '') {
-      const numericPatchId = Number(trimmedPatchId);
-      if (!Number.isInteger(numericPatchId) || numericPatchId <= 0) {
-        setLocalError('patch_id debe ser un entero positivo');
-        return;
-      }
-      payload.patch_id = numericPatchId;
-    }
-
     await onSubmit(payload);
   };
+
 
   return (
     <div className="apply-patch-modal-backdrop" role="presentation">
@@ -222,8 +290,16 @@ export function ApplyPatchModal({
             <div className="apply-patch-context-grid">
               <Field label="Patch oficial disponible" value={hasPatchAvailable ? 'Sí' : 'No'} />
               <Field label="Patch Priority" value={`${item.priority_tier || 'LOW'} · ${percent(item.priority_score)}`} />
-              <Field label="Remediation level" value="OFFICIAL_FIX" />
-              <Field label="Fixed version propuesta" value={recommendedFixedVersion || 'pendiente'} />
+
+              <Field
+                label="Fixed versions candidatas"
+                value={
+                  fixedVersionCandidates.length > 1
+                    ? `${fixedVersionCandidates.length} versiones disponibles`
+                    : recommendedFixedVersion || 'pendiente'
+                }
+              />
+
               <Field label="Tipo de acción" value={patchActionType} />
             </div>
 
@@ -246,6 +322,7 @@ export function ApplyPatchModal({
               <div className="apply-patch-proposals-list">
                 {patches.map((patchItem) => {
                   const isSelected = String(patchItem.patch_id) === String(patchId);
+                  const remediationLevel = inferRemediationLevelFromPatch(patchItem);
                   const patchDesc = descriptionMatchesCurrentCVE(patchItem.description, item.cve_id)
                     ? patchItem.description
                     : 'Referencia oficial / aviso de seguridad';
@@ -259,13 +336,18 @@ export function ApplyPatchModal({
                     >
                       <div className="apply-patch-proposal-header">
                         <span className="apply-patch-label">
-                          Propuesta de patch #{patchItem.patch_id}
+                          Propuesta de patch
                         </span>
-                        {isSelected && (
-                          <span className="apply-patch-selected-badge">
-                            ✓ Seleccionado
+                        <span className="apply-patch-proposal-badges">
+                          <span className="apply-patch-remediation-badge">
+                            {remediationLevel}
                           </span>
-                        )}
+                          {isSelected && (
+                            <span className="apply-patch-selected-badge">
+                              ✓ Seleccionado
+                            </span>
+                          )}
+                        </span>
                       </div>
 
                       <strong>
@@ -300,7 +382,9 @@ export function ApplyPatchModal({
             </div>
 
             <p className="apply-patch-help">
-              OFFICIAL_FIX declara un parche oficial aplicado sobre esta instalación concreta. No aplica el patch al CVE global.
+              {selectedRemediationLevel} se declarará sobre esta instalación concreta. No aplica el patch al CVE global.
+              {' '}
+              {REMEDIATION_LEVEL_HELP[selectedRemediationLevel]}
             </p>
           </section>
 
@@ -308,30 +392,34 @@ export function ApplyPatchModal({
             <h3>Declaración</h3>
 
             <label className="apply-patch-form-field">
-              <span>Patch ID</span>
+              <span>Patch propuesto</span>
               <select
                 className="apply-patch-input"
                 value={patchId}
                 onChange={(event) => setPatchId(event.target.value)}
                 disabled={loading}
               >
-                <option value="">Resolver automáticamente si hay un único patch</option>
+                <option value="">Resolver automáticamente si hay una única referencia disponible</option>
                 {patches.map(patch => {
+                  const remediationLevel = inferRemediationLevelFromPatch(patch);
                   const patchDesc = descriptionMatchesCurrentCVE(patch.description, item.cve_id)
-                    ? patch.description || 'referencia oficial'
-                    : 'referencia oficial';
+                    ? patch.description || 'Referencia oficial'
+                    : 'Referencia oficial / advisory';
+
                   const urlText = patch.url ? ` — ${patch.url}` : '';
+
                   return (
                     <option key={patch.patch_id} value={patch.patch_id}>
-                      {`Patch #${patch.patch_id} · ${patchDesc}${urlText}`}
+                      {`${remediationLevel} · ${patchDesc}${urlText}`}
                     </option>
                   );
                 })}
               </select>
               <small>
-                Puedes hacer clic en la tarjeta de propuesta de patch de arriba o seleccionarlo en este desplegable.
+                Selecciona la referencia o corrección que estás declarando como aplicada sobre esta instalación.
               </small>
             </label>
+
 
             {fixedVersionCandidates.length > 0 && (
               <label className="apply-patch-form-field">
@@ -396,7 +484,7 @@ export function ApplyPatchModal({
             className="btn btn-accent"
             disabled={loading || !hasPatchAvailable}
           >
-            {loading ? 'Aplicando...' : 'Aplicar official patch'}
+            {loading ? 'Aplicando...' : 'Declarar remediación'}
           </button>
         </div>
       </form>

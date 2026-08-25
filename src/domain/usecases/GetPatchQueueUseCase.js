@@ -3,7 +3,7 @@ export class GetPatchQueueUseCase {
     this.infrastructureRepository = infrastructureRepository;
   }
 
-  async execute(projectId, limit = 100) {
+  async execute(projectId, limit = 20) {
     const result = await this.infrastructureRepository.getPatchQueue(projectId, limit);
     return {
       count: result?.count || 0,
