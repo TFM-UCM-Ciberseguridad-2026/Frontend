@@ -6,9 +6,13 @@ export function SidebarFilters({
   category,
   setCategory,
   categories,
-  nodes
+  categoryCounts = {},
+  nodes = []
 }) {
   const getNodeCount = (catKey) => {
+    if (categoryCounts && Object.keys(categoryCounts).length > 0) {
+      return categoryCounts[catKey] || 0;
+    }
     if (!nodes) return 0;
     if (catKey === 'ALL') return nodes.length;
     return nodes.filter(n => n.primaryLabel === catKey).length;

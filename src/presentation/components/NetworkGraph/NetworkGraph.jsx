@@ -1064,6 +1064,13 @@ export function NetworkGraph({
 
             const nodeShouldBeDimmed = (isDimmed && !isNodeInPath) || pathDimmedNode;
 
+            // Comprobar si tiene conectividad a internet
+            const isInternetExposed = Boolean(
+              node.entity.properties?.internet_exposed === true ||
+              node.entity.properties?.internet_exposed === 'true' ||
+              node.entity.internet_exposed === true
+            );
+
             return (
               <g
                 key={node.id}
@@ -1122,6 +1129,20 @@ export function NetworkGraph({
                   color={isNodeInPath ? '#ef4444' : isDecom ? '#6b7280' : node.color}
                   size={node.r * 1.1}
                 />
+
+                {isInternetExposed && (
+                  <g className="internet-badge" transform={`translate(${-node.r + 2}, ${-node.r + 2})`}>
+                    <title>Expuesto a Internet</title>
+                    <circle r="9.5" fill="#090d16" stroke="#0ea5e9" strokeWidth="1.4" filter="url(#glow)" />
+                    <path
+                      d="M -3.5,2.5 H 3.5 A 2.5,2.5 0 0,0 4,-2.45 A 3.5,3.5 0 0,0 -2.8,-3.45 A 2.5,2.5 0 0,0 -5,1 A 2.5,2.5 0 0,0 -3.5,2.5 Z"
+                      fill="#38bdf8"
+                      stroke="#0284c7"
+                      strokeWidth="0.6"
+                      strokeLinejoin="round"
+                    />
+                  </g>
+                )}
 
                 {isStepNode && (
                   <g transform={`translate(${node.r - 2}, ${-node.r + 2})`}>

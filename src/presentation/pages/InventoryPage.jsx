@@ -4,19 +4,32 @@ import { SidebarFilters } from '../components/Inventory/SidebarFilters';
 import { AssetTable } from '../components/Inventory/AssetTable';
 import { AssetDetails } from '../components/Inventory/AssetDetails';
 
-export function InventoryPage({ graphData, categories }) {
+export function InventoryPage({ categories = [], selectedProjectId = null, graphData = { nodes: [] } }) {
   const {
     search,
     setSearch,
     category,
     setCategory,
+    filters,
+    updateFilter,
+    removeFilter,
+    clearAllFilters,
     sortField,
     sortDirection,
     handleSort,
+    page,
+    totalPages,
+    totalItems,
+    categoryCounts,
     processedNodes,
+    loading,
     selectedNode,
-    setSelectedNode
-  } = useInventory(graphData.nodes);
+    setSelectedNode,
+    prevPage,
+    nextPage,
+    firstPage,
+    lastPage
+  } = useInventory(selectedProjectId);
 
   return (
     <>
@@ -27,6 +40,7 @@ export function InventoryPage({ graphData, categories }) {
         category={category}
         setCategory={setCategory}
         categories={categories}
+        categoryCounts={categoryCounts}
         nodes={graphData.nodes}
       />
 
@@ -38,6 +52,19 @@ export function InventoryPage({ graphData, categories }) {
         sortField={sortField}
         sortDirection={sortDirection}
         handleSort={handleSort}
+        filters={filters}
+        updateFilter={updateFilter}
+        removeFilter={removeFilter}
+        clearAllFilters={clearAllFilters}
+        categoriesList={categories}
+        page={page}
+        totalPages={totalPages}
+        totalItems={totalItems}
+        loading={loading}
+        prevPage={prevPage}
+        nextPage={nextPage}
+        firstPage={firstPage}
+        lastPage={lastPage}
       />
 
       {/* PANEL DERECHO DE DETALLES — grid column 3 (300px) */}
