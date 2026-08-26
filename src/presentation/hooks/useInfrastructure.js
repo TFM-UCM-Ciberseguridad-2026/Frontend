@@ -31,6 +31,7 @@ import { GetPatchQueueUseCase } from '../../domain/usecases/GetPatchQueueUseCase
 import { RefreshPatchesForVulnerabilityUseCase } from '../../domain/usecases/RefreshPatchesForVulnerabilityUseCase';
 import { DeclarePatchAppliedUseCase } from '../../domain/usecases/DeclarePatchAppliedUseCase';
 import { GetPatchesForVulnerabilityUseCase } from '../../domain/usecases/GetPatchesForVulnerabilityUseCase';
+import { GetAppliedPatchHistoryUseCase } from '../../domain/usecases/GetAppliedPatchHistoryUseCase';
 
 
 export function useInfrastructure() {
@@ -92,6 +93,11 @@ export function useInfrastructure() {
   const [patchProjectRefreshLoading, setPatchProjectRefreshLoading] = useState(false);
   const [patchProjectRefreshError, setPatchProjectRefreshError] = useState(null);
   const [patchProjectRefreshProgress, setPatchProjectRefreshProgress] = useState(null);
+  const [appliedPatchHistory, setAppliedPatchHistory] = useState([]);
+  const [appliedPatchHistoryLoading, setAppliedPatchHistoryLoading] = useState(false);
+  const [appliedPatchHistoryError, setAppliedPatchHistoryError] = useState(null);
+  const [appliedPatchHistoryInstallationId, setAppliedPatchHistoryInstallationId] = useState(null);
+
 
   // Inyección de dependencias (Clean Architecture)
   const apiDataSource = useMemo(() => new InfrastructureApiDataSource(), []);
@@ -129,7 +135,7 @@ export function useInfrastructure() {
   const refreshPatchesForVulnerabilityUseCase = useMemo(() => new RefreshPatchesForVulnerabilityUseCase(repository), [repository]);
   const declarePatchAppliedUseCase = useMemo(() => new DeclarePatchAppliedUseCase(repository), [repository]);
   const getPatchesForVulnerabilityUseCase = useMemo(() => new GetPatchesForVulnerabilityUseCase(repository), [repository]);
-
+  const getAppliedPatchHistoryUseCase = useMemo(() => new GetAppliedPatchHistoryUseCase(repository), [repository]);
 
   const showToast = (msg, type = 'info', title = null) => {
     toast.showToast(msg, type, title);
@@ -511,6 +517,7 @@ export function useInfrastructure() {
     }
   };
 
+
   const declarePatchApplied = async (installationId, payload, applyingKey = null) => {
     setPatchApplyingKey(applyingKey);
     setPatchApplyError(null);
@@ -553,6 +560,31 @@ export function useInfrastructure() {
 
     toast.warning(`No se encontró ${item.cve_id} en el grafo visible`, 'Nodo no encontrado');
     return null;
+  };
+
+
+  const fetchAppliedPatchHistory = async (installationId) => {
+    if (!installationId) {
+      setAppliedPatchHistory([]);
+      setAppliedPatchHistoryInstallationId(null);
+      return [];
+    }
+
+    setAppliedPatchHistoryLoading(true);
+    setAppliedPatchHistoryError(null);
+    setAppliedPatchHistoryInstallationId(installationId);
+
+    try {
+      const history = await getAppliedPatchHistoryUseCase.execute(installationId);
+      setAppliedPatchHistory(history);
+      return history;
+    } catch (err) {
+      setAppliedPatchHistoryError(err.message);
+      setAppliedPatchHistory([]);
+      throw err;
+    } finally {
+      setAppliedPatchHistoryLoading(false);
+    }
   };
 
   const _triggerDownload = (filename, jsonText) => {
@@ -1366,6 +1398,11 @@ export function useInfrastructure() {
     refreshPatchesForProject,
     patchProjectRefreshLoading,
     patchProjectRefreshError,
-    patchProjectRefreshProgress
+    patchProjectRefreshProgress,
+  appliedPatchHistory,
+  appliedPatchHistoryLoading,
+  appliedPatchHistoryError,
+  appliedPatchHistoryInstallationId,
+  fetchAppliedPatchHistory
   };
 }

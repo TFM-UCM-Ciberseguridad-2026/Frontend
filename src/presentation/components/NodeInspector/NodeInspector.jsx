@@ -17,6 +17,51 @@ const getRiskBadgeClass = (score, tier) => {
   return 'risk-badge-low';
 };
 
+
+const getFindingPatchState = (props = {}) => {
+  const status = String(props.status || '').toUpperCase();
+  const remediationKind = String(props.remediation_kind || '').toUpperCase();
+  const remediationFactor = Number(props.remediation_factor ?? 1);
+  const riskScore = Number(props.risk_score ?? 0);
+  const hasAvailableRemediation = Boolean(
+    props.patch_available ||
+    props.fixed_version ||
+    (remediationKind && remediationKind !== 'UNAVAILABLE')
+  );
+
+  if (status === 'PATCHED' || remediationFactor === 0 || riskScore === 0) {
+    return {
+      label: 'PATCHED',
+      className: 'finding-state-patched',
+      help: 'Finding corregido por un parche oficial. Riesgo efectivo 0.'
+    };
+  }
+
+  if (status === 'MITIGATED' || (remediationFactor > 0 && remediationFactor < 1)) {
+    return {
+      label: 'MITIGATED',
+      className: 'finding-state-mitigated',
+      help: 'Finding tratado con mitigación o corrección temporal. Mantiene riesgo residual.'
+    };
+  }
+
+  if (hasAvailableRemediation) {
+    return {
+      label: 'ANALYSED',
+      className: 'finding-state-analysed',
+      help: 'Finding con remediación conocida disponible, pendiente de aplicar.'
+    };
+  }
+
+  return {
+    label: 'IDENTIFIED',
+    className: 'finding-state-identified',
+    help: 'Finding identificado sin remediación conocida.'
+  };
+};
+
+
+
 export function NodeInspector({
   selectedNode,
   updateNode,
@@ -199,15 +244,24 @@ export function NodeInspector({
               const riskPct = toPercent(props.risk_score) ?? 0;
               const badgeClass = getRiskBadgeClass(props.risk_score, props.risk_tier);
 
+              const findingPatchState = getFindingPatchState(props);
+
+
               return (
-                <div key={fId} className={`finding-accordion-card ${isPathTarget ? 'is-path-target' : ''}`}>
+                <div key={fId} className={`finding-accordion-card ${findingPatchState.className} ${isPathTarget ? 'is-path-target' : ''}`}>
                   <div
                     className={`finding-accordion-header ${isExpanded ? 'is-expanded' : ''}`}
                     onClick={() => toggleFinding(fId)}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div className="finding-accordion-main">
                       <span className="finding-accordion-title">
                         {titleName}
+                      </span>
+                      <span
+                        className={`finding-state-badge ${findingPatchState.className}`}
+                        title={findingPatchState.help}
+                      >
+                        {findingPatchState.label}
                       </span>
                       {isPathTarget && (
                         <span className="path-target-badge" title="Vulnerabilidad de la ruta de ataque activa">
@@ -234,6 +288,10 @@ export function NodeInspector({
                       </div>
 
                       <div className="props finding-props-container">
+                        <div className="prop-row">
+                          <div className="k">PATCH STATE</div>
+                          <div className="v">{findingPatchState.label}</div>
+                        </div>
                         <div className="prop-row">
                           <div className="k">IMPACT</div>
                           <div className="v">{props.impact_score ?? 'N/A'}</div>

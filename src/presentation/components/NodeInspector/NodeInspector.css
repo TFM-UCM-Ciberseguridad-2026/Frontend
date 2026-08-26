@@ -98,6 +98,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   padding: 12px 14px;
   cursor: pointer;
   background: rgba(122, 115, 255, 0.04);
@@ -112,17 +113,31 @@
   background: rgba(122, 115, 255, 0.12);
 }
 
+.finding-accordion-main {
+  display: grid;
+  grid-template-columns: minmax(88px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
 .finding-accordion-title {
   font-family: 'Orbitron', sans-serif;
   font-size: 13px;
   font-weight: bold;
   color: var(--c50, #f0f1ff);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .finding-accordion-meta {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+  min-width: 112px;
 }
 
 .finding-accordion-scores {
@@ -256,4 +271,68 @@
 .finding-accordion-card.is-path-target {
   border-color: rgba(239, 68, 68, 0.6) !important;
   box-shadow: 0 0 10px rgba(239, 68, 68, 0.25);
+}
+
+
+.finding-state-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 74px;
+  padding: 0.28rem 0.58rem;
+  border-radius: 999px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.finding-state-identified.finding-state-badge {
+    color: #c084fc;
+    border-color: rgba(192, 132, 252, 0.45);
+    background: rgba(192, 132, 252, 0.13);
+}
+
+.finding-state-analysed.finding-state-badge {
+    color: #38bdf8;
+    border-color: rgba(56, 189, 248, 0.42);
+    background: rgba(56, 189, 248, 0.12);
+}
+
+.finding-state-patched.finding-state-badge {
+  color: #86efac;
+  border-color: rgba(134, 239, 172, 0.4);
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.finding-accordion-card.finding-state-patched {
+  opacity: 0.72;
+}
+
+.finding-accordion-card.finding-state-patched .finding-accordion-title {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  text-decoration-color: rgba(134, 239, 172, 0.65);
+}
+
+.finding-accordion-card.finding-state-analysed {
+  border-color: rgba(147, 197, 253, 0.35);
+}
+
+.finding-accordion-card.finding-state-identified {
+  border-color: rgba(192, 132, 252, 0.35);
+}
+
+
+.finding-state-mitigated.finding-state-badge {
+  color: #facc15;
+  border-color: rgba(250, 204, 21, 0.4);
+  background: rgba(250, 204, 21, 0.12);
+}
+
+.finding-accordion-card.finding-state-mitigated {
+  border-color: rgba(250, 204, 21, 0.24);
 }

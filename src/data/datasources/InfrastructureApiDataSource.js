@@ -367,6 +367,11 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
+  async fetchAppliedPatchHistory(installationId) {
+    const res = await fetch(`/api/installations/${encodeURIComponent(installationId)}/applied-patches`);
+    return await this._handleResponse(res);
+  }
+
 
   async refreshPatchesForProject(projectId, { limit = 20, offset = 0 } = {}) {
     const params = new URLSearchParams();
