@@ -384,4 +384,41 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
+  async fetchPaginatedInventory({
+    projectId,
+    page = 1,
+    limit = 50,
+    category = 'ALL',
+    categories = [],
+    search = '',
+    ipSearch = '',
+    vendorSearch = '',
+    environment = '',
+    internetExposed = '',
+    status = '',
+    riskTier = '',
+    sortField = 'name',
+    sortDirection = 'asc'
+  } = {}) {
+    const params = new URLSearchParams();
+    if (projectId) params.set('project_id', String(projectId));
+    if (page) params.set('page', String(page));
+    if (limit) params.set('limit', String(limit));
+    if (category) params.set('category', category);
+    if (Array.isArray(categories) && categories.length > 0) {
+      params.set('categories', categories.join(','));
+    }
+    if (search) params.set('search', search);
+    if (ipSearch) params.set('ip_search', ipSearch);
+    if (vendorSearch) params.set('vendor_search', vendorSearch);
+    if (environment) params.set('environment', environment);
+    if (internetExposed) params.set('internet_exposed', internetExposed);
+    if (status) params.set('status', status);
+    if (riskTier) params.set('risk_tier', riskTier);
+    if (sortField) params.set('sort_by', sortField);
+    if (sortDirection) params.set('order', sortDirection);
+
+    const res = await fetch(`/api/inventory?${params.toString()}`);
+    return await this._handleResponse(res);
+  }
 }

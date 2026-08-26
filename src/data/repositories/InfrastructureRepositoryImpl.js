@@ -145,4 +145,27 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
   async deleteNode(id, justification) { return await this.apiDataSource.deleteNode(id, justification); }
   async getEndpointIPs(id) { return await this.apiDataSource.getEndpointIPs(id); }
   async exportProject(id) { return await this.apiDataSource.exportProject(id); }
+
+  async getPaginatedInventory(params) {
+    const rawData = await this.apiDataSource.fetchPaginatedInventory(params);
+    if (!rawData) {
+      return {
+        items: [],
+        page: 1,
+        limit: 50,
+        totalItems: 0,
+        totalPages: 0,
+        categoryCounts: {}
+      };
+    }
+    const items = (rawData.items || []).map(n => new Node(n));
+    return {
+      items,
+      page: rawData.page || 1,
+      limit: rawData.limit || 50,
+      totalItems: rawData.total_items || 0,
+      totalPages: rawData.total_pages || 0,
+      categoryCounts: rawData.category_counts || {}
+    };
+  }
 }

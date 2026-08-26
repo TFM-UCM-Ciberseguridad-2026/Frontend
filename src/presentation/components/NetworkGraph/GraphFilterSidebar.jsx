@@ -6,6 +6,9 @@ export function GraphFilterSidebar({
   setFilterType,
   searchQuery,
   setSearchQuery,
+  graphAdvancedFilters = {},
+  updateGraphAdvancedFilter,
+  clearGraphAdvancedFilters,
   categories = [],
   getNodeCountByType,
   fetchExploitationPaths,
@@ -19,7 +22,7 @@ export function GraphFilterSidebar({
 }) {
   const [openSections, setOpenSections] = useState({
     categories: true,
-    advanced: false
+    advanced: true
   });
 
   const toggleSection = (sectionKey) => {
@@ -29,15 +32,29 @@ export function GraphFilterSidebar({
     }));
   };
 
-  const activeFilterCount = (filterType !== 'ALL' ? 1 : 0) + (searchQuery.trim() !== '' ? 1 : 0);
+  // Calcular total de filtros activos
+  const activeAdvancedCount = [
+    graphAdvancedFilters.ipSearch?.trim(),
+    graphAdvancedFilters.vendorSearch?.trim(),
+    graphAdvancedFilters.environment !== 'ALL' ? graphAdvancedFilters.environment : null,
+    graphAdvancedFilters.internetExposed !== 'ALL' ? graphAdvancedFilters.internetExposed : null,
+    graphAdvancedFilters.status !== 'ALL' ? graphAdvancedFilters.status : null,
+    graphAdvancedFilters.riskTier !== 'ALL' ? graphAdvancedFilters.riskTier : null
+  ].filter(Boolean).length;
+
+  const activeFilterCount = (filterType !== 'ALL' ? 1 : 0) + (searchQuery.trim() !== '' ? 1 : 0) + activeAdvancedCount;
 
   const handleResetFilters = () => {
-    setFilterType('ALL');
-    setSearchQuery('');
+    if (clearGraphAdvancedFilters) {
+      clearGraphAdvancedFilters();
+    } else {
+      setFilterType('ALL');
+      setSearchQuery('');
+    }
   };
 
   const totalNodes = graphData?.nodes?.length || 0;
-  const totalEdges = graphData?.links?.length || graphData?.edges?.length || 0;
+  const totalEdges = graphData?.links?.length || graphData?.edges?.length || graphData?.relationships?.length || 0;
 
   return (
     <aside className="sidebar compact-sidebar">
@@ -64,7 +81,7 @@ export function GraphFilterSidebar({
         )}
       </div>
 
-      {/* BARRA DE BÚSQUEDA COMPACTA CON ICONO SVG BLANCO */}
+      {/* BARRA DE BÚSQUEDA COMPACTA CON ICONO SVG */}
       <div className="compact-search-wrapper">
         <svg className="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <circle cx="11" cy="11" r="8" />
@@ -186,6 +203,8 @@ export function GraphFilterSidebar({
 
       {/* CONTENEDOR DE SECCIONES CON SCROLL SLIM */}
       <div className="filter-scroll-container">
+        
+        {/* SECCIÓN 1: CATEGORÍAS */}
         <div className="filter-accordion">
           <button
             className="accordion-header"
@@ -239,6 +258,7 @@ export function GraphFilterSidebar({
           )}
         </div>
 
+        {/* SECCIÓN 2: FILTROS AVANZADOS INTERACTIVOS */}
         <div className="filter-accordion">
           <button
             className="accordion-header"
@@ -246,7 +266,11 @@ export function GraphFilterSidebar({
           >
             <div className="accordion-title-wrap">
               <span className="eyebrow-compact">Filtros Avanzados</span>
-              <span className="accordion-tag">Próximamente</span>
+              {activeAdvancedCount > 0 && (
+                <span className="filter-active-badge" style={{ fontSize: '10px', padding: '1px 5px' }}>
+                  {activeAdvancedCount}
+                </span>
+              )}
             </div>
             <svg
               className={`accordion-chevron ${openSections.advanced ? 'open' : ''}`}
@@ -260,20 +284,152 @@ export function GraphFilterSidebar({
           </button>
 
           {openSections.advanced && (
-            <div className="accordion-content">
-              <div className="future-filters-placeholder">
-                <div className="placeholder-item">
-                  <span>Severidad Vulnerabilidad</span>
-                  <span className="ph-badge">Alta / Crítica</span>
-                </div>
-                <div className="placeholder-item">
-                  <span>Estado de Activo</span>
-                  <span className="ph-badge">Activo / Inactivo</span>
-                </div>
-                <small className="placeholder-note">
-                  Modo preparado para integrar filtros por rangos, tags y atributos extendidos.
-                </small>
+            <div className="accordion-content" style={{ padding: '10px 4px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              
+              {/* A. EXPOSICIÓN A INTERNET */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
+                  Exposición a Internet:
+                </label>
+                <select
+                  value={graphAdvancedFilters.internetExposed || 'ALL'}
+                  onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('internetExposed', e.target.value)}
+                  style={{
+                    background: '#0d0d1a',
+                    border: '1px solid var(--line)',
+                    color: 'var(--c100)',
+                    padding: '5px 8px',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    fontFamily: 'Share Tech Mono, monospace'
+                  }}
+                >
+                  <option value="ALL">Todos los activos</option>
+                  <option value="TRUE">☁ Solo Expuestos</option>
+                  <option value="FALSE">🔒 Solo Internos</option>
+                </select>
               </div>
+
+              {/* B. ENTORNO */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
+                  Entorno de Despliegue:
+                </label>
+                <select
+                  value={graphAdvancedFilters.environment || 'ALL'}
+                  onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('environment', e.target.value)}
+                  style={{
+                    background: '#0d0d1a',
+                    border: '1px solid var(--line)',
+                    color: 'var(--c100)',
+                    padding: '5px 8px',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    fontFamily: 'Share Tech Mono, monospace'
+                  }}
+                >
+                  <option value="ALL">Todos los entornos</option>
+                  <option value="production">Production</option>
+                  <option value="development">Development</option>
+                  <option value="staging">Staging</option>
+                </select>
+              </div>
+
+              {/* C. DIRECCIÓN IP / SUBRED */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
+                  IP / Subred (CIDR):
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej. 192.168.1..."
+                  value={graphAdvancedFilters.ipSearch || ''}
+                  onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('ipSearch', e.target.value)}
+                  style={{
+                    background: '#0d0d1a',
+                    border: '1px solid var(--line)',
+                    color: 'var(--c100)',
+                    padding: '5px 8px',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    fontFamily: 'Share Tech Mono, monospace'
+                  }}
+                />
+              </div>
+
+              {/* D. PROVEEDOR / VENDOR */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
+                  Proveedor / Vendor:
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej. Apache, Cisco..."
+                  value={graphAdvancedFilters.vendorSearch || ''}
+                  onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('vendorSearch', e.target.value)}
+                  style={{
+                    background: '#0d0d1a',
+                    border: '1px solid var(--line)',
+                    color: 'var(--c100)',
+                    padding: '5px 8px',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    fontFamily: 'Share Tech Mono, monospace'
+                  }}
+                />
+              </div>
+
+              {/* E. ESTADO */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
+                  Estado de Ejecución:
+                </label>
+                <select
+                  value={graphAdvancedFilters.status || 'ALL'}
+                  onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('status', e.target.value)}
+                  style={{
+                    background: '#0d0d1a',
+                    border: '1px solid var(--line)',
+                    color: 'var(--c100)',
+                    padding: '5px 8px',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    fontFamily: 'Share Tech Mono, monospace'
+                  }}
+                >
+                  <option value="ALL">Todos los estados</option>
+                  <option value="running">Running</option>
+                  <option value="stopped">Stopped</option>
+                  <option value="active">Active</option>
+                </select>
+              </div>
+
+              {/* F. NIVEL DE RIESGO */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
+                  Nivel de Riesgo:
+                </label>
+                <select
+                  value={graphAdvancedFilters.riskTier || 'ALL'}
+                  onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('riskTier', e.target.value)}
+                  style={{
+                    background: '#0d0d1a',
+                    border: '1px solid var(--line)',
+                    color: 'var(--c100)',
+                    padding: '5px 8px',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    fontFamily: 'Share Tech Mono, monospace'
+                  }}
+                >
+                  <option value="ALL">Todos los niveles</option>
+                  <option value="CRITICAL">Critical</option>
+                  <option value="HIGH">High</option>
+                  <option value="MEDIUM">Medium</option>
+                  <option value="LOW">Low</option>
+                </select>
+              </div>
+
             </div>
           )}
         </div>

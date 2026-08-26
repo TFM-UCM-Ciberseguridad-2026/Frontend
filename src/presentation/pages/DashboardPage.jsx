@@ -22,6 +22,9 @@ export function DashboardPage({
   setSearchQuery,
   filterType,
   setFilterType,
+  graphAdvancedFilters,
+  updateGraphAdvancedFilter,
+  clearGraphAdvancedFilters,
   showToast,
   showAPTPanel,
   setShowAPTPanel,
@@ -165,6 +168,9 @@ export function DashboardPage({
             setFilterType={setFilterType}
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
+            graphAdvancedFilters={graphAdvancedFilters}
+            updateGraphAdvancedFilter={updateGraphAdvancedFilter}
+            clearGraphAdvancedFilters={clearGraphAdvancedFilters}
             selectedNode={selectedNode}
             setSelectedNode={setSelectedNode}
             loading={loading}
@@ -202,7 +208,8 @@ export function DashboardPage({
         {activeNav === 'inventario' && (
           <InventoryPage
             graphData={graphData}
-            categories={categories}
+            categories={categories.filter(c => !['Finding', 'Remediation', 'Vulnerability', 'CWE', 'CVE'].includes(c.key))}
+            selectedProjectId={selectedProjectId}
           />
         )}
 
