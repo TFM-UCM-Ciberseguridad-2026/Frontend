@@ -87,6 +87,14 @@ function inferRemediationLevelFromPatch(patch) {
   const text = `${patch?.description || ''} ${patch?.url || ''}`.toLowerCase();
 
   if (
+    text.includes('fixed-version://') ||
+    text.includes('mitigación por actualización') ||
+    text.includes('mitigacion por actualizacion')
+  ) {
+    return 'WORKAROUND';
+  }
+
+  if (
     text.includes('workaround') ||
     text.includes('mitigation') ||
     text.includes('mitigación') ||
@@ -288,7 +296,7 @@ export function ApplyPatchModal({
           <section className="apply-patch-section">
             <h3>Resumen y propuesta</h3>
             <div className="apply-patch-context-grid">
-              <Field label="Patch oficial disponible" value={hasPatchAvailable ? 'Sí' : 'No'} />
+              <Field label="Remediación disponible" value={hasPatchAvailable ? 'Sí' : 'No'} />
               <Field label="Patch Priority" value={`${item.priority_tier || 'LOW'} · ${percent(item.priority_score)}`} />
 
               <Field
@@ -351,9 +359,11 @@ export function ApplyPatchModal({
                       </div>
 
                       <strong>
-                        {recommendedFixedVersion
-                          ? `Actualizar ${item.software_name || 'software'} a versión ${recommendedFixedVersion}`
-                          : `Referencia oficial para ${item.cve_id}`}
+                        {remediationLevel === 'WORKAROUND' && recommendedFixedVersion
+                          ? `Mitigación: actualizar ${item.software_name || 'software'} a una versión corregida`
+                          : recommendedFixedVersion
+                            ? `Actualizar ${item.software_name || 'software'} a versión ${recommendedFixedVersion}`
+                            : `Referencia oficial para ${item.cve_id}`}
                       </strong>
 
                       {patchDesc && (

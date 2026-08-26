@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ApplyPatchModal } from '../components/PatchQueue/ApplyPatchModal';
+import { AppliedPatchHistoryPanel } from '../components/PatchQueue/AppliedPatchHistoryPanel';
 import './PatchQueuePage.css';
 
 const percent = (value) => `${Math.round(Number(value || 0) * 100)}%`;
@@ -7,6 +8,21 @@ const percent = (value) => `${Math.round(Number(value || 0) * 100)}%`;
 function tierClass(tier) {
   return `patch-tier patch-tier-${String(tier || 'low').toLowerCase()}`;
 }
+
+function patchAvailability(item) {
+  switch (item.remediation_kind) {
+    case 'OFFICIAL_FIX':
+      return { label: 'Patch oficial', className: 'yes' };
+    case 'WORKAROUND':
+      return { label: 'Mitigación', className: 'warning' };
+    case 'TEMPORARY_FIX':
+      return { label: 'Temporal', className: 'warning' };
+    case 'UNAVAILABLE':
+    default:
+      return { label: 'Sin remediación', className: 'no' };
+  }
+}
+
 
 export function PatchQueuePage({
   selectedProjectId,
@@ -32,12 +48,21 @@ export function PatchQueuePage({
   refreshPatchesForProject,
   patchProjectRefreshLoading,
   patchProjectRefreshError,
-  patchProjectRefreshProgress
+  patchProjectRefreshProgress,
+  appliedPatchHistory,
+  appliedPatchHistoryLoading,
+  appliedPatchHistoryError,
+  appliedPatchHistoryInstallationId,
+  fetchAppliedPatchHistory
 }) {
 
   const [selectedPatchItem, setSelectedPatchItem] = useState(null);
+  const [selectedHistoryItem, setSelectedHistoryItem] = useState(null);
+
+
 
   useEffect(() => {
+    setSelectedHistoryItem(null);
     fetchPatchQueue?.(1, 20);
   }, [selectedProjectId]);
 
@@ -69,6 +94,10 @@ export function PatchQueuePage({
       payload,
       getPatchQueueItemKey(currentSelectedPatchItem)
     );
+
+    if (selectedHistoryItem?.installation_id === currentSelectedPatchItem.installation_id) {
+      await fetchAppliedPatchHistory?.(currentSelectedPatchItem.installation_id);
+    }
 
     setSelectedPatchItem(null);
   };
@@ -105,6 +134,12 @@ export function PatchQueuePage({
       );
     }
     return pages;
+  };
+
+
+  const selectHistoryItem = async (item) => {
+    setSelectedHistoryItem(item);
+    await fetchAppliedPatchHistory?.(item.installation_id);
   };
 
   return (
@@ -147,126 +182,158 @@ export function PatchQueuePage({
         )}
       </div>
 
-      <div className="patch-queue-table-wrap">
-        <table className="patch-queue-table">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Patch Priority</th>
-              <th>CVE</th>
-              <th>Activo</th>
-              <th>Software</th>
-              <th>Versiones</th>
-              <th>Risk</th>
-              <th>Patch</th>
-              <th>Contexto</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {patchQueueLoading && (
-              <tr>
-                <td colSpan="10">Cargando Patch Queue...</td>
-              </tr>
-            )}
+      <div className="patch-queue-content-layout">
+        <div className="patch-queue-main-column">
+          <div className="patch-queue-table-wrap">
+            <table className="patch-queue-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Patch Priority</th>
+                  <th>CVE</th>
+                  <th>Activo</th>
+                  <th>Software</th>
+                  <th>Versiones</th>
+                  <th>Risk</th>
+                  <th>Patch</th>
+                  <th>Contexto</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {patchQueueLoading && (
+                  <tr>
+                    <td colSpan="10">Cargando Patch Queue...</td>
+                  </tr>
+                )}
 
-            {!patchQueueLoading && patchQueue.length === 0 && (
-              <tr>
-                <td colSpan="10">No hay findings pendientes de parcheo.</td>
-              </tr>
-            )}
+                {!patchQueueLoading && patchQueue.length === 0 && (
+                  <tr>
+                    <td colSpan="10">No hay findings pendientes de parcheo.</td>
+                  </tr>
+                )}
 
-            {!patchQueueLoading && patchQueue.map(item => {
-              const itemKey = getPatchQueueItemKey(item);
-              const isApplyingThisRow = patchApplyingKey === itemKey;
-              const hasPatchAvailable = Boolean(item.patch_available);
+                {!patchQueueLoading && patchQueue.map(item => {
+                  const itemKey = getPatchQueueItemKey(item);
+                  const isApplyingThisRow = patchApplyingKey === itemKey;
+                  const hasPatchAvailable = Boolean(item.patch_available);
+                  const patchState = patchAvailability(item);
+                  const isSelectedHistoryRow = selectedHistoryItem && getPatchQueueItemKey(selectedHistoryItem) === itemKey;
 
-              return (
-              <tr key={itemKey}>
-                <td>{item.position}</td>
-                <td>
-                  <span className={tierClass(item.priority_tier)}>
-                    {item.priority_tier || 'LOW'} · {percent(item.priority_score)}
-                  </span>
-                </td>
-                <td className="patch-cve">{item.cve_id}</td>
-                <td>
-                  <strong>{item.hostname || 'N/A'}</strong>
-                  <small>#{item.endpoint_id}</small>
-                </td>
-                <td>
-                  <strong>{item.software_name || 'N/A'}</strong>
-                  <small>{item.installation_id}</small>
-                </td>
-                <td>
-                  <span>{item.software_version || 'N/A'}</span>
-                  <small>fix: {item.fixed_version || 'pendiente'}</small>
-                </td>
-                <td>{percent(item.risk_score)}</td>
-                <td>
-                  <span className={`patch-available ${item.patch_available ? 'yes' : 'no'}`}>
-                    {item.patch_available ? 'Disponible' : 'Sin patch'}
-                  </span>
-                </td>
-                <td>
-                  {item.in_container
-                    ? `Container: ${item.container_name || 'N/A'}`
-                    : `Host · ${item.environment || 'N/A'}`}
-                </td>
-                <td>
-                  <div className="patch-actions">
-                    <button type="button" onClick={() => openInGraph(item)}>
-                      Ver
-                    </button>
-                    <button type="button" onClick={() => refreshPatchesForCVE?.(item.cve_id)}>
-                      Refresh CVE
-                    </button>
-                    {hasPatchAvailable && (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedPatchItem(item)}
-                        disabled={isApplyingThisRow}
-                        title="Aplicar patch a esta instalación"
-                      >
-                        {isApplyingThisRow ? 'Aplicando...' : 'Aplicar patch'}
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {patchQueueTotalPages > 1 && (
-        <div className="patch-pagination-container">
-          <button
-            className="patch-pagination-btn"
-            onClick={() => handlePageChange(patchQueuePage - 1)}
-            disabled={patchQueuePage <= 1 || patchQueueLoading}
-          >
-            &laquo; Anterior
-          </button>
-
-          <div className="patch-pagination-pages">
-            {renderPageNumbers()}
+                  return (
+                    <tr
+                      key={itemKey}
+                      className={isSelectedHistoryRow ? 'is-selected-history-row' : ''}
+                      onClick={() => selectHistoryItem(item)}
+                    >
+                      <td>{item.position}</td>
+                      <td>
+                        <span className={tierClass(item.priority_tier)}>
+                          {item.priority_tier || 'LOW'} · {percent(item.priority_score)}
+                        </span>
+                      </td>
+                      <td className="patch-cve">{item.cve_id}</td>
+                      <td>
+                        <strong>{item.hostname || 'N/A'}</strong>
+                        <small>#{item.endpoint_id}</small>
+                      </td>
+                      <td>
+                        <strong>{item.software_name || 'N/A'}</strong>
+                        <small>{item.installation_id}</small>
+                      </td>
+                      <td>
+                        <span>{item.software_version || 'N/A'}</span>
+                        <small>fix: {item.fixed_version || 'pendiente'}</small>
+                      </td>
+                      <td>{percent(item.risk_score)}</td>
+                      <td>
+                        <span className={`patch-available ${patchState.className}`}>
+                          {patchState.label}
+                        </span>
+                      </td>
+                      <td>
+                        {item.in_container
+                          ? `Container: ${item.container_name || 'N/A'}`
+                          : `Host · ${item.environment || 'N/A'}`}
+                      </td>
+                      <td>
+                        <div className="patch-actions">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openInGraph(item);
+                            }}
+                          >
+                            Ver
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              refreshPatchesForCVE?.(item.cve_id);
+                            }}
+                          >
+                            Refresh CVE
+                          </button>
+                          {hasPatchAvailable && (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setSelectedPatchItem(item);
+                              }}
+                              disabled={isApplyingThisRow}
+                              title="Aplicar patch a esta instalación"
+                            >
+                              {isApplyingThisRow ? 'Aplicando...' : 'Aplicar patch'}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
 
-          <button
-            className="patch-pagination-btn"
-            onClick={() => handlePageChange(patchQueuePage + 1)}
-            disabled={patchQueuePage >= patchQueueTotalPages || patchQueueLoading}
-          >
-            Siguiente &raquo;
-          </button>
+          {patchQueueTotalPages > 1 && (
+            <div className="patch-pagination-container">
+              <button
+                className="patch-pagination-btn"
+                onClick={() => handlePageChange(patchQueuePage - 1)}
+                disabled={patchQueuePage <= 1 || patchQueueLoading}
+              >
+                &laquo; Anterior
+              </button>
 
-          <span className="patch-pagination-info">
-            Página {patchQueuePage} de {patchQueueTotalPages}
-          </span>
+              <div className="patch-pagination-pages">
+                {renderPageNumbers()}
+              </div>
+
+              <button
+                className="patch-pagination-btn"
+                onClick={() => handlePageChange(patchQueuePage + 1)}
+                disabled={patchQueuePage >= patchQueueTotalPages || patchQueueLoading}
+              >
+                Siguiente &raquo;
+              </button>
+
+              <span className="patch-pagination-info">
+                Página {patchQueuePage} de {patchQueueTotalPages}
+              </span>
+            </div>
+          )}
         </div>
-      )}
+
+        <AppliedPatchHistoryPanel
+          selectedItem={selectedHistoryItem}
+          history={appliedPatchHistory}
+          loading={appliedPatchHistoryLoading}
+          error={appliedPatchHistoryError}
+        />
+      </div>
 
       <ApplyPatchModal
         isOpen={Boolean(currentSelectedPatchItem)}

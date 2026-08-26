@@ -93,7 +93,12 @@ export function DashboardPage({
   refreshPatchesForProject,
   patchProjectRefreshLoading,
   patchProjectRefreshError,
-  patchProjectRefreshProgress
+  patchProjectRefreshProgress,
+  appliedPatchHistory,
+  appliedPatchHistoryLoading,
+  appliedPatchHistoryError,
+  appliedPatchHistoryInstallationId,
+  fetchAppliedPatchHistory
 }) {
   const [activeNav, setActiveNav] = useState('grafo');
   const [showExportModal, setShowExportModal] = useState(false);
@@ -226,6 +231,11 @@ export function DashboardPage({
             patchProjectRefreshLoading={patchProjectRefreshLoading}
             patchProjectRefreshError={patchProjectRefreshError}
             patchProjectRefreshProgress={patchProjectRefreshProgress}
+            appliedPatchHistory={appliedPatchHistory}
+            appliedPatchHistoryLoading={appliedPatchHistoryLoading}
+            appliedPatchHistoryError={appliedPatchHistoryError}
+            appliedPatchHistoryInstallationId={appliedPatchHistoryInstallationId}
+            fetchAppliedPatchHistory={fetchAppliedPatchHistory}
             setActiveNav={setActiveNav}
           />
         )}
