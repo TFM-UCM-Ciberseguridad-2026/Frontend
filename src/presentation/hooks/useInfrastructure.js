@@ -567,6 +567,8 @@ export function useInfrastructure() {
       toast.success('Parche declarado como aplicado', 'Patch aplicado');
       await fetchPatchQueue();
       await fetchInfrastructure(true);
+      clearSelectedExploitationPath();
+      setExploitationPaths([]);
       return result;
     } catch (err) {
       setPatchApplyError(err.message);
