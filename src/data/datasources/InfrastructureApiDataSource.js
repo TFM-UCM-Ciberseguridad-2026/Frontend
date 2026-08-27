@@ -352,11 +352,33 @@ export class InfrastructureApiDataSource {
     }
   }
 
-  async fetchPatchQueue(projectId, page = 1, limit = 20) {
+  async fetchPatchQueue(paramsOrProjectId = {}, legacyPage = 1, legacyLimit = 20) {
+    let queryParams = {};
+    if (typeof paramsOrProjectId === 'object' && paramsOrProjectId !== null) {
+      queryParams = paramsOrProjectId;
+    } else {
+      queryParams = {
+        projectId: paramsOrProjectId,
+        page: legacyPage,
+        limit: legacyLimit
+      };
+    }
+
     const params = new URLSearchParams();
-    if (projectId) params.set('project_id', projectId);
-    if (page) params.set('page', String(page));
-    if (limit) params.set('limit', String(limit));
+    if (queryParams.projectId) params.set('project_id', String(queryParams.projectId));
+    if (queryParams.page) params.set('page', String(queryParams.page));
+    if (queryParams.limit) params.set('limit', String(queryParams.limit));
+    if (queryParams.search) params.set('search', queryParams.search);
+    if (queryParams.vendorSearch) params.set('vendor_search', queryParams.vendorSearch);
+    if (queryParams.hostnameSearch) params.set('hostname_search', queryParams.hostnameSearch);
+    if (queryParams.environment && queryParams.environment !== 'ALL') params.set('environment', queryParams.environment);
+    if (queryParams.internetExposed && queryParams.internetExposed !== 'ALL') params.set('internet_exposed', queryParams.internetExposed);
+    if (queryParams.inContainer && queryParams.inContainer !== 'ALL') params.set('in_container', queryParams.inContainer);
+    if (queryParams.priorityTier && queryParams.priorityTier !== 'ALL') params.set('priority_tier', queryParams.priorityTier);
+    if (queryParams.patchAvailable && queryParams.patchAvailable !== 'ALL') params.set('patch_available', queryParams.patchAvailable);
+    if (queryParams.remediationKind && queryParams.remediationKind !== 'ALL') params.set('remediation_kind', queryParams.remediationKind);
+    if (queryParams.sortField) params.set('sort_field', queryParams.sortField);
+    if (queryParams.sortDirection) params.set('sort_direction', queryParams.sortDirection);
 
     const res = await fetch(`/api/patch-queue?${params.toString()}`);
     return await this._handleResponse(res);
