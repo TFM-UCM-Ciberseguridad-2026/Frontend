@@ -139,11 +139,19 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
-  async scanInstallationVulnerabilities(installationId, softwareId, limit = 100) {
+  async scanInstallationVulnerabilities(installationId, softwareId, { limit, forceRefresh } = {}) {
     const params = new URLSearchParams({
-      software_id: String(softwareId),
-      limit: String(limit)
+      software_id: String(softwareId)
     });
+
+    if (Number.isInteger(limit) && limit > 0) {
+      params.set('limit', String(limit));
+    }
+
+    if (forceRefresh) {
+      params.set('force_refresh', 'true');
+    }
+
     const res = await fetch(`/api/installations/${installationId}/scan-vulns?${params.toString()}`, {
       method: 'POST'
     });
@@ -155,8 +163,16 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
-  async scanContainerImageVulnerabilities(imageId, imageName) {
-    const res = await fetch(`/api/containers/images/${encodeURIComponent(imageId)}/scan-vulns`, {
+  async scanContainerImageVulnerabilities(imageId, imageName, { forceRefresh } = {}) {
+    const params = new URLSearchParams();
+    if (forceRefresh) {
+      params.set('force_refresh', 'true');
+    }
+
+    const queryString = params.toString();
+    const url = `/api/containers/images/${encodeURIComponent(imageId)}/scan-vulns${queryString ? `?${queryString}` : ''}`;
+
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image_name: imageName })
