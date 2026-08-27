@@ -85,12 +85,12 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     return await this.apiDataSource.deleteProject(projectId, justification);
   }
 
-  async scanInstallationVulnerabilities(installationId, softwareId, limit) {
-    return await this.apiDataSource.scanInstallationVulnerabilities(installationId, softwareId, limit);
+  async scanInstallationVulnerabilities(installationId, softwareId, options) {
+    return await this.apiDataSource.scanInstallationVulnerabilities(installationId, softwareId, options);
   }
 
-  async scanContainerImageVulnerabilities(imageId, imageName) {
-    return await this.apiDataSource.scanContainerImageVulnerabilities(imageId, imageName);
+  async scanContainerImageVulnerabilities(imageId, imageName, options) {
+    return await this.apiDataSource.scanContainerImageVulnerabilities(imageId, imageName, options);
   }
 
   async getFindingVulnerabilities(findingId) {

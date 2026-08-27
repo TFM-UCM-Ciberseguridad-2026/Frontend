@@ -33,6 +33,18 @@ import { DeclarePatchAppliedUseCase } from '../../domain/usecases/DeclarePatchAp
 import { GetPatchesForVulnerabilityUseCase } from '../../domain/usecases/GetPatchesForVulnerabilityUseCase';
 import { GetAppliedPatchHistoryUseCase } from '../../domain/usecases/GetAppliedPatchHistoryUseCase';
 
+const VULN_SCAN_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+
+function shouldForceVulnRefresh(installationNode) {
+  const completedAt = installationNode?.properties?.vuln_scan_completed_at;
+  if (!completedAt) return true;
+
+  const completedAtMs = new Date(completedAt).getTime();
+  if (!Number.isFinite(completedAtMs)) return true;
+
+  return Date.now() - completedAtMs >= VULN_SCAN_CACHE_TTL_MS;
+}
+
 
 export function useInfrastructure() {
   const toast = useToast();
@@ -555,6 +567,8 @@ export function useInfrastructure() {
       toast.success('Parche declarado como aplicado', 'Patch aplicado');
       await fetchPatchQueue();
       await fetchInfrastructure(true);
+      clearSelectedExploitationPath();
+      setExploitationPaths([]);
       return result;
     } catch (err) {
       setPatchApplyError(err.message);
@@ -1206,7 +1220,8 @@ export function useInfrastructure() {
           installationId: installationNode.properties?.id || installationNode.properties?.installation_id,
           softwareId: softwareNode.properties?.id || softwareNode.properties?.software_id,
           installationName: installationNode.name,
-          softwareName: softwareNode.name
+          softwareName: softwareNode.name,
+          installationNode
         };
       })
       .filter(Boolean)
@@ -1218,7 +1233,8 @@ export function useInfrastructure() {
       .filter(n => n.primaryLabel === 'ContainerImage')
       .map(n => ({
         imageId: n.properties?.id,
-        imageName: n.properties?.id || n.properties?.name
+        imageName: n.properties?.id || n.properties?.name,
+        imageNode: n
       }))
       .filter(item => item.imageId);
   }, [filteredGraphData]);
@@ -1230,6 +1246,12 @@ export function useInfrastructure() {
     setRiskActionError(null);
 
     let successCount = 0;
+    let processedCVEs = 0;
+    let findingsCreated = 0;
+    let findingsExisting = 0;
+    let cacheHits = 0;
+    let freshQueries = 0;
+
     try {
       const installations = getSelectedProjectSoftwareInstallations();
       const containerImages = getSelectedProjectContainerImages();
@@ -1244,11 +1266,24 @@ export function useInfrastructure() {
 
       for (const installation of installations) {
         try {
-          await scanInstallationVulnerabilitiesUseCase.execute(
+          const result = await scanInstallationVulnerabilitiesUseCase.execute(
             installation.installationId,
             installation.softwareId,
-            100
+            {
+              forceRefresh: shouldForceVulnRefresh(installation.installationNode)
+            }
           );
+
+          processedCVEs += Number(result?.processed || result?.vulnerabilities_found || 0);
+          findingsCreated += Number(result?.findings_created || 0);
+          findingsExisting += Number(result?.findings_existing || 0);
+
+          if (result?.cache_hit) {
+            cacheHits++;
+          } else {
+            freshQueries++;
+          }
+
           successCount++;
         } catch (err) {
           console.error(`Error analizando software ${installation.softwareName || installation.installationId}:`, err);
@@ -1258,10 +1293,24 @@ export function useInfrastructure() {
 
       for (const image of containerImages) {
         try {
-          await scanContainerImageVulnerabilitiesUseCase.execute(
+          const result = await scanContainerImageVulnerabilitiesUseCase.execute(
             image.imageId,
-            image.imageName
+            image.imageName,
+            {
+              forceRefresh: shouldForceVulnRefresh(image.imageNode)
+            }
           );
+
+          processedCVEs += Number(result?.processed || result?.vulnerabilities_found || 0);
+          findingsCreated += Number(result?.findings_created || 0);
+          findingsExisting += Number(result?.findings_existing || 0);
+
+          if (result?.cache_hit) {
+            cacheHits++;
+          } else {
+            freshQueries++;
+          }
+
           successCount++;
         } catch (err) {
           console.error(`Error analizando imagen ${image.imageName || image.imageId}:`, err);
@@ -1272,10 +1321,21 @@ export function useInfrastructure() {
       await fetchInfrastructure(true);
 
       const totalItems = installations.length + containerImages.length;
+      const summaryLines = [
+        `Vulnerabilidades analizadas: ${successCount} elemento(s).`,
+        `Instalaciones software: ${installations.length}.`,
+        `Imágenes contenedor: ${containerImages.length}.`,
+        `CVEs procesadas: ${processedCVEs}.`,
+        `Nuevos findings: ${findingsCreated}.`,
+        `Findings existentes: ${findingsExisting}.`,
+        `Cache usada: ${cacheHits} instalación(es).`,
+        `Consultas frescas: ${freshQueries} instalación(es).`
+      ];
+
       if (failedItems.length === 0) {
-        toast.success(`Vulnerabilidades analizadas con éxito para ${successCount} elemento(s).`, 'Análisis Completado');
+        toast.success(summaryLines.join('\n'), 'Análisis Completado');
       } else if (successCount > 0) {
-        toast.warning(`Análisis completado para ${successCount} de ${totalItems} elemento(s). No se pudo analizar: ${failedItems.join(', ')}.`, 'Análisis Parcial');
+        toast.warning(`${summaryLines.join('\n')}\nNo se pudo analizar: ${failedItems.join(', ')}.`, `Análisis Parcial (${successCount}/${totalItems})`);
       } else {
         const errorMsg = `No se pudo analizar ningún elemento. Fallaron: ${failedItems.join(', ')}`;
         setRiskActionError(errorMsg);

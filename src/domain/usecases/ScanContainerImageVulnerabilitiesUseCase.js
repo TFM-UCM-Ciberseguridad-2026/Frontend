@@ -3,10 +3,10 @@ export class ScanContainerImageVulnerabilitiesUseCase {
     this.infrastructureRepository = infrastructureRepository;
   }
 
-  async execute(imageId, imageName) {
+  async execute(imageId, imageName, options = {}) {
     if (!imageId) {
       throw new Error('El imageId es requerido para el escaneo.');
     }
-    return await this.infrastructureRepository.scanContainerImageVulnerabilities(imageId, imageName);
+    return await this.infrastructureRepository.scanContainerImageVulnerabilities(imageId, imageName, options);
   }
 }

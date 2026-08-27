@@ -148,6 +148,7 @@
   line-height: 1.4;
   color: var(--c50);
   word-break: break-word;
+  white-space: pre-line;
 }
 
 /* Close Button */
