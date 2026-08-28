@@ -1977,7 +1977,10 @@ aside {
   cursor: pointer;
   outline: none;
   transition: all 0.2s ease;
-  max-width: 200px;
+  max-width: 320px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .project-selector select:hover {
