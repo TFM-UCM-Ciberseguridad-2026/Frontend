@@ -33,6 +33,14 @@ import { DeclarePatchAppliedUseCase } from '../../domain/usecases/DeclarePatchAp
 import { GetPatchesForVulnerabilityUseCase } from '../../domain/usecases/GetPatchesForVulnerabilityUseCase';
 import { GetAppliedPatchHistoryUseCase } from '../../domain/usecases/GetAppliedPatchHistoryUseCase';
 
+const isSoftwareInstallationNode = node =>
+  node?.primaryLabel === 'SoftwareInstallation' ||
+  node?.labels?.includes('SoftwareInstallation');
+
+const isSoftwareNode = node =>
+  node?.primaryLabel === 'Software' ||
+  node?.labels?.includes('Software');
+
 const VULN_SCAN_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
 function shouldForceVulnRefresh(installationNode) {
@@ -949,45 +957,97 @@ export function useInfrastructure() {
       }
     });
 
-    const installationFindingsMap = new Map();
+    rels.forEach(rel => {
+      if (rel.type !== 'INSTANCE_OF') return;
+
+      const sourceNode = nodeMap.get(rel.source);
+      const targetNode = nodeMap.get(rel.target);
+      if (!sourceNode || !targetNode) return;
+
+      if (
+        (isSoftwareInstallationNode(sourceNode) && isSoftwareNode(targetNode)) ||
+        (isSoftwareNode(sourceNode) && isSoftwareInstallationNode(targetNode))
+      ) {
+        reachableIds.add(rel.source);
+        reachableIds.add(rel.target);
+      }
+    });
+
+    const findingOwners = new Map();
+
+    projectInstallationIds.forEach(ownerId => {
+      findingOwners.set(ownerId, {
+        owner_id: ownerId,
+        owner_type: 'SoftwareInstallation'
+      });
+    });
+
+    projectContainerIds.forEach(ownerId => {
+      findingOwners.set(ownerId, {
+        owner_id: ownerId,
+        owner_type: 'Container'
+      });
+    });
+
+    const findingOwnerMap = new Map();
 
     rels.forEach(rel => {
-      const sourceIsInst = projectInstallationIds.has(rel.source);
-      const targetIsInst = projectInstallationIds.has(rel.target);
-      const sourceIsImage = projectContainerImageIds.has(rel.source);
-      const targetIsImage = projectContainerImageIds.has(rel.target);
+      if (rel.type !== 'HAS_FINDING') return;
 
-      if (sourceIsInst || targetIsInst || sourceIsImage || targetIsImage) {
-        const instId = (sourceIsInst || targetIsInst)
-          ? (sourceIsInst ? rel.source : rel.target)
-          : (sourceIsImage ? rel.source : rel.target);
-        const otherId = (sourceIsInst || sourceIsImage) ? rel.target : rel.source;
-        const otherNode = nodeMap.get(otherId);
-        if (!otherNode) return;
+      const sourceOwner = findingOwners.get(rel.source);
+      const targetOwner = findingOwners.get(rel.target);
+      const owner = sourceOwner || targetOwner;
 
-        const primaryLabel = otherNode.primaryLabel || otherNode.labels?.[0];
-        const labels = otherNode.labels || [];
+      if (!owner) return;
 
-        if (primaryLabel === 'Finding' || labels.includes('Finding') || rel.type === 'HAS_FINDING' || primaryLabel === 'Vulnerability' || labels.includes('Vulnerability') || rel.type === 'HAS_VULNERABILITY') {
-          if (!installationFindingsMap.has(instId)) {
-            installationFindingsMap.set(instId, []);
-          }
-          installationFindingsMap.get(instId).push(otherNode);
-        } else if (primaryLabel === 'Software' || labels.includes('Software') || rel.type === 'INSTANCE_OF') {
-          reachableIds.add(otherId);
-        }
+      const findingNodeId = sourceOwner ? rel.target : rel.source;
+      const findingNode = nodeMap.get(findingNodeId);
+      if (!findingNode) return;
+
+      const labels = findingNode.labels || [];
+      const isFinding =
+        findingNode.primaryLabel === 'Finding' ||
+        labels.includes('Finding');
+
+      if (!isFinding) return;
+
+      if (!findingOwnerMap.has(owner.owner_id)) {
+        findingOwnerMap.set(owner.owner_id, {
+          owner_id: owner.owner_id,
+          owner_type: owner.owner_type,
+          findings: [],
+          finding_ids: new Set()
+        });
       }
+
+      const ownerEntry = findingOwnerMap.get(owner.owner_id);
+      const findingIdentity = String(
+        findingNode.properties?.finding_key ||
+        findingNode.properties?.id ||
+        findingNode.id
+      );
+
+      if (ownerEntry.finding_ids.has(findingIdentity)) return;
+
+      ownerEntry.finding_ids.add(findingIdentity);
+      ownerEntry.findings.push(findingNode);
     });
 
     const groupedFindingNodesMap = new Map();
     const groupedFindingNodeIds = new Set();
     const routeFindingNodes = new Map();
 
-    installationFindingsMap.forEach((findingsList, instId) => {
+    findingOwnerMap.forEach(ownerEntry => {
+      const {
+        owner_id: ownerId,
+        owner_type: ownerType,
+        findings: findingsList
+      } = ownerEntry;
+
       if (findingsList.length === 0) return;
 
       const visibleFindings = findingsList.filter(isRouteFinding);
-      const groupedFindings = findingsList.filter(f => !isRouteFinding(f));
+      const groupedFindings = findingsList.filter(finding => !isRouteFinding(finding));
 
       visibleFindings.forEach(finding => {
         routeFindingNodes.set(finding.id, finding);
@@ -996,7 +1056,7 @@ export function useInfrastructure() {
 
       if (groupedFindings.length === 0) return;
 
-      const groupedNodeId = `findings-group-${instId}`;
+      const groupedNodeId = `findings-group-${ownerType}-${ownerId}`;
       groupedFindingNodeIds.add(groupedNodeId);
 
       const groupedNode = {
@@ -1007,13 +1067,23 @@ export function useInfrastructure() {
         name: `Hallazgos (${groupedFindings.length})`,
         properties: {
           id: groupedNodeId,
-          software_installation_id: instId,
+          owner_id: ownerId,
+          owner_type: ownerType,
+          software_installation_id:
+            ownerType === 'SoftwareInstallation' ? ownerId : null,
+          container_id:
+            ownerType === 'Container' ? ownerId : null,
           findings: groupedFindings,
-          has_vulnerabilities: groupedFindings.some(f => Boolean(f.properties?.has_vulnerabilities))
+          has_vulnerabilities: groupedFindings.some(finding =>
+            Boolean(
+              finding.hasVuln ||
+              finding.properties?.has_vulnerabilities
+            )
+          )
         }
       };
 
-      groupedFindingNodesMap.set(instId, groupedNode);
+      groupedFindingNodesMap.set(ownerId, groupedNode);
     });
 
     rels.forEach(rel => {
@@ -1043,13 +1113,18 @@ export function useInfrastructure() {
       return reachableIds.has(r.source) && reachableIds.has(r.target);
     });
 
-    groupedFindingNodesMap.forEach((groupedNode, instId) => {
+    groupedFindingNodesMap.forEach((groupedNode, ownerId) => {
+      const ownerType = groupedNode.properties.owner_type;
+
       finalRelationships.push({
-        id: `rel-group-${instId}`,
-        source: instId,
+        id: `rel-group-${ownerType}-${ownerId}`,
+        source: ownerId,
         target: groupedNode.id,
         type: 'HAS_FINDING',
-        properties: { virtual: true }
+        properties: {
+          virtual: true,
+          owner_type: ownerType
+        }
       });
     });
 
@@ -1197,12 +1272,12 @@ export function useInfrastructure() {
 
     const softwareByElementId = new Map(
       nodes
-        .filter(n => n.primaryLabel === 'Software')
+        .filter(n => n.primaryLabel === 'Software' || n.labels?.includes('Software'))
         .map(n => [n.id, n])
     );
 
     return nodes
-      .filter(n => n.primaryLabel === 'SoftwareInstallation')
+      .filter(isSoftwareInstallationNode)
       .map(installationNode => {
         const rel = relationships.find(r =>
           r.type === 'INSTANCE_OF' &&
@@ -1230,7 +1305,10 @@ export function useInfrastructure() {
 
   const getSelectedProjectContainerImages = useCallback(() => {
     return (filteredGraphData?.nodes || [])
-      .filter(n => n.primaryLabel === 'ContainerImage')
+      .filter(n =>
+        n.primaryLabel === 'ContainerImage' ||
+        n.labels?.includes('ContainerImage')
+      )
       .map(n => ({
         imageId: n.properties?.id,
         imageName: n.properties?.id || n.properties?.name,

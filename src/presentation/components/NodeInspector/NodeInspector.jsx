@@ -19,25 +19,35 @@ const getRiskBadgeClass = (score, tier) => {
 
 
 const getFindingPatchState = (props = {}) => {
-  const status = String(props.status || '').toUpperCase();
-  const remediationKind = String(props.remediation_kind || '').toUpperCase();
-  const remediationFactor = Number(props.remediation_factor ?? 1);
-  const riskScore = Number(props.risk_score ?? 0);
+  const status = String(props.status || 'OPEN').toUpperCase();
+  const remediationKind = String(
+    props.remediation_kind || 'UNAVAILABLE'
+  ).toUpperCase();
+
+  const remediationFactorRaw = Number(props.remediation_factor);
+  const hasValidRemediationFactor = Number.isFinite(remediationFactorRaw);
+  const remediationFactor = hasValidRemediationFactor
+    ? remediationFactorRaw
+    : 1;
+
   const hasAvailableRemediation = Boolean(
     props.patch_available ||
     props.fixed_version ||
     (remediationKind && remediationKind !== 'UNAVAILABLE')
   );
 
-  if (status === 'PATCHED' || remediationFactor === 0 || riskScore === 0) {
+  if (status === 'PATCHED') {
     return {
       label: 'PATCHED',
       className: 'finding-state-patched',
-      help: 'Finding corregido por un parche oficial. Riesgo efectivo 0.'
+      help: 'Finding corregido mediante una remediación oficial aplicada.'
     };
   }
 
-  if (status === 'MITIGATED' || (remediationFactor > 0 && remediationFactor < 1)) {
+  if (
+    status === 'MITIGATED' ||
+    (remediationFactor > 0 && remediationFactor < 1)
+  ) {
     return {
       label: 'MITIGATED',
       className: 'finding-state-mitigated',
@@ -239,7 +249,10 @@ export function NodeInspector({
               const titleName = props.title || finding.name || `Finding #${fId}`;
               const isExpanded = expandedFindingId === fId;
               const isPathTarget = targetPathFindingId === fId;
-              const hasVulns = Boolean(props.has_vulnerabilities);
+              const hasVulns = Boolean(
+                props.has_vulnerabilities ||
+                finding.hasVuln
+              );
 
               const riskPct = toPercent(props.risk_score) ?? 0;
               const badgeClass = getRiskBadgeClass(props.risk_score, props.risk_tier);
@@ -289,24 +302,53 @@ export function NodeInspector({
 
                       <div className="props finding-props-container">
                         <div className="prop-row">
+                          <div className="k">STATUS</div>
+                          <div className="v">{props.status || 'OPEN'}</div>
+                        </div>
+
+                        <div className="prop-row">
                           <div className="k">PATCH STATE</div>
                           <div className="v">{findingPatchState.label}</div>
                         </div>
+
+                        <div className="prop-row">
+                          <div className="k">RISK TIER</div>
+                          <div className="v">{props.risk_tier || 'UNKNOWN'}</div>
+                        </div>
+
+                        <div className="prop-row">
+                          <div className="k">PRIORITY TIER</div>
+                          <div className="v">{props.priority_tier || 'UNKNOWN'}</div>
+                        </div>
+
                         <div className="prop-row">
                           <div className="k">IMPACT</div>
                           <div className="v">{props.impact_score ?? 'N/A'}</div>
                         </div>
+
                         <div className="prop-row">
                           <div className="k">LIKELIHOOD</div>
                           <div className="v">{props.likelihood ?? 'N/A'}</div>
                         </div>
+
                         <div className="prop-row">
                           <div className="k">EXPOSURE</div>
                           <div className="v">{props.exposure_factor ?? 'N/A'}</div>
                         </div>
+
                         <div className="prop-row">
-                          <div className="k">REMEDIATION</div>
+                          <div className="k">REMEDIATION FACTOR</div>
                           <div className="v">{props.remediation_factor ?? 'N/A'}</div>
+                        </div>
+
+                        <div className="prop-row">
+                          <div className="k">REMEDIATION KIND</div>
+                          <div className="v">{props.remediation_kind || 'UNAVAILABLE'}</div>
+                        </div>
+
+                        <div className="prop-row">
+                          <div className="k">PATCH AVAILABLE</div>
+                          <div className="v">{props.patch_available ? 'Sí' : 'No'}</div>
                         </div>
                       </div>
 
