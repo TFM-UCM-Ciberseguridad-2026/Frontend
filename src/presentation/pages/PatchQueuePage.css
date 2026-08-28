@@ -241,18 +241,71 @@
   cursor: pointer;
 }
 
-.patch-queue-table tbody tr.is-selected-history-row {
-  background: rgba(77, 59, 255, 0.12);
-  outline: 1px solid rgba(121, 115, 255, 0.35);
+.patch-queue-metrics-bar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
 }
 
-@media (max-width: 1200px) {
-  .patch-queue-content-layout {
-    grid-template-columns: 1fr;
-  }
+.patch-metric-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: rgba(18, 18, 36, 0.75);
+  border: 1px solid rgba(122, 115, 255, 0.2);
+  border-radius: 8px;
+  font-family: 'Share Tech Mono', monospace;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
 
-  .applied-history-panel {
-    max-width: none;
-    width: 100%;
-  }
+.patch-metric-badge:hover {
+  border-color: rgba(122, 115, 255, 0.5);
+  transform: translateY(-1px);
+}
+
+.patch-metric-badge.active {
+  border-color: #7a73ff;
+  background: rgba(122, 115, 255, 0.15);
+  box-shadow: 0 0 12px rgba(122, 115, 255, 0.25);
+}
+
+.patch-metric-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+}
+
+.patch-metric-count {
+  font-size: 14px;
+  font-weight: 800;
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.patch-metric-critical .patch-metric-count { color: #f87171; background: rgba(239, 68, 68, 0.2); }
+.patch-metric-high .patch-metric-count { color: #fb923c; background: rgba(249, 115, 22, 0.2); }
+.patch-metric-medium .patch-metric-count { color: #facc15; background: rgba(234, 179, 8, 0.2); }
+.patch-metric-low .patch-metric-count { color: #4ade80; background: rgba(34, 197, 94, 0.2); }
+
+.patch-queue-table th.sortable-th {
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s;
+}
+
+.patch-queue-table th.sortable-th:hover {
+  background: rgba(30, 41, 59, 0.9);
+  color: #f1f5f9;
+}
+
+.patch-sort-icon {
+  margin-left: 4px;
+  font-size: 10px;
+  color: #7a73ff;
 }

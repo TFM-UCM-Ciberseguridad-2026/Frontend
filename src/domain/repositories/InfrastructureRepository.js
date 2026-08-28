@@ -69,7 +69,7 @@ export class InfrastructureRepository {
     throw new Error('Method computeAllProjectRisks not implemented');
   }
 
-  async getPatchQueue(projectId, page, limit) {
+  async getPatchQueue(query = {}) {
     throw new Error('Method getPatchQueue not implemented');
   }
 

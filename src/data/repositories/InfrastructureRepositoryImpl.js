@@ -106,8 +106,8 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     return await this.apiDataSource.computeAllProjectRisks();
   }
 
-  async getPatchQueue(projectId, page, limit) {
-    return await this.apiDataSource.fetchPatchQueue(projectId, page, limit);
+  async getPatchQueue(paramsOrProjectId, page, limit) {
+    return await this.apiDataSource.fetchPatchQueue(paramsOrProjectId, page, limit);
   }
 
   async refreshPatchesForVulnerability(cveId) {

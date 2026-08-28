@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { ApplyPatchModal } from '../components/PatchQueue/ApplyPatchModal';
 import { AppliedPatchHistoryPanel } from '../components/PatchQueue/AppliedPatchHistoryPanel';
+import { PatchQueueFilters } from '../components/PatchQueue/PatchQueueFilters';
+import { ActivePatchQueueFilterChips } from '../components/PatchQueue/ActivePatchQueueFilterChips';
+import { usePatchQueue } from '../hooks/usePatchQueue';
 import './PatchQueuePage.css';
 
 const percent = (value) => `${Math.round(Number(value || 0) * 100)}%`;
@@ -23,17 +26,8 @@ function patchAvailability(item) {
   }
 }
 
-
 export function PatchQueuePage({
   selectedProjectId,
-  patchQueue = [],
-  patchQueueCount = 0,
-  patchQueuePage = 1,
-  patchQueueTotal = 0,
-  patchQueueTotalPages = 1,
-  patchQueueLoading,
-  patchQueueError,
-  fetchPatchQueue,
   refreshPatchesForCVE,
   focusPatchQueueItem,
   patchApplyLoading,
@@ -52,24 +46,39 @@ export function PatchQueuePage({
   appliedPatchHistory,
   appliedPatchHistoryLoading,
   appliedPatchHistoryError,
-  appliedPatchHistoryInstallationId,
   fetchAppliedPatchHistory
 }) {
+  // Centralized hook for advanced filtering, sorting, and pagination
+  const {
+    filters,
+    updateFilter,
+    removeFilter,
+    clearAllFilters,
+    sortField,
+    sortDirection,
+    handleSort,
+    page,
+    totalPages,
+    totalItems,
+    priorityTierCounts,
+    queue,
+    loading: patchQueueLoading,
+    error: patchQueueError,
+    goToPage,
+    refetch
+  } = usePatchQueue(selectedProjectId);
 
   const [selectedPatchItem, setSelectedPatchItem] = useState(null);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState(null);
 
-
-
   useEffect(() => {
     setSelectedHistoryItem(null);
-    fetchPatchQueue?.(1, 20);
   }, [selectedProjectId]);
 
   useEffect(() => {
     if (!selectedPatchItem?.cve_id) return;
     fetchPatchesForCVE?.(selectedPatchItem.cve_id);
-  }, [selectedPatchItem?.cve_id]);
+  }, [selectedPatchItem?.cve_id, fetchPatchesForCVE]);
 
   const openInGraph = (item) => {
     const found = focusPatchQueueItem?.(item);
@@ -83,7 +92,7 @@ export function PatchQueuePage({
 
   const selectedPatchItemKey = selectedPatchItem ? getPatchQueueItemKey(selectedPatchItem) : null;
   const currentSelectedPatchItem = selectedPatchItemKey
-    ? patchQueue.find(item => getPatchQueueItemKey(item) === selectedPatchItemKey) || selectedPatchItem
+    ? queue.find(item => getPatchQueueItemKey(item) === selectedPatchItemKey) || selectedPatchItem
     : null;
 
   const submitPatchApplication = async (payload) => {
@@ -100,22 +109,22 @@ export function PatchQueuePage({
     }
 
     setSelectedPatchItem(null);
+    refetch();
   };
 
-  const handlePageChange = (newPage) => {
-    if (newPage < 1 || newPage > patchQueueTotalPages || newPage === patchQueuePage) return;
-    fetchPatchQueue?.(newPage, 20);
-  };
+  const startItem = totalItems === 0 ? 0 : (page - 1) * 20 + 1;
+  const endItem = Math.min(page * 20, totalItems);
 
-  const totalItems = patchQueueTotal || patchQueueCount || patchQueue.length;
-  const startItem = totalItems === 0 ? 0 : (patchQueuePage - 1) * 20 + 1;
-  const endItem = Math.min(patchQueuePage * 20, totalItems);
+  const renderSortIcon = (field) => {
+    if (sortField !== field) return null;
+    return <span className="patch-sort-icon">{sortDirection === 'asc' ? '▲' : '▼'}</span>;
+  };
 
   const renderPageNumbers = () => {
     const pages = [];
     const maxVisiblePages = 5;
-    let startPage = Math.max(1, patchQueuePage - 2);
-    let endPage = Math.min(patchQueueTotalPages, startPage + maxVisiblePages - 1);
+    let startPage = Math.max(1, page - 2);
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
 
     if (endPage - startPage < maxVisiblePages - 1) {
       startPage = Math.max(1, endPage - maxVisiblePages + 1);
@@ -125,8 +134,8 @@ export function PatchQueuePage({
       pages.push(
         <button
           key={i}
-          className={`patch-pagination-page ${i === patchQueuePage ? 'active' : ''}`}
-          onClick={() => handlePageChange(i)}
+          className={`patch-pagination-page ${i === page ? 'active' : ''}`}
+          onClick={() => goToPage(i)}
           disabled={patchQueueLoading}
         >
           {i}
@@ -136,10 +145,17 @@ export function PatchQueuePage({
     return pages;
   };
 
-
   const selectHistoryItem = async (item) => {
     setSelectedHistoryItem(item);
     await fetchAppliedPatchHistory?.(item.installation_id);
+  };
+
+  const handleMetricBadgeClick = (tier) => {
+    if (filters.priorityTier === tier) {
+      updateFilter('priorityTier', 'ALL');
+    } else {
+      updateFilter('priorityTier', tier);
+    }
   };
 
   return (
@@ -149,17 +165,74 @@ export function PatchQueuePage({
           <p className="eyebrow">Blue Team Operations</p>
           <h2>Patch Queue</h2>
           <p className="patch-queue-subtitle">
-            Findings pendientes ordenados por prioridad de parcheo.
+            Cola priorizada de remediación según vulnerabilidad y criticidad contextual del activo.
           </p>
         </div>
         <button
           className="btn btn-secondary"
-          onClick={() => refreshPatchesForProject?.()}
+          onClick={() => {
+            refreshPatchesForProject?.();
+            refetch();
+          }}
           disabled={patchQueueLoading || patchProjectRefreshLoading}
         >
           {patchProjectRefreshLoading ? 'Refrescando patches...' : 'Refrescar cola'}
         </button>
       </div>
+
+      {/* Badges de métricas por Nivel de Prioridad */}
+      <div className="patch-queue-metrics-bar">
+        <div
+          className={`patch-metric-badge ${filters.priorityTier === 'ALL' ? 'active' : ''}`}
+          onClick={() => handleMetricBadgeClick('ALL')}
+          title="Filtrar todas las prioridades"
+        >
+          <span className="patch-metric-label">TOTAL PENDIENTES</span>
+          <span className="patch-metric-count">{totalItems}</span>
+        </div>
+        <div
+          className={`patch-metric-badge patch-metric-critical ${filters.priorityTier === 'CRITICAL' ? 'active' : ''}`}
+          onClick={() => handleMetricBadgeClick('CRITICAL')}
+          title="Filtrar prioridad CRITICAL"
+        >
+          <span className="patch-metric-label">🔴 CRITICAL</span>
+          <span className="patch-metric-count">{priorityTierCounts.CRITICAL || 0}</span>
+        </div>
+        <div
+          className={`patch-metric-badge patch-metric-high ${filters.priorityTier === 'HIGH' ? 'active' : ''}`}
+          onClick={() => handleMetricBadgeClick('HIGH')}
+          title="Filtrar prioridad HIGH"
+        >
+          <span className="patch-metric-label">🟠 HIGH</span>
+          <span className="patch-metric-count">{priorityTierCounts.HIGH || 0}</span>
+        </div>
+        <div
+          className={`patch-metric-badge patch-metric-medium ${filters.priorityTier === 'MEDIUM' ? 'active' : ''}`}
+          onClick={() => handleMetricBadgeClick('MEDIUM')}
+          title="Filtrar prioridad MEDIUM"
+        >
+          <span className="patch-metric-label">🟡 MEDIUM</span>
+          <span className="patch-metric-count">{priorityTierCounts.MEDIUM || 0}</span>
+        </div>
+        <div
+          className={`patch-metric-badge patch-metric-low ${filters.priorityTier === 'LOW' ? 'active' : ''}`}
+          onClick={() => handleMetricBadgeClick('LOW')}
+          title="Filtrar prioridad LOW"
+        >
+          <span className="patch-metric-label">🔵 LOW</span>
+          <span className="patch-metric-count">{priorityTierCounts.LOW || 0}</span>
+        </div>
+      </div>
+
+      {/* Controles de Filtro Avanzado */}
+      <PatchQueueFilters filters={filters} onUpdateFilter={updateFilter} />
+
+      {/* Chips de Filtros Activos */}
+      <ActivePatchQueueFilterChips
+        filters={filters}
+        onRemoveFilter={removeFilter}
+        onClearAll={clearAllFilters}
+      />
 
       {patchQueueError && (
         <div className="patch-queue-error">⚠️ {patchQueueError}</div>
@@ -189,12 +262,22 @@ export function PatchQueuePage({
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>Patch Priority</th>
-                  <th>CVE</th>
-                  <th>Activo</th>
-                  <th>Software</th>
+                  <th className="sortable-th" onClick={() => handleSort('priority_score')}>
+                    Patch Priority {renderSortIcon('priority_score')}
+                  </th>
+                  <th className="sortable-th" onClick={() => handleSort('cve')}>
+                    CVE {renderSortIcon('cve')}
+                  </th>
+                  <th className="sortable-th" onClick={() => handleSort('hostname')}>
+                    Activo {renderSortIcon('hostname')}
+                  </th>
+                  <th className="sortable-th" onClick={() => handleSort('software')}>
+                    Software {renderSortIcon('software')}
+                  </th>
                   <th>Versiones</th>
-                  <th>Risk</th>
+                  <th className="sortable-th" onClick={() => handleSort('risk')}>
+                    Risk {renderSortIcon('risk')}
+                  </th>
                   <th>Patch</th>
                   <th>Contexto</th>
                   <th>Acciones</th>
@@ -207,13 +290,13 @@ export function PatchQueuePage({
                   </tr>
                 )}
 
-                {!patchQueueLoading && patchQueue.length === 0 && (
+                {!patchQueueLoading && queue.length === 0 && (
                   <tr>
-                    <td colSpan="10">No hay findings pendientes de parcheo.</td>
+                    <td colSpan="10">No hay findings pendientes que coincidan con los filtros aplicados.</td>
                   </tr>
                 )}
 
-                {!patchQueueLoading && patchQueue.map(item => {
+                {!patchQueueLoading && queue.map(item => {
                   const itemKey = getPatchQueueItemKey(item);
                   const isApplyingThisRow = patchApplyingKey === itemKey;
                   const hasPatchAvailable = Boolean(item.patch_available);
@@ -272,6 +355,7 @@ export function PatchQueuePage({
                             onClick={(event) => {
                               event.stopPropagation();
                               refreshPatchesForCVE?.(item.cve_id);
+                              refetch();
                             }}
                           >
                             Refresh CVE
@@ -298,12 +382,12 @@ export function PatchQueuePage({
             </table>
           </div>
 
-          {patchQueueTotalPages > 1 && (
+          {totalPages > 1 && (
             <div className="patch-pagination-container">
               <button
                 className="patch-pagination-btn"
-                onClick={() => handlePageChange(patchQueuePage - 1)}
-                disabled={patchQueuePage <= 1 || patchQueueLoading}
+                onClick={() => goToPage(page - 1)}
+                disabled={page <= 1 || patchQueueLoading}
               >
                 &laquo; Anterior
               </button>
@@ -314,14 +398,14 @@ export function PatchQueuePage({
 
               <button
                 className="patch-pagination-btn"
-                onClick={() => handlePageChange(patchQueuePage + 1)}
-                disabled={patchQueuePage >= patchQueueTotalPages || patchQueueLoading}
+                onClick={() => goToPage(page + 1)}
+                disabled={page >= totalPages || patchQueueLoading}
               >
                 Siguiente &raquo;
               </button>
 
               <span className="patch-pagination-info">
-                Página {patchQueuePage} de {patchQueueTotalPages}
+                Página {page} de {totalPages}
               </span>
             </div>
           )}
