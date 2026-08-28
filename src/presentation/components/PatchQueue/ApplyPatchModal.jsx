@@ -217,8 +217,8 @@ export function ApplyPatchModal({
     event.preventDefault();
     setLocalError(null);
 
-    if (!item.installation_id || !item.cve_id) {
-      setLocalError('La fila no contiene installation_id o cve_id');
+    if (!(item.installation_id || item.container_id || item.asset_id) || !item.cve_id) {
+      setLocalError('La fila no contiene un activo o cve_id');
       return;
     }
 
@@ -289,6 +289,7 @@ export function ApplyPatchModal({
               <Field label="Software" value={item.software_name} />
               <Field label="Versión actual" value={item.software_version} />
               <Field label="Installation ID" value={item.installation_id} />
+              <Field label="Activo de remediación" value={item.asset_type === 'CONTAINER' ? `Container: ${item.container_id || item.asset_id}` : `SoftwareInstallation: ${item.installation_id}`} />
               <Field label="Contexto" value={item.in_container ? `Container: ${item.container_name || 'N/A'}` : 'Host'} />
             </div>
           </section>

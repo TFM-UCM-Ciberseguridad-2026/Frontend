@@ -613,8 +613,8 @@ export function useInfrastructure() {
   };
 
 
-  const fetchAppliedPatchHistory = async (installationId) => {
-    if (!installationId) {
+  const fetchAppliedPatchHistory = async (assetId, assetType = 'SOFTWARE_INSTALLATION') => {
+    if (!assetId) {
       setAppliedPatchHistory([]);
       setAppliedPatchHistoryInstallationId(null);
       return [];
@@ -622,10 +622,10 @@ export function useInfrastructure() {
 
     setAppliedPatchHistoryLoading(true);
     setAppliedPatchHistoryError(null);
-    setAppliedPatchHistoryInstallationId(installationId);
+      setAppliedPatchHistoryInstallationId(assetId);
 
     try {
-      const history = await getAppliedPatchHistoryUseCase.execute(installationId);
+      const history = await getAppliedPatchHistoryUseCase.execute(assetId, assetType);
       setAppliedPatchHistory(history);
       return history;
     } catch (err) {
@@ -964,12 +964,18 @@ export function useInfrastructure() {
       const targetNode = nodeMap.get(rel.target);
       if (!sourceNode || !targetNode) return;
 
-      if (
-        (isSoftwareInstallationNode(sourceNode) && isSoftwareNode(targetNode)) ||
-        (isSoftwareNode(sourceNode) && isSoftwareInstallationNode(targetNode))
-      ) {
-        reachableIds.add(rel.source);
+      const sourceIsInstallation = isSoftwareInstallationNode(sourceNode);
+      const targetIsInstallation = isSoftwareInstallationNode(targetNode);
+      const sourceIsSoftware = isSoftwareNode(sourceNode);
+      const targetIsSoftware = isSoftwareNode(targetNode);
+
+      if (sourceIsInstallation && targetIsSoftware && reachableIds.has(rel.source)) {
         reachableIds.add(rel.target);
+        return;
+      }
+
+      if (sourceIsSoftware && targetIsInstallation && reachableIds.has(rel.target)) {
+        reachableIds.add(rel.source);
       }
     });
 
@@ -1482,7 +1488,7 @@ export function useInfrastructure() {
   }, [graphData, selectedProjectId]);
 
 
-  const refreshPatchesForProject = async () => {
+  const refreshPatchesForProject = async (queueItems = patchQueue) => {
     if (!selectedProjectId) {
       const message = 'Selecciona un proyecto antes de refrescar patches';
       setPatchProjectRefreshError(message);
@@ -1497,7 +1503,7 @@ export function useInfrastructure() {
     try {
       const visibleCVEs = [
         ...new Set(
-          patchQueue
+          queueItems
             .map(item => item.cve_id)
             .filter(Boolean)
         )
