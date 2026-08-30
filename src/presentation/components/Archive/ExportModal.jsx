@@ -8,11 +8,13 @@ export function ExportModal({
   selectedProjectId,
   onExportProject,
   onExportMitre,
-  onExportInventory
+  onExportInventory,
+  onExportVulnReport
 }) {
   const [exportProjectChecked, setExportProjectChecked] = useState(true);
   const [exportInventoryChecked, setExportInventoryChecked] = useState(true);
   const [exportMitreChecked, setExportMitreChecked] = useState(false);
+  const [exportVulnReportChecked, setExportVulnReportChecked] = useState(false);
   const [targetProjectId, setTargetProjectId] = useState(selectedProjectId || (projects[0]?.id ?? '1'));
 
   React.useEffect(() => {
@@ -32,6 +34,9 @@ export function ExportModal({
     }
     if (exportMitreChecked && onExportMitre) {
       onExportMitre(targetProjectId);
+    }
+    if (exportVulnReportChecked && onExportVulnReport) {
+      onExportVulnReport(targetProjectId);
     }
     onClose();
   };
@@ -102,6 +107,18 @@ export function ExportModal({
               <p>Genera una capa (*layer*) en formato JSON v4.5 compatible con la aplicación oficial MITRE ATT&CK Navigator para visualización de técnicas adversarias.</p>
             </div>
           </label>
+
+          <label className="archive-checkbox-card">
+            <input
+              type="checkbox"
+              checked={exportVulnReportChecked}
+              onChange={e => setExportVulnReportChecked(e.target.checked)}
+            />
+            <div className="archive-checkbox-info">
+              <h4>Exportar Reporte de Vulnerabilidades a PowerPoint (.pptx)</h4>
+              <p>Genera un reporte ejecutivo con gráficas de distribución de vulnerabilidades por severidad (Crítica, Alta, Media, Baja) y tabla Top-10 CVEs.</p>
+            </div>
+          </label>
         </div>
 
         <div className="archive-modal-actions">
@@ -111,7 +128,7 @@ export function ExportModal({
           <button
             className="archive-btn archive-btn-primary"
             onClick={handleExport}
-            disabled={!exportProjectChecked && !exportInventoryChecked && !exportMitreChecked}
+            disabled={!exportProjectChecked && !exportInventoryChecked && !exportMitreChecked && !exportVulnReportChecked}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />

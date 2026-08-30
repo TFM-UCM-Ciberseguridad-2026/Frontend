@@ -31,6 +31,7 @@ import { GetPatchQueueUseCase } from '../../domain/usecases/GetPatchQueueUseCase
 import { RefreshPatchesForVulnerabilityUseCase } from '../../domain/usecases/RefreshPatchesForVulnerabilityUseCase';
 import { DeclarePatchAppliedUseCase } from '../../domain/usecases/DeclarePatchAppliedUseCase';
 import { GetPatchesForVulnerabilityUseCase } from '../../domain/usecases/GetPatchesForVulnerabilityUseCase';
+import { ExportVulnReportUseCase } from '../../domain/usecases/ExportVulnReportUseCase';
 
 export function useInfrastructure() {
   const toast = useToast();
@@ -109,6 +110,7 @@ export function useInfrastructure() {
   const exportProjectUseCase = useMemo(() => new ExportProjectUseCase(repository), [repository]);
   const exportMitreNavigatorUseCase = useMemo(() => new ExportMitreNavigatorUseCase(), []);
   const exportInventoryUseCase = useMemo(() => new ExportInventoryUseCase(repository), [repository]);
+  const exportVulnReportUseCase = useMemo(() => new ExportVulnReportUseCase(repository), [repository]);
   const importInfrastructureUseCase = useMemo(() => new ImportInfrastructureUseCase(repository), [repository]);
 
   const scanInstallationVulnerabilitiesUseCase = useMemo(() => new ScanInstallationVulnerabilitiesUseCase(repository), [repository]);
@@ -608,6 +610,24 @@ export function useInfrastructure() {
     } catch (err) {
       console.error(err);
       showToast(`Error al exportar inventario: ${err.message}`, 'error');
+    }
+  };
+
+  const exportVulnReport = async (targetProjectId) => {
+    try {
+      showToast('Generando reporte PPTX de vulnerabilidades...', 'info');
+      const projId = targetProjectId || selectedProjectId;
+      const projectNode = graphData?.nodes?.find(
+        n => (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
+            String(n.properties?.id ?? n.id) === String(projId)
+      );
+      const projectName = projectNode?.properties?.nombre || projectNode?.properties?.name || 'Proyecto';
+
+      await exportVulnReportUseCase.execute(projId, projectName);
+      showToast('¡Reporte PPTX de vulnerabilidades exportado con éxito!');
+    } catch (err) {
+      console.error(err);
+      showToast(`Error al generar reporte PPTX: ${err.message}`, 'error');
     }
   };
 
@@ -1235,6 +1255,7 @@ export function useInfrastructure() {
     exportProject,
     exportMitreNavigator,
     exportInventory,
+    exportVulnReport,
     importProject,
     vulnScanLoading,
     riskComputeLoading,
