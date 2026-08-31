@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { NodeIcon } from './NodeIcon';
+import { getGraphFilterLineageMaps } from '../../utils/graphFilterUtils';
 
 const PHYSICS = {
   repulsion: 8500,
@@ -302,6 +303,7 @@ export function NetworkGraph({
   graphData,
   filterType,
   searchQuery,
+  graphAdvancedFilters,
   loading,
   error,
   selectedNode,
@@ -924,21 +926,16 @@ export function NetworkGraph({
     return { pathEdgeIdSet: edgeIdSet, pathConnectorNodeIdSet: connectorNodeIdSet, pathNodeStepMap: nodeStepMap };
   }, [selectedExploitationPath, graphData]);
 
-  // Búsqueda y Filtros ACTIVOS
-  const searchActive = (searchQuery || '').trim().length > 0;
-  const searchQTerm = (searchQuery || '').toLowerCase().trim();
-
-  const checkNodeMatch = useCallback((n) => {
-    if (!searchActive) return true;
-    if (!n || !n.entity) return false;
-    const name = (n.entity.name || '').toLowerCase();
-    const cve = (n.entity.properties?.cve_id || n.entity.properties?.cve || '').toLowerCase();
-    const title = (n.entity.properties?.title || '').toLowerCase();
-    const desc = (n.entity.properties?.description || '').toLowerCase();
-    const ttps = Array.isArray(n.entity.properties?.ttps) ? n.entity.properties.ttps.join(' ').toLowerCase() : String(n.entity.properties?.ttps || '').toLowerCase();
-    const nid = String(n.id).toLowerCase();
-    return name.includes(searchQTerm) || cve.includes(searchQTerm) || title.includes(searchQTerm) || desc.includes(searchQTerm) || ttps.includes(searchQTerm) || nid.includes(searchQTerm);
-  }, [searchActive, searchQTerm]);
+  // Búsqueda y Filtros ACTIVOS con mapa de linaje estructural (ancestros y descendientes de contexto)
+  const lineageMaps = useMemo(() => {
+    return getGraphFilterLineageMaps(
+      graphData?.nodes || [],
+      graphData?.relationships || [],
+      filterType,
+      searchQuery,
+      graphAdvancedFilters
+    );
+  }, [graphData, filterType, searchQuery, graphAdvancedFilters]);
 
   // Renderizador principal en HTML5 Canvas con animación a 60 FPS
   useEffect(() => {
@@ -1176,18 +1173,17 @@ export function NetworkGraph({
         // Omitir enlace directo entre Proyecto y Red en el lienzo para no sobrecargar el centro
         if (isProjectToNetwork) continue;
 
-        const naMatches = filterType === 'ALL' || na.entity.primaryLabel === filterType;
-        const nbMatches = filterType === 'ALL' || nb.entity.primaryLabel === filterType;
-        const isDimmed = !naMatches || !nbMatches;
+        const naId = String(na.id);
+        const nbId = String(nb.id);
+        const naActive = lineageMaps.directMatches.has(naId) || lineageMaps.contextMatches.has(naId);
+        const nbActive = lineageMaps.directMatches.has(nbId) || lineageMaps.contextMatches.has(nbId);
 
-        const saMatches = checkNodeMatch(na);
-        const sbMatches = checkNodeMatch(nb);
-        const searchDimmed = searchActive && !(saMatches || sbMatches);
+        const isDimmed = lineageMaps.hasActiveFilters && (!naActive || !nbActive);
 
         const isPathEdge = pathEdgeIdSet.has(rel.id);
         const pathDimmed = pathActive && !isPathEdge;
 
-        const edgeShouldBeDimmed = (isDimmed && !isPathEdge) || (searchDimmed && !isPathEdge) || pathDimmed;
+        const edgeShouldBeDimmed = (isDimmed && !isPathEdge) || pathDimmed;
 
         ctx.save();
         ctx.beginPath();
@@ -1233,31 +1229,36 @@ export function NetworkGraph({
       // Renderizar Nodos en Canvas
       for (let i = 0; i < nodes.length; i++) {
         const node = nodes[i];
-        const matchesCat = filterType === 'ALL' || node.entity.primaryLabel === filterType;
-        const matchesSearch = checkNodeMatch(node);
-        const isDimmed = !matchesCat || !matchesSearch;
+        const nodeIdStr = String(node.id);
+        const isDirectMatch = lineageMaps.directMatches.has(nodeIdStr);
+        const isContextMatch = lineageMaps.contextMatches.has(nodeIdStr);
+
+        const isDimmed = lineageMaps.hasActiveFilters && !isDirectMatch && !isContextMatch;
+        const isContextNode = lineageMaps.hasActiveFilters && !isDirectMatch && isContextMatch;
 
         const isSelected = selectedNode && selectedNode.id === node.id;
         const isDecom = node.isDecom || isDecommissionedEndpoint(node.entity);
+        const isNodeInPath = pathConnectorNodeIdSet.has(node.id);
+        const stepNumber = pathNodeStepMap.get(node.id);
+        const isStepNode = stepNumber !== undefined;
+
+        const pathDimmedNode = pathActive && !isNodeInPath;
+        const nodeShouldBeDimmed = (isDimmed && !isNodeInPath) || pathDimmedNode;
 
         const riskTierColor = isDecom ? null : getTierColor(node.entity.properties?.risk_tier);
         const priorityTierColor = isDecom ? null : getTierColor(node.entity.properties?.priority_tier);
-
-        const stepNumber = pathNodeStepMap.get(String(node.id));
-        const isStepNode = stepNumber !== undefined;
-        const isConnectorNode = pathConnectorNodeIdSet.has(String(node.id));
-        const isNodeInPath = isStepNode || isConnectorNode;
-        const pathDimmedNode = pathActive && !isNodeInPath;
-
-        const nodeShouldBeDimmed = (isDimmed && !isNodeInPath) || pathDimmedNode;
 
         ctx.save();
         ctx.translate(node.x, node.y);
 
         if (nodeShouldBeDimmed) {
           ctx.globalAlpha = 0.2;
+        } else if (isContextNode) {
+          ctx.globalAlpha = 0.65;
         } else if (isDecom) {
           ctx.globalAlpha = 0.65;
+        } else {
+          ctx.globalAlpha = 1.0;
         }
 
         // Anillo de Riesgo Tier
@@ -1476,7 +1477,7 @@ export function NetworkGraph({
 
     frameId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(frameId);
-  }, [graphData, layoutMode, selectedNode, filterType, searchQuery, selectedExploitationPath, pathEdgeIdSet, pathConnectorNodeIdSet, pathNodeStepMap, checkNodeMatch, collapsedNodeIds]);
+  }, [graphData, layoutMode, selectedNode, filterType, searchQuery, graphAdvancedFilters, selectedExploitationPath, pathEdgeIdSet, pathConnectorNodeIdSet, pathNodeStepMap, lineageMaps, collapsedNodeIds]);
 
   // Conversión de coordenadas de pantalla a coordenadas del mundo Canvas
   const screenToWorld = useCallback((clientX, clientY) => {

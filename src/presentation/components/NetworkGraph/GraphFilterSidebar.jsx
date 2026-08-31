@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import { getGraphFacets } from '../../utils/graphFilterUtils';
 
 export function GraphFilterSidebar({
   graphData,
@@ -25,6 +26,9 @@ export function GraphFilterSidebar({
     advanced: true
   });
 
+  // Facetas dinámicas y contadores calculados en tiempo real a partir del grafo
+  const facets = useMemo(() => getGraphFacets(graphData?.nodes || []), [graphData]);
+
   const toggleSection = (sectionKey) => {
     setOpenSections(prev => ({
       ...prev,
@@ -39,17 +43,19 @@ export function GraphFilterSidebar({
     graphAdvancedFilters.environment !== 'ALL' ? graphAdvancedFilters.environment : null,
     graphAdvancedFilters.internetExposed !== 'ALL' ? graphAdvancedFilters.internetExposed : null,
     graphAdvancedFilters.status !== 'ALL' ? graphAdvancedFilters.status : null,
-    graphAdvancedFilters.riskTier !== 'ALL' ? graphAdvancedFilters.riskTier : null
+    graphAdvancedFilters.riskTier !== 'ALL' ? graphAdvancedFilters.riskTier : null,
+    graphAdvancedFilters.includeAncestors ? true : null,
+    graphAdvancedFilters.onlyVulnerable ? true : null,
+    graphAdvancedFilters.inExploitationPath ? true : null
   ].filter(Boolean).length;
 
   const activeFilterCount = (filterType !== 'ALL' ? 1 : 0) + (searchQuery.trim() !== '' ? 1 : 0) + activeAdvancedCount;
 
   const handleResetFilters = () => {
+    setFilterType('ALL');
+    setSearchQuery('');
     if (clearGraphAdvancedFilters) {
       clearGraphAdvancedFilters();
-    } else {
-      setFilterType('ALL');
-      setSearchQuery('');
     }
   };
 
@@ -284,8 +290,45 @@ export function GraphFilterSidebar({
           </button>
 
           {openSections.advanced && (
-            <div className="accordion-content" style={{ padding: '10px 4px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div className="accordion-content" style={{ padding: '10px 4px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
               
+              {/* Opciones de Linaje y Seguridad */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '8px', background: 'rgba(255,255,255,0.02)', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <label style={{ fontSize: '11px', color: '#7973FF', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Modo y Contexto
+                </label>
+                
+                <label style={{ fontSize: '11px', color: 'var(--c200)', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(graphAdvancedFilters.includeAncestors)}
+                    onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('includeAncestors', e.target.checked)}
+                    style={{ accentColor: '#7973FF', cursor: 'pointer' }}
+                  />
+                  <span>Preservar linaje de contexto (Padres/Hijos)</span>
+                </label>
+
+                <label style={{ fontSize: '11px', color: 'var(--c200)', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(graphAdvancedFilters.onlyVulnerable)}
+                    onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('onlyVulnerable', e.target.checked)}
+                    style={{ accentColor: '#ef4444', cursor: 'pointer' }}
+                  />
+                  <span>Solo vulnerables / hallazgos {facets.vulnerableCount > 0 && `(${facets.vulnerableCount})`}</span>
+                </label>
+
+                <label style={{ fontSize: '11px', color: 'var(--c200)', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(graphAdvancedFilters.inExploitationPath)}
+                    onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('inExploitationPath', e.target.checked)}
+                    style={{ accentColor: '#00D1FF', cursor: 'pointer' }}
+                  />
+                  <span>Participantes en Rutas de Explotación</span>
+                </label>
+              </div>
+
               {/* A. EXPOSICIÓN A INTERNET */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
@@ -304,13 +347,13 @@ export function GraphFilterSidebar({
                     fontFamily: 'Share Tech Mono, monospace'
                   }}
                 >
-                  <option value="ALL">Todos los activos</option>
-                  <option value="TRUE">☁ Solo Expuestos</option>
-                  <option value="FALSE">🔒 Solo Internos</option>
+                  <option value="ALL">Todos los activos ({totalNodes})</option>
+                  <option value="TRUE">☁ Solo Expuestos ({facets.internetExposed.exposed})</option>
+                  <option value="FALSE">🔒 Solo Internos ({facets.internetExposed.internal})</option>
                 </select>
               </div>
 
-              {/* B. ENTORNO */}
+              {/* B. ENTORNO DINÁMICO */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
                   Entorno de Despliegue:
@@ -329,9 +372,18 @@ export function GraphFilterSidebar({
                   }}
                 >
                   <option value="ALL">Todos los entornos</option>
-                  <option value="production">Production</option>
-                  <option value="development">Development</option>
-                  <option value="staging">Staging</option>
+                  {Object.entries(facets.environments).map(([envKey, count]) => (
+                    <option key={envKey} value={envKey}>
+                      {envKey} ({count})
+                    </option>
+                  ))}
+                  {Object.keys(facets.environments).length === 0 && (
+                    <>
+                      <option value="production">production</option>
+                      <option value="development">development</option>
+                      <option value="staging">staging</option>
+                    </>
+                  )}
                 </select>
               </div>
 
@@ -357,13 +409,14 @@ export function GraphFilterSidebar({
                 />
               </div>
 
-              {/* D. PROVEEDOR / VENDOR */}
+              {/* D. PROVEEDOR / VENDOR CON SUGERENCIAS DE DATALIST */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
                   Proveedor / Vendor:
                 </label>
                 <input
                   type="text"
+                  list="vendor-suggestions"
                   placeholder="Ej. Apache, Cisco..."
                   value={graphAdvancedFilters.vendorSearch || ''}
                   onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('vendorSearch', e.target.value)}
@@ -377,9 +430,14 @@ export function GraphFilterSidebar({
                     fontFamily: 'Share Tech Mono, monospace'
                   }}
                 />
+                <datalist id="vendor-suggestions">
+                  {facets.vendors.map(v => (
+                    <option key={v.name} value={v.name}>{v.name} ({v.count})</option>
+                  ))}
+                </datalist>
               </div>
 
-              {/* E. ESTADO */}
+              {/* E. ESTADO DINÁMICO */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
                   Estado de Ejecución:
@@ -398,13 +456,22 @@ export function GraphFilterSidebar({
                   }}
                 >
                   <option value="ALL">Todos los estados</option>
-                  <option value="running">Running</option>
-                  <option value="stopped">Stopped</option>
-                  <option value="active">Active</option>
+                  {Object.entries(facets.statuses).map(([stKey, count]) => (
+                    <option key={stKey} value={stKey}>
+                      {stKey} ({count})
+                    </option>
+                  ))}
+                  {Object.keys(facets.statuses).length === 0 && (
+                    <>
+                      <option value="running">running</option>
+                      <option value="stopped">stopped</option>
+                      <option value="active">active</option>
+                    </>
+                  )}
                 </select>
               </div>
 
-              {/* F. NIVEL DE RIESGO */}
+              {/* F. NIVEL DE RIESGO CON CONTADORES DINÁMICOS */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
                   Nivel de Riesgo:
@@ -423,10 +490,10 @@ export function GraphFilterSidebar({
                   }}
                 >
                   <option value="ALL">Todos los niveles</option>
-                  <option value="CRITICAL">Critical</option>
-                  <option value="HIGH">High</option>
-                  <option value="MEDIUM">Medium</option>
-                  <option value="LOW">Low</option>
+                  <option value="CRITICAL">CRITICAL ({facets.riskTiers.CRITICAL || 0})</option>
+                  <option value="HIGH">HIGH ({facets.riskTiers.HIGH || 0})</option>
+                  <option value="MEDIUM">MEDIUM ({facets.riskTiers.MEDIUM || 0})</option>
+                  <option value="LOW">LOW ({facets.riskTiers.LOW || 0})</option>
                 </select>
               </div>
 
