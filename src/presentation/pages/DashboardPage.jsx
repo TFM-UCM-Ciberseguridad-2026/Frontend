@@ -234,7 +234,7 @@ export function DashboardPage({
         )}
 
         {activeNav === 'gobierno' && (
-          <GovernancePage />
+          <GovernancePage selectedProjectId={selectedProjectId} />
         )}
       </div>
 

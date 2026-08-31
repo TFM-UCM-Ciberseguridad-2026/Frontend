@@ -12,7 +12,7 @@ const formatDateToEuropean = (isoString) => {
   return isoString;
 };
 
-export function GovernancePage() {
+export function GovernancePage({ selectedProjectId }) {
   const [activeTab, setActiveTab] = useState('politicas');
   const [openProcs, setOpenProcs] = useState({});
 
@@ -59,8 +59,17 @@ export function GovernancePage() {
   const [roleDetails, setRoleDetails] = useState({ open: false, role: null, isEditing: false });
 
   useEffect(() => {
-    fetchAll();
-  }, []);
+    if (selectedProjectId) {
+      fetchAll();
+    } else {
+      setPolicies([]);
+      setRoles([]);
+      setActivities([]);
+      setProcedures([]);
+      setSLAConfig([]);
+      setSLABreaches([]);
+    }
+  }, [selectedProjectId]);
 
   const fetchAll = async () => {
     setLoading(true);
@@ -75,19 +84,19 @@ export function GovernancePage() {
     setLoading(false);
   };
 
-  const fetchPolicies = () => fetch(`${API_BASE}/policies`).then(r => r.json()).then(d => setPolicies(d || []));
-  const fetchRoles = () => fetch(`${API_BASE}/roles`).then(r => r.json()).then(d => setRoles(d || []));
-  const fetchActivities = () => fetch(`${API_BASE}/raci`).then(r => r.json()).then(d => setActivities(d || []));
-  const fetchProcedures = () => fetch(`${API_BASE}/procedures`).then(r => r.json()).then(d => setProcedures(d || []));
-  const fetchSLAConfig = () => fetch(`${API_BASE}/sla`).then(r => r.json()).then(d => setSLAConfig(d || []));
-  const fetchSLABreaches = () => fetch(`${API_BASE}/sla/breaches`).then(r => r.json()).then(d => setSLABreaches(d || []));
+  const fetchPolicies = () => fetch(`${API_BASE}/policies?project_id=${selectedProjectId}`).then(r => r.json()).then(d => setPolicies(d || []));
+  const fetchRoles = () => fetch(`${API_BASE}/roles?project_id=${selectedProjectId}`).then(r => r.json()).then(d => setRoles(d || []));
+  const fetchActivities = () => fetch(`${API_BASE}/raci?project_id=${selectedProjectId}`).then(r => r.json()).then(d => setActivities(d || []));
+  const fetchProcedures = () => fetch(`${API_BASE}/procedures?project_id=${selectedProjectId}`).then(r => r.json()).then(d => setProcedures(d || []));
+  const fetchSLAConfig = () => fetch(`${API_BASE}/sla?project_id=${selectedProjectId}`).then(r => r.json()).then(d => setSLAConfig(d || []));
+  const fetchSLABreaches = () => fetch(`${API_BASE}/sla/breaches?project_id=${selectedProjectId}`).then(r => r.json()).then(d => setSLABreaches(d || []));
 
   const handleSLAChange = (severity, newDays) => {
     setSLAConfig(prev => prev.map(c => c.severity === severity ? { ...c, days: parseInt(newDays) || 0 } : c));
   };
 
   const saveSLAConfig = async () => {
-    const res = await fetch(`${API_BASE}/sla`, { method: 'PUT', body: JSON.stringify(slaConfig) });
+    const res = await fetch(`${API_BASE}/sla?project_id=${selectedProjectId}`, { method: 'PUT', body: JSON.stringify(slaConfig) });
     if (res.ok) {
       alert("Configuración SLA guardada exitosamente.");
     } else {
@@ -168,7 +177,7 @@ export function GovernancePage() {
       document_url: formData.document_url || '',
       under_review: formData.under_review || false
     };
-    await fetch(`${API_BASE}/policies`, { method: 'POST', body: JSON.stringify(newPolicy) });
+    await fetch(`${API_BASE}/policies?project_id=${selectedProjectId}`, { method: 'POST', body: JSON.stringify(newPolicy) });
     fetchPolicies();
     handleCloseModal();
   };
@@ -181,7 +190,7 @@ export function GovernancePage() {
       name: formData.name, 
       contact: formData.contact || '' 
     };
-    await fetch(`${API_BASE}/roles`, { method: 'POST', body: JSON.stringify(newRole) });
+    await fetch(`${API_BASE}/roles?project_id=${selectedProjectId}`, { method: 'POST', body: JSON.stringify(newRole) });
     fetchRoles();
     handleCloseModal();
     setRoleDetails({ open: false, role: null, isEditing: false });
@@ -196,7 +205,7 @@ export function GovernancePage() {
       order: activities.length + 1,
       roles: {}
     };
-    await fetch(`${API_BASE}/raci`, { method: 'POST', body: JSON.stringify(newAct) });
+    await fetch(`${API_BASE}/raci?project_id=${selectedProjectId}`, { method: 'POST', body: JSON.stringify(newAct) });
     fetchActivities();
     handleCloseModal();
   };
@@ -211,7 +220,7 @@ export function GovernancePage() {
       meta: "0 pasos · recién creado",
       steps: stepsStr.split(',').map(s => s.trim()).filter(s => s)
     };
-    await fetch(`${API_BASE}/procedures`, { method: 'POST', body: JSON.stringify(newProc) });
+    await fetch(`${API_BASE}/procedures?project_id=${selectedProjectId}`, { method: 'POST', body: JSON.stringify(newProc) });
     fetchProcedures();
     handleCloseModal();
   };
@@ -223,16 +232,16 @@ export function GovernancePage() {
   const confirmDelete = async () => {
     const { id, type } = deleteModal;
     if (type === 'policy') {
-      await fetch(`${API_BASE}/policies/${id}`, { method: 'DELETE' });
+      await fetch(`${API_BASE}/policies/${id}?project_id=${selectedProjectId}`, { method: 'DELETE' });
       fetchPolicies();
     } else if (type === 'role') {
-      await fetch(`${API_BASE}/roles/${id}`, { method: 'DELETE' });
+      await fetch(`${API_BASE}/roles/${id}?project_id=${selectedProjectId}`, { method: 'DELETE' });
       fetchRoles();
     } else if (type === 'activity') {
-      await fetch(`${API_BASE}/raci/${id}`, { method: 'DELETE' });
+      await fetch(`${API_BASE}/raci/${id}?project_id=${selectedProjectId}`, { method: 'DELETE' });
       fetchActivities();
     } else if (type === 'procedure') {
-      await fetch(`${API_BASE}/procedures/${id}`, { method: 'DELETE' });
+      await fetch(`${API_BASE}/procedures/${id}?project_id=${selectedProjectId}`, { method: 'DELETE' });
       fetchProcedures();
     }
     setDeleteModal({ open: false, id: null, type: null, title: '' });
@@ -256,7 +265,7 @@ export function GovernancePage() {
     // Optimistic UI update
     setActivities(acts => acts.map(a => a.id === activity.id ? updated : a));
 
-    await fetch(`${API_BASE}/raci`, { method: 'POST', body: JSON.stringify(updated) });
+    await fetch(`${API_BASE}/raci?project_id=${selectedProjectId}`, { method: 'POST', body: JSON.stringify(updated) });
     fetchActivities(); // refetch to ensure sync
   };
 
