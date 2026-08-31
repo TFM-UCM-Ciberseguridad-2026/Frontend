@@ -99,6 +99,7 @@ export function GovernancePage({ selectedProjectId }) {
     const res = await fetch(`${API_BASE}/sla?project_id=${selectedProjectId}`, { method: 'PUT', body: JSON.stringify(slaConfig) });
     if (res.ok) {
       alert("Configuración SLA guardada exitosamente.");
+      fetchSLABreaches();
     } else {
       alert("Error al guardar la configuración.");
     }
