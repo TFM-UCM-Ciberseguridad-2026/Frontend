@@ -23,18 +23,19 @@ const WORLD_CENTER_Y = (CANVAS_MIN + CANVAS_MAX) / 2; // 0
 const INITIAL_VIEW_W = 900;
 const INITIAL_VIEW_H = 640;
 
-const getLayerY = (categoryId) => {
-  switch (categoryId) {
-    case 'proyecto': return -220;
-    case 'red': return -140;
+const getLayerY = (categoryId, primaryLabel, labels = []) => {
+  const cat = (categoryId || primaryLabel || labels[0] || '').toLowerCase();
+  switch (cat) {
+    case 'proyecto': case 'project': return -220;
+    case 'red': case 'network': return -140;
     case 'endpoint': return -40;
-    case 'container': return 10;
-    case 'instalacion': return 60;
+    case 'container': case 'contenedor': return 10;
+    case 'instalacion': case 'installation': case 'softwareinstallation': return 60;
     case 'hardware':
     case 'software': return 160;
-    case 'hallazgo': return 240;
-    case 'vulnerabilidad':
-    case 'remediacion': return 300;
+    case 'hallazgo': case 'finding': return 240;
+    case 'vulnerabilidad': case 'vulnerability':
+    case 'remediacion': case 'remediation': return 300;
     default: return 0;
   }
 };
@@ -735,7 +736,7 @@ export function NetworkGraph({
         id: n.id,
         entity: n,
         x: layoutMode === 'tree' ? treePos.x : initialX,
-        y: layoutMode === 'tree' ? treePos.y : getLayerY(n.categoryId),
+        y: layoutMode === 'tree' ? treePos.y : getLayerY(n.categoryId, n.primaryLabel, n.labels),
         vx: 0,
         vy: 0,
         fx: 0,
@@ -1222,7 +1223,7 @@ export function NetworkGraph({
             node.fx += (targetX - node.x) * 0.18;
             node.fy += (targetY - node.y) * 0.18;
           } else {
-            node.fy += (getLayerY(node.entity.categoryId) - node.y) * PHYSICS.centralGravity;
+            node.fy += (getLayerY(node.entity?.categoryId, node.entity?.primaryLabel, node.entity?.labels) - node.y) * PHYSICS.centralGravity;
           }
 
           node.vx = (node.vx + node.fx) * (1 - PHYSICS.damping);
