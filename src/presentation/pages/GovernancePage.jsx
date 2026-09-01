@@ -70,15 +70,21 @@ export function GovernancePage({ selectedProjectId }) {
 
   const fetchAll = async () => {
     setLoading(true);
-    await Promise.all([
-      fetchPolicies(),
-      fetchRoles(),
-      fetchActivities(),
-      fetchProcedures(),
-      fetchSLAConfig(),
-      fetchSLABreaches()
-    ]);
-    setLoading(false);
+    try {
+      await Promise.all([
+        fetchPolicies(),
+        fetchRoles(),
+        fetchActivities(),
+        fetchProcedures(),
+        fetchSLAConfig(),
+        fetchSLABreaches()
+      ]);
+    } catch (err) {
+      console.error("Error fetching governance data:", err);
+      toast.error("Error al cargar algunos datos. Revisa la consola o el servidor.", "Error de carga");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const fetchPolicies = () => fetch(`${API_BASE}/policies?project_id=${selectedProjectId}`).then(r => r.json()).then(d => setPolicies(d || []));
