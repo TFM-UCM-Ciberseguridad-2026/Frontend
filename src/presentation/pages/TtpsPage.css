@@ -290,7 +290,6 @@ main.ttps {
   font-size: 8.5px;
   letter-spacing: 0.8px;
   text-transform: uppercase;
-  color: var(--c900);
   background: rgba(122, 115, 255, 0.1);
   border: 1px solid var(--c800);
   padding: 2px 6px;

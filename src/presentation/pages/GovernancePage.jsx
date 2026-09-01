@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useToast } from '../context/ToastContext';
 import './TtpsPage.css';
 
 const API_BASE = 'http://localhost:8080/api/governance';
@@ -13,6 +14,8 @@ const formatDateToEuropean = (isoString) => {
 };
 
 export function GovernancePage({ selectedProjectId }) {
+  const toast = useToast();
+
   const [activeTab, setActiveTab] = useState('politicas');
   const [openProcs, setOpenProcs] = useState({});
 
@@ -31,13 +34,8 @@ export function GovernancePage({ selectedProjectId }) {
 
   const filteredSLABreaches = useMemo(() => {
     return slaBreaches.filter(b => {
-      // 1. Text filter
       if (slaSearchText && !b.cve_id.toLowerCase().includes(slaSearchText.toLowerCase())) return false;
-      
-      // 2. Severity filter
       if (slaSeverityFilter !== 'Todas' && b.severity !== slaSeverityFilter) return false;
-      
-      // 3. Status filter
       if (slaStatusFilter !== 'Todos') {
         let status = 'Dentro de plazo';
         if (b.days_remaining < 0) {
@@ -47,7 +45,6 @@ export function GovernancePage({ selectedProjectId }) {
         }
         if (status !== slaStatusFilter) return false;
       }
-      
       return true;
     });
   }, [slaBreaches, slaSearchText, slaSeverityFilter, slaStatusFilter]);
@@ -92,16 +89,25 @@ export function GovernancePage({ selectedProjectId }) {
   const fetchSLABreaches = () => fetch(`${API_BASE}/sla/breaches?project_id=${selectedProjectId}`).then(r => r.json()).then(d => setSLABreaches(d || []));
 
   const handleSLAChange = (severity, newDays) => {
-    setSLAConfig(prev => prev.map(c => c.severity === severity ? { ...c, days: parseInt(newDays) || 0 } : c));
+    setSLAConfig(prev => prev.map(c => c.severity === severity ? { ...c, days: parseInt(newDays, 10) || 0 } : c));
   };
 
   const saveSLAConfig = async () => {
-    const res = await fetch(`${API_BASE}/sla?project_id=${selectedProjectId}`, { method: 'PUT', body: JSON.stringify(slaConfig) });
-    if (res.ok) {
-      alert("Configuración SLA guardada exitosamente.");
-      fetchSLABreaches();
-    } else {
-      alert("Error al guardar la configuración.");
+    try {
+      const res = await fetch(`${API_BASE}/sla?project_id=${selectedProjectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(slaConfig)
+      });
+      if (res.ok) {
+        toast.success("Configuración SLA guardada exitosamente.", "SLA Actualizado");
+        fetchSLABreaches();
+      } else {
+        toast.error("Error al guardar la configuración de SLA en el servidor.", "Error de Guardado");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error(err.message || "Error al comunicarse con el servidor.", "Error de Red");
     }
   };
 
@@ -122,7 +128,7 @@ export function GovernancePage({ selectedProjectId }) {
   };
 
   const getRaciBadge = (letter) => {
-    if (!letter) return <span style={{ display: 'inline-block', width: '28px', height: '28px' }}>-</span>;
+    if (!letter) return <span style={{ display: 'inline-block', width: '28px', height: '28px', lineHeight: '28px' }}>-</span>;
     
     let color = '';
     let bg = '';
@@ -142,8 +148,6 @@ export function GovernancePage({ selectedProjectId }) {
       </span>
     );
   };
-
-  // --- Actions ---
 
   const handleOpenModal = (type, item = null) => {
     if (item && type === 'policy') {
@@ -169,61 +173,81 @@ export function GovernancePage({ selectedProjectId }) {
   const submitPolicy = async (e) => {
     e.preventDefault();
     if (!formData.name) return;
-    const newPolicy = {
-      id: formData.id || 'pol-' + Date.now(),
-      name: formData.name,
-      version: formData.version || 'v1.0',
-      owner: formData.owner || 'CISO',
-      next_review_date: formData.date || '',
-      document_url: formData.document_url || '',
-      under_review: formData.under_review || false
-    };
-    await fetch(`${API_BASE}/policies?project_id=${selectedProjectId}`, { method: 'POST', body: JSON.stringify(newPolicy) });
-    fetchPolicies();
-    handleCloseModal();
+    try {
+      const newPolicy = {
+        id: formData.id || 'pol-' + Date.now(),
+        name: formData.name,
+        version: formData.version || 'v1.0',
+        owner: formData.owner || 'CISO',
+        next_review_date: formData.date || '',
+        document_url: formData.document_url || '',
+        under_review: formData.under_review || false
+      };
+      await fetch(`${API_BASE}/policies?project_id=${selectedProjectId}`, { method: 'POST', body: JSON.stringify(newPolicy) });
+      toast.success('Política guardada correctamente', 'Política');
+      fetchPolicies();
+      handleCloseModal();
+    } catch (err) {
+      toast.error(err.message, 'Error al guardar política');
+    }
   };
 
   const submitRole = async (e) => {
     e.preventDefault();
     if (!formData.name) return;
-    const newRole = { 
-      id: formData.id || 'role-' + Date.now(), 
-      name: formData.name, 
-      contact: formData.contact || '' 
-    };
-    await fetch(`${API_BASE}/roles?project_id=${selectedProjectId}`, { method: 'POST', body: JSON.stringify(newRole) });
-    fetchRoles();
-    handleCloseModal();
-    setRoleDetails({ open: false, role: null, isEditing: false });
+    try {
+      const newRole = { 
+        id: formData.id || 'role-' + Date.now(), 
+        name: formData.name, 
+        contact: formData.contact || '' 
+      };
+      await fetch(`${API_BASE}/roles?project_id=${selectedProjectId}`, { method: 'POST', body: JSON.stringify(newRole) });
+      toast.success('Rol guardado correctamente', 'Rol RACI');
+      fetchRoles();
+      handleCloseModal();
+      setRoleDetails({ open: false, role: null, isEditing: false });
+    } catch (err) {
+      toast.error(err.message, 'Error al guardar rol');
+    }
   };
 
   const submitActivity = async (e) => {
     e.preventDefault();
     if (!formData.name) return;
-    const newAct = {
-      id: 'act-' + Date.now(),
-      name: formData.name,
-      order: activities.length + 1,
-      roles: {}
-    };
-    await fetch(`${API_BASE}/raci?project_id=${selectedProjectId}`, { method: 'POST', body: JSON.stringify(newAct) });
-    fetchActivities();
-    handleCloseModal();
+    try {
+      const newAct = {
+        id: 'act-' + Date.now(),
+        name: formData.name,
+        order: activities.length + 1,
+        roles: {}
+      };
+      await fetch(`${API_BASE}/raci?project_id=${selectedProjectId}`, { method: 'POST', body: JSON.stringify(newAct) });
+      toast.success('Actividad añadida a la matriz RACI', 'Actividad');
+      fetchActivities();
+      handleCloseModal();
+    } catch (err) {
+      toast.error(err.message, 'Error al crear actividad');
+    }
   };
 
   const submitProcedure = async (e) => {
     e.preventDefault();
     if (!formData.name) return;
-    const stepsStr = formData.steps || "";
-    const newProc = {
-      id: 'PROC-' + Math.floor(Math.random() * 1000),
-      name: formData.name,
-      meta: "0 pasos · recién creado",
-      steps: stepsStr.split(',').map(s => s.trim()).filter(s => s)
-    };
-    await fetch(`${API_BASE}/procedures?project_id=${selectedProjectId}`, { method: 'POST', body: JSON.stringify(newProc) });
-    fetchProcedures();
-    handleCloseModal();
+    try {
+      const stepsStr = formData.steps || "";
+      const newProc = {
+        id: 'PROC-' + Math.floor(Math.random() * 1000),
+        name: formData.name,
+        meta: "0 pasos · recién creado",
+        steps: stepsStr.split(',').map(s => s.trim()).filter(s => s)
+      };
+      await fetch(`${API_BASE}/procedures?project_id=${selectedProjectId}`, { method: 'POST', body: JSON.stringify(newProc) });
+      toast.success('Procedimiento operativo registrado', 'Procedimiento');
+      fetchProcedures();
+      handleCloseModal();
+    } catch (err) {
+      toast.error(err.message, 'Error al crear procedimiento');
+    }
   };
 
   const openDeleteModal = (id, type, title) => {
@@ -232,44 +256,47 @@ export function GovernancePage({ selectedProjectId }) {
 
   const confirmDelete = async () => {
     const { id, type } = deleteModal;
-    if (type === 'policy') {
-      await fetch(`${API_BASE}/policies/${id}?project_id=${selectedProjectId}`, { method: 'DELETE' });
-      fetchPolicies();
-    } else if (type === 'role') {
-      await fetch(`${API_BASE}/roles/${id}?project_id=${selectedProjectId}`, { method: 'DELETE' });
-      fetchRoles();
-    } else if (type === 'activity') {
-      await fetch(`${API_BASE}/raci/${id}?project_id=${selectedProjectId}`, { method: 'DELETE' });
-      fetchActivities();
-    } else if (type === 'procedure') {
-      await fetch(`${API_BASE}/procedures/${id}?project_id=${selectedProjectId}`, { method: 'DELETE' });
-      fetchProcedures();
+    try {
+      if (type === 'policy') {
+        await fetch(`${API_BASE}/policies/${id}?project_id=${selectedProjectId}`, { method: 'DELETE' });
+        fetchPolicies();
+      } else if (type === 'role') {
+        await fetch(`${API_BASE}/roles/${id}?project_id=${selectedProjectId}`, { method: 'DELETE' });
+        fetchRoles();
+      } else if (type === 'activity') {
+        await fetch(`${API_BASE}/raci/${id}?project_id=${selectedProjectId}`, { method: 'DELETE' });
+        fetchActivities();
+      } else if (type === 'procedure') {
+        await fetch(`${API_BASE}/procedures/${id}?project_id=${selectedProjectId}`, { method: 'DELETE' });
+        fetchProcedures();
+      }
+      toast.success('Elemento eliminado correctamente', 'Registro Eliminado');
+    } catch (err) {
+      toast.error(err.message, 'Error al eliminar');
+    } finally {
+      setDeleteModal({ open: false, id: null, type: null, title: '' });
+      setRoleDetails({ open: false, role: null, isEditing: false });
     }
-    setDeleteModal({ open: false, id: null, type: null, title: '' });
-    setRoleDetails({ open: false, role: null, isEditing: false });
   };
 
+  // --- Rotación RACI incluyendo el estado vacío / "-" ---
   const cycleRaciCell = async (activity, roleId) => {
     const current = (activity.roles && activity.roles[roleId]) || '';
-    const nextMap = { 'R': 'A', 'A': 'C', 'C': 'I', 'I': '', '': 'R' };
-    const nextVal = nextMap[current] || 'R';
+    const nextMap = { '': 'R', 'R': 'A', 'A': 'C', 'C': 'I', 'I': '' };
+    const nextVal = current in nextMap ? nextMap[current] : 'R';
 
     const newRoles = { ...(activity.roles || {}) };
-    if (nextVal === '') {
+    if (!nextVal) {
       delete newRoles[roleId];
     } else {
       newRoles[roleId] = nextVal;
     }
 
     const updated = { ...activity, roles: newRoles };
-    
-    // Optimistic UI update
     setActivities(acts => acts.map(a => a.id === activity.id ? updated : a));
-
     await fetch(`${API_BASE}/raci?project_id=${selectedProjectId}`, { method: 'POST', body: JSON.stringify(updated) });
-    fetchActivities(); // refetch to ensure sync
+    fetchActivities();
   };
-
 
   return (
     <main className="ttps">
@@ -364,7 +391,7 @@ export function GovernancePage({ selectedProjectId }) {
                     <th style={{ padding: '12px', color: 'var(--c300)', fontWeight: '600' }}>Estado</th>
                     <th style={{ padding: '12px', color: 'var(--c300)', fontWeight: '600' }}>Owner</th>
                     <th style={{ padding: '12px', color: 'var(--c300)', fontWeight: '600' }}>Próxima revisión</th>
-                    <th style={{ padding: '12px', color: 'var(--c300)', fontWeight: '600', width: '50px' }}></th>
+                    <th style={{ padding: '12px', color: 'var(--c300)', fontWeight: '600', width: '70px' }}></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -388,8 +415,26 @@ export function GovernancePage({ selectedProjectId }) {
                       <td style={{ padding: '16px 12px' }}>{row.owner}</td>
                       <td style={{ padding: '16px 12px', color: row.status === 'bad' ? '#ff3264' : 'inherit' }}>{formatDateToEuropean(row.next_review_date)}</td>
                       <td style={{ padding: '16px 12px', textAlign: 'right' }}>
-                        <button onClick={() => handleOpenModal('policy', row)} style={{ background: 'transparent', border: 'none', color: 'var(--c400)', cursor: 'pointer', opacity: 0.8, marginRight: '10px' }} title="Modificar">✏️</button>
-                        <button onClick={() => openDeleteModal(row.id, 'policy', row.name)} style={{ background: 'transparent', border: 'none', color: '#ff3264', cursor: 'pointer', opacity: 0.7 }} title="Eliminar">🗑️</button>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                          <button
+                            onClick={() => handleOpenModal('policy', row)}
+                            style={{ background: 'transparent', border: 'none', color: 'var(--c400)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '4px', borderRadius: '4px', transition: 'all 0.2s' }}
+                            title="Modificar Política"
+                          >
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => openDeleteModal(row.id, 'policy', row.name)}
+                            style={{ background: 'transparent', border: 'none', color: '#ff3264', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '4px', borderRadius: '4px', transition: 'all 0.2s' }}
+                            title="Eliminar Política"
+                          >
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                            </svg>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -416,10 +461,13 @@ export function GovernancePage({ selectedProjectId }) {
               </div>
             </div>
             <p style={{ color: 'var(--c300)', fontSize: '13px', marginBottom: '24px' }}>
-              Click en cualquier celda para cambiar de R → A → C → I. Responsabilidades por actividad del ciclo de vida de parcheo.
+              Click en cualquier celda para cambiar de - → R → A → C → I → -. Responsabilidades por actividad del ciclo de vida de parcheo.
             </p>
 
             <div style={{ display: 'flex', gap: '20px', marginBottom: '20px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--c100)' }}>
+                {getRaciBadge('')} <span><b>Sin asignar</b> (por defecto)</span>
+              </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--c100)' }}>
                 {getRaciBadge('R')} <span><b>Responsible</b> — ejecuta</span>
               </div>
@@ -472,7 +520,7 @@ export function GovernancePage({ selectedProjectId }) {
                               style={{ padding: '12px', cursor: 'pointer', transition: 'background 0.2s' }}
                               onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
                               onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                              title="Click para cambiar rol RACI"
+                              title="Click para cambiar rol RACI (o volver a -)"
                             >
                               {getRaciBadge(letter)}
                             </td>
@@ -480,7 +528,15 @@ export function GovernancePage({ selectedProjectId }) {
                         })}
 
                         <td style={{ padding: '16px 12px' }}>
-                          <button onClick={() => openDeleteModal(act.id, 'activity', act.name)} style={{ background: 'transparent', border: 'none', color: '#ff3264', cursor: 'pointer', opacity: 0.7 }} title="Eliminar fila">🗑️</button>
+                          <button
+                            onClick={() => openDeleteModal(act.id, 'activity', act.name)}
+                            style={{ background: 'transparent', border: 'none', color: '#ff3264', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '4px', borderRadius: '4px', transition: 'all 0.2s' }}
+                            title="Eliminar fila"
+                          >
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                            </svg>
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -509,26 +565,71 @@ export function GovernancePage({ selectedProjectId }) {
             {loading ? <p>Cargando...</p> : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '16px' }}>
                 {procedures.map(proc => (
-                  <div key={proc.id} style={{ border: '1px solid var(--line)', borderRadius: '8px', background: 'rgba(0,0,0,0.2)', overflow: 'hidden', position: 'relative' }}>
+                  <div key={proc.id} style={{ border: '1px solid var(--line)', borderRadius: '8px', background: 'rgba(0,0,0,0.2)', overflow: 'hidden' }}>
                     
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); openDeleteModal(proc.id, 'procedure', proc.name); }}
-                      style={{ position: 'absolute', top: '16px', right: '40px', background: 'none', border: 'none', color: '#ff3264', cursor: 'pointer', opacity: 0.7, zIndex: 10 }}
-                      title="Eliminar"
-                    >🗑️</button>
-
                     <div 
-                      style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', background: openProcs[proc.id] ? 'rgba(0, 240, 255, 0.05)' : 'transparent' }}
+                      style={{ 
+                        padding: '16px', 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center', 
+                        cursor: 'pointer', 
+                        background: openProcs[proc.id] ? 'rgba(0, 240, 255, 0.05)' : 'transparent',
+                        gap: '16px'
+                      }}
                       onClick={() => toggleProc(proc.id)}
                     >
-                      <div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ color: 'var(--c400)', fontFamily: 'Orbitron, sans-serif', fontSize: '11px', letterSpacing: '1px', marginBottom: '4px' }}>{proc.id}</div>
-                        <div style={{ color: 'var(--c50)', fontWeight: '600', fontSize: '14px', marginBottom: '4px', paddingRight: '40px' }}>{proc.name}</div>
+                        <div style={{ color: 'var(--c50)', fontWeight: '600', fontSize: '14px', marginBottom: '4px' }}>{proc.name}</div>
                         <div style={{ color: 'var(--c300)', fontSize: '12px' }}>{proc.meta}</div>
                       </div>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: '20px', height: '20px', color: 'var(--c300)', transform: openProcs[proc.id] ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
-                        <path d="M6 9l6 6 6-6"/>
-                      </svg>
+
+                      {/* Icono de eliminar centrado verticalmente al lado del desplegable */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+                        <button 
+                          type="button"
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            openDeleteModal(proc.id, 'procedure', proc.name); 
+                          }}
+                          style={{ 
+                            background: 'transparent', 
+                            border: 'none', 
+                            color: '#ff3264', 
+                            cursor: 'pointer', 
+                            display: 'inline-flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center', 
+                            padding: '6px', 
+                            borderRadius: '4px',
+                            transition: 'background 0.2s ease'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 50, 100, 0.15)'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                          title="Eliminar Procedimiento"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                          </svg>
+                        </button>
+
+                        <svg 
+                          viewBox="0 0 24 24" 
+                          fill="none" 
+                          stroke="currentColor" 
+                          strokeWidth="2" 
+                          style={{ 
+                            width: '20px', 
+                            height: '20px', 
+                            color: 'var(--c300)', 
+                            transform: openProcs[proc.id] ? 'rotate(180deg)' : 'none', 
+                            transition: 'transform 0.2s' 
+                          }}
+                        >
+                          <path d="M6 9l6 6 6-6"/>
+                        </svg>
+                      </div>
                     </div>
                     {openProcs[proc.id] && (
                       <div style={{ padding: '0 20px 20px 40px', color: 'var(--c100)', fontSize: '13px', lineHeight: '1.8' }}>
@@ -726,203 +827,338 @@ export function GovernancePage({ selectedProjectId }) {
         )}
       </div>
 
-      {/* ======================= MODALS ======================= */}
+      {/* ======================= MODALES HUD ======================= */}
+
+      {/* MODAL CREAR/MODIFICAR RECURSO */}
       {activeModal && (
-        <div className="ttp-modal-backdrop" onClick={handleCloseModal}>
-          <div className="ttp-modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-head">
+        <div className="asset-modal-overlay" onClick={handleCloseModal}>
+          <div className="asset-modal" onClick={e => e.stopPropagation()}>
+            <div className="asset-modal-header">
               <div>
-                <p className="eyebrow">Añadir Nuevo</p>
-                <h3>
-                  {activeModal === 'policy' && 'Documento Normativo (Política)'}
-                  {activeModal === 'role' && 'Rol (Columna RACI)'}
-                  {activeModal === 'activity' && 'Actividad (Fila RACI)'}
-                  {activeModal === 'procedure' && 'Procedimiento'}
-                </h3>
+                <h2>
+                  {activeModal === 'policy' && (formData.id ? 'EDITAR POLÍTICA' : '➕ NUEVA POLÍTICA')}
+                  {activeModal === 'role' && '➕ NUEVO ROL (RACI)'}
+                  {activeModal === 'activity' && '➕ NUEVA ACTIVIDAD (RACI)'}
+                  {activeModal === 'procedure' && '➕ NUEVO PROCEDIMIENTO'}
+                </h2>
+                <div className="asset-modal-subtitle">
+                  {activeModal === 'policy' && 'Registra o actualiza el documento normativo de gobierno'}
+                  {activeModal === 'role' && 'Añade una columna de rol a la matriz de responsabilidades'}
+                  {activeModal === 'activity' && 'Añade una fila de actividad al ciclo de parcheo'}
+                  {activeModal === 'procedure' && 'Define un procedimiento operativo estándar paso a paso'}
+                </div>
               </div>
-              <button className="modal-close" onClick={handleCloseModal}>✕</button>
+              <button className="asset-modal-close" onClick={handleCloseModal}>✕</button>
             </div>
-            
-            <div className="modal-body" style={{ padding: '24px' }}>
-              <form onSubmit={
+
+            <form
+              onSubmit={
                 activeModal === 'policy' ? submitPolicy :
                 activeModal === 'role' ? submitRole :
                 activeModal === 'activity' ? submitActivity :
                 submitProcedure
-              } style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '12px', color: 'var(--c300)' }}>Nombre / Título</label>
-                  <input type="text" name="name" required autoFocus value={formData.name || ''} onChange={handleFormChange} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--line)', color: 'white', padding: '10px 14px', borderRadius: '6px', fontSize: '14px' }} placeholder="Escribe aquí..." />
-                </div>
-
-                {activeModal === 'policy' && (
-                  <>
-                    <div style={{ display: 'flex', gap: '16px' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
-                        <label style={{ fontSize: '12px', color: 'var(--c300)' }}>Versión</label>
-                        <input type="text" name="version" value={formData.version || ''} onChange={handleFormChange} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--line)', color: 'white', padding: '10px 14px', borderRadius: '6px', fontSize: '14px' }} placeholder="v1.0" />
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
-                        <label style={{ fontSize: '12px', color: 'var(--c300)' }}>Owner</label>
-                        <input type="text" name="owner" value={formData.owner || ''} onChange={handleFormChange} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--line)', color: 'white', padding: '10px 14px', borderRadius: '6px', fontSize: '14px' }} placeholder="Ej: CISO" />
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
-                        <label style={{ fontSize: '12px', color: 'var(--c300)' }}>Próxima Revisión</label>
-                        <input type="date" name="date" value={formData.date || ''} onChange={handleFormChange} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--line)', color: 'white', padding: '10px 14px', borderRadius: '6px', fontSize: '14px' }} />
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, marginTop: '28px' }}>
-                        <input type="checkbox" name="under_review" id="under_review" checked={formData.under_review || false} onChange={handleFormChange} style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: 'var(--c400)' }} />
-                        <label htmlFor="under_review" style={{ fontSize: '12px', color: 'var(--c300)', cursor: 'pointer' }}>Marcar como en revisión (Forzar estado)</label>
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
-                        <label style={{ fontSize: '12px', color: 'var(--c300)' }}>URL del documento (SharePoint, Drive, etc.)</label>
-                        <input type="text" name="document_url" value={formData.document_url || ''} onChange={handleFormChange} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--line)', color: 'white', padding: '10px 14px', borderRadius: '6px', fontSize: '14px' }} placeholder="https://..." />
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {activeModal === 'role' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <label style={{ fontSize: '12px', color: 'var(--c300)' }}>Contacto (Email o Departamento)</label>
-                    <input type="text" name="contact" value={formData.contact || ''} onChange={handleFormChange} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--line)', color: 'white', padding: '10px 14px', borderRadius: '6px', fontSize: '14px' }} placeholder="Opcional..." />
-                  </div>
-                )}
-
-                {activeModal === 'procedure' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <label style={{ fontSize: '12px', color: 'var(--c300)' }}>Pasos (separados por comas)</label>
-                    <textarea name="steps" value={formData.steps || ''} onChange={handleFormChange} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--line)', color: 'white', padding: '10px 14px', borderRadius: '6px', fontSize: '14px', minHeight: '80px', fontFamily: 'inherit' }} placeholder="Paso 1, Paso 2, Paso 3..." />
-                  </div>
-                )}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
-                  <button type="button" onClick={handleCloseModal} style={{ padding: '10px 20px', background: 'transparent', color: 'var(--c300)', border: '1px solid var(--line)', borderRadius: '6px', cursor: 'pointer' }}>Cancelar</button>
-                  <button type="submit" style={{ padding: '10px 20px', background: 'var(--c400)', color: '#050614', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Guardar</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-
-
-      {/* MODAL DE CONFIRMACIÓN DE BORRADO */}
-      {deleteModal.open && (
-        <div className="ttp-modal-backdrop" onClick={() => setDeleteModal({ ...deleteModal, open: false })}>
-          <div className="ttp-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
-            <div className="modal-head">
+              }
+              className="asset-form"
+            >
               <div>
-                <p className="eyebrow">Confirmar Acción</p>
-                <h3>Eliminar Registro</h3>
+                <div className="asset-field-label">Nombre / Título</div>
+                <input
+                  type="text"
+                  name="name"
+                  className="asset-input"
+                  required
+                  autoFocus
+                  value={formData.name || ''}
+                  onChange={handleFormChange}
+                  placeholder="Escribe el nombre o título..."
+                />
               </div>
-              <button className="modal-close" onClick={() => setDeleteModal({ ...deleteModal, open: false })}>✕</button>
-            </div>
-            
-            <div className="modal-body" style={{ padding: '24px' }}>
-              <p style={{ color: 'var(--c100)', fontSize: '14px', marginBottom: '24px' }}>
-                ¿Estás seguro de que deseas eliminar permanentemente <b>{deleteModal.title}</b>? Esta acción no se puede deshacer.
-              </p>
-              
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                <button type="button" onClick={() => setDeleteModal({ ...deleteModal, open: false })} style={{ padding: '10px 20px', background: 'transparent', color: 'var(--c300)', border: '1px solid var(--line)', borderRadius: '6px', cursor: 'pointer' }}>Cancelar</button>
-                <button type="button" onClick={confirmDelete} style={{ padding: '10px 20px', background: '#ff3264', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Eliminar</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* MODAL DE DETALLES DEL ROL (VER / EDITAR) */}
-      {roleDetails.open && (
-        <div className="ttp-modal-backdrop" onClick={() => setRoleDetails({ open: false, role: null, isEditing: false })}>
-          <div className="ttp-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
-            <div className="modal-head">
-              <div>
-                <p className="eyebrow">Detalles del Rol RACI</p>
-                <h3>{roleDetails.isEditing ? 'Modificar Rol' : roleDetails.role?.name}</h3>
-              </div>
-              <button className="modal-close" onClick={() => setRoleDetails({ open: false, role: null, isEditing: false })}>✕</button>
-            </div>
-            
-            <div className="modal-body" style={{ padding: '0' }}>
-              {!roleDetails.isEditing ? (
+              {activeModal === 'policy' && (
                 <>
-                  <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                    
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                      <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-soft)', padding: '16px', borderRadius: '8px' }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '10px', color: 'var(--c300)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>
-                          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
-                          Identificador interno
-                        </span>
-                        <p style={{ color: 'var(--c50)', margin: '0', fontSize: '13px', fontFamily: 'monospace' }}>{roleDetails.role?.id}</p>
-                      </div>
-
-                      <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-soft)', padding: '16px', borderRadius: '8px' }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '10px', color: 'var(--c300)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>
-                          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                          Nombre del Rol
-                        </span>
-                        <p style={{ color: 'var(--c400)', margin: '0', fontSize: '14px', fontWeight: 'bold' }}>{roleDetails.role?.name}</p>
-                      </div>
+                  <div className="asset-field-row">
+                    <div>
+                      <div className="asset-field-label">Versión</div>
+                      <input
+                        type="text"
+                        name="version"
+                        className="asset-input"
+                        value={formData.version || ''}
+                        onChange={handleFormChange}
+                        placeholder="v1.0"
+                      />
                     </div>
-
-                    <div style={{ background: 'rgba(0, 240, 255, 0.02)', border: '1px solid rgba(0, 240, 255, 0.1)', padding: '16px', borderRadius: '8px' }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '10px', color: 'var(--c400)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>
-                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
-                        Datos de Contacto
-                      </span>
-                      <p style={{ color: 'var(--c50)', margin: '0', fontSize: '13px' }}>{roleDetails.role?.contact || <span style={{color: 'var(--c300)', fontStyle: 'italic'}}>No especificado. Haz clic en modificar para añadir correo o información.</span>}</p>
+                    <div>
+                      <div className="asset-field-label">Owner (Responsable)</div>
+                      <input
+                        type="text"
+                        name="owner"
+                        className="asset-input"
+                        value={formData.owner || ''}
+                        onChange={handleFormChange}
+                        placeholder="Ej: CISO, SecOps"
+                      />
                     </div>
-
                   </div>
-                  
-                  <div style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(0,0,0,0.3)', borderTop: '1px solid var(--line)', padding: '16px 24px', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px' }}>
-                    <button 
-                      onClick={() => openDeleteModal(roleDetails.role?.id, 'role', roleDetails.role?.name)} 
-                      style={{ padding: '8px 16px', background: 'rgba(255, 50, 100, 0.1)', color: '#ff3264', border: '1px solid rgba(255,50,100,0.3)', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+
+                  <div className="asset-field-row">
+                    <div>
+                      <div className="asset-field-label">Próxima Revisión</div>
+                      <input
+                        type="date"
+                        name="date"
+                        className="asset-input"
+                        value={formData.date || ''}
+                        onChange={handleFormChange}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', marginTop: '1.6rem' }}>
+                      <div className="asset-checkbox-row">
+                        <input
+                          type="checkbox"
+                          name="under_review"
+                          id="under_review"
+                          checked={Boolean(formData.under_review)}
+                          onChange={handleFormChange}
+                        />
+                        <label htmlFor="under_review" className="asset-field-label asset-checkbox-label">
+                          En revisión (forzar estado)
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="asset-field-label">URL del documento (SharePoint, Drive, etc.)</div>
+                    <input
+                      type="text"
+                      name="document_url"
+                      className="asset-input"
+                      value={formData.document_url || ''}
+                      onChange={handleFormChange}
+                      placeholder="https://..."
+                    />
+                  </div>
+                </>
+              )}
+
+              {activeModal === 'role' && (
+                <div>
+                  <div className="asset-field-label">Contacto (Email / Info)</div>
+                  <input
+                    type="text"
+                    name="contact"
+                    className="asset-input"
+                    value={formData.contact || ''}
+                    onChange={handleFormChange}
+                    placeholder="ej: soc@miempresa.com"
+                  />
+                </div>
+              )}
+
+              {activeModal === 'procedure' && (
+                <div>
+                  <div className="asset-field-label">Pasos operativos (separados por comas)</div>
+                  <textarea
+                    name="steps"
+                    className="asset-input asset-textarea"
+                    rows={4}
+                    value={formData.steps || ''}
+                    onChange={handleFormChange}
+                    placeholder="Paso 1: Notificar equipo, Paso 2: Aislar entorno, Paso 3: Aplicar parche..."
+                  />
+                </div>
+              )}
+
+              <div className="asset-form-actions">
+                <button type="button" className="btn btn-secondary" onClick={handleCloseModal}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn btn-accent asset-submit-btn">
+                  Guardar Registro
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CONFIRMACIÓN DE BORRADO */}
+      {deleteModal.open && (
+        <div className="asset-modal-overlay" onClick={() => setDeleteModal({ ...deleteModal, open: false })}>
+          <div
+            className="asset-modal"
+            style={{
+              maxWidth: '480px',
+              border: '1px solid rgba(239, 68, 68, 0.5)',
+              boxShadow: '0 30px 80px rgba(0, 0, 0, 0.85), 0 0 25px rgba(239, 68, 68, 0.25)'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="asset-modal-header" style={{ borderBottomColor: 'rgba(239, 68, 68, 0.3)' }}>
+              <div>
+                <h2 style={{ color: '#f87171', textShadow: '0 0 12px rgba(239, 68, 68, 0.6)' }}>
+                  ELIMINAR REGISTRO
+                </h2>
+                <div className="asset-modal-subtitle">Confirma la baja permanente del elemento</div>
+              </div>
+              <button className="asset-modal-close" onClick={() => setDeleteModal({ ...deleteModal, open: false })}>✕</button>
+            </div>
+
+            <div className="asset-modal-body">
+              <div className="asset-form">
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '12px 14px',
+                  background: 'rgba(239, 68, 68, 0.08)',
+                  border: '1px dashed rgba(239, 68, 68, 0.4)',
+                  borderRadius: '6px',
+                  color: '#fca5a5',
+                  fontSize: '13.5px',
+                  fontFamily: 'Rajdhani, sans-serif'
+                }}>
+                  <span style={{ fontSize: '16px' }}>⚠️</span>
+                  <span>
+                    ¿Estás seguro de que deseas eliminar permanentemente <strong>"{deleteModal.title}"</strong>? Esta acción no se puede deshacer.
+                  </span>
+                </div>
+
+                <div className="asset-form-actions">
+                  <button type="button" className="btn btn-secondary" onClick={() => setDeleteModal({ ...deleteModal, open: false })}>
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={confirmDelete}
+                    style={{
+                      flex: 1,
+                      background: 'linear-gradient(135deg, #ef4444, #991b1b)',
+                      color: '#ffffff',
+                      border: 'none',
+                      fontFamily: 'Orbitron, sans-serif',
+                      fontSize: '11.5px',
+                      letterSpacing: '1px',
+                      cursor: 'pointer',
+                      boxShadow: '0 4px 15px rgba(239, 68, 68, 0.4)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    </svg>
+                    Eliminar Definitivamente
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DETALLES DEL ROL (VER / MODIFICAR) */}
+      {roleDetails.open && (
+        <div className="asset-modal-overlay" onClick={() => setRoleDetails({ open: false, role: null, isEditing: false })}>
+          <div className="asset-modal" style={{ maxWidth: '520px' }} onClick={e => e.stopPropagation()}>
+            <div className="asset-modal-header">
+              <div>
+                <h2>{roleDetails.isEditing ? 'EDITAR ROL' : 'DETALLES DEL ROL RACI'}</h2>
+                <div className="asset-modal-subtitle">
+                  {roleDetails.isEditing ? 'Modifica los datos del rol en la matriz' : (roleDetails.role?.name || '')}
+                </div>
+              </div>
+              <button className="asset-modal-close" onClick={() => setRoleDetails({ open: false, role: null, isEditing: false })}>✕</button>
+            </div>
+
+            <div className="asset-modal-body">
+              {!roleDetails.isEditing ? (
+                <div className="asset-form">
+                  <div className="asset-field-row">
+                    <div>
+                      <div className="asset-field-label">Identificador Interno</div>
+                      <input type="text" className="asset-input" value={roleDetails.role?.id || ''} disabled />
+                    </div>
+                    <div>
+                      <div className="asset-field-label">Nombre del Rol</div>
+                      <input type="text" className="asset-input" value={roleDetails.role?.name || ''} disabled style={{ fontWeight: 'bold', color: 'var(--c400)' }} />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="asset-field-label">Datos de Contacto</div>
+                    <input type="text" className="asset-input" value={roleDetails.role?.contact || 'No especificado'} disabled />
+                  </div>
+
+                  <div className="asset-form-actions">
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => openDeleteModal(roleDetails.role?.id, 'role', roleDetails.role?.name)}
+                      style={{ color: '#ff3264', borderColor: 'rgba(255, 50, 100, 0.4)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                     >
-                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                      </svg>
                       Borrar Rol
                     </button>
-                    
-                    <button 
+                    <button
+                      type="button"
+                      className="btn btn-accent asset-submit-btn"
                       onClick={() => {
                         setFormData({ id: roleDetails.role?.id, name: roleDetails.role?.name, contact: roleDetails.role?.contact });
                         setRoleDetails(prev => ({ ...prev, isEditing: true }));
-                      }} 
-                      style={{ padding: '8px 16px', background: 'var(--c400)', color: '#050614', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                      }}
+                      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
                     >
-                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                      </svg>
                       Modificar
                     </button>
                   </div>
-                </>
+                </div>
               ) : (
-                <form onSubmit={submitRole} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <label style={{ fontSize: '12px', color: 'var(--c300)', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                      Nombre del Rol
-                    </label>
-                    <input type="text" name="name" required value={formData.name || ''} onChange={handleFormChange} style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid var(--c400)', color: 'white', padding: '12px 14px', borderRadius: '6px', fontSize: '14px', outline: 'none', boxShadow: '0 0 0 1px rgba(0, 240, 255, 0.2)' }} />
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <label style={{ fontSize: '12px', color: 'var(--c300)', textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
-                      Contacto (Email / Info)
-                    </label>
-                    <input type="text" name="contact" value={formData.contact || ''} onChange={handleFormChange} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--line)', color: 'white', padding: '12px 14px', borderRadius: '6px', fontSize: '14px', outline: 'none' }} placeholder="ej: soc@miempresa.com" />
+                <form onSubmit={submitRole} className="asset-form">
+                  <div>
+                    <div className="asset-field-label">Nombre del Rol</div>
+                    <input
+                      type="text"
+                      name="name"
+                      className="asset-input"
+                      required
+                      value={formData.name || ''}
+                      onChange={handleFormChange}
+                    />
                   </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px', paddingTop: '20px', borderTop: '1px solid var(--line)' }}>
-                    <button type="button" onClick={() => setRoleDetails(prev => ({ ...prev, isEditing: false }))} style={{ padding: '10px 20px', background: 'transparent', color: 'var(--c300)', border: '1px solid var(--line)', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}>Cancelar</button>
-                    <button type="submit" style={{ padding: '10px 20px', background: 'var(--c400)', color: '#050614', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>Guardar Cambios</button>
+                  <div>
+                    <div className="asset-field-label">Contacto (Email / Información)</div>
+                    <input
+                      type="text"
+                      name="contact"
+                      className="asset-input"
+                      value={formData.contact || ''}
+                      onChange={handleFormChange}
+                      placeholder="ej: soc@miempresa.com"
+                    />
+                  </div>
+
+                  <div className="asset-form-actions">
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => setRoleDetails(prev => ({ ...prev, isEditing: false }))}
+                    >
+                      Cancelar
+                    </button>
+                    <button type="submit" className="btn btn-accent asset-submit-btn">
+                      Guardar Cambios
+                    </button>
                   </div>
                 </form>
               )}
