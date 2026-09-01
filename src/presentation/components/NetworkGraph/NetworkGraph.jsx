@@ -947,15 +947,21 @@ export function NetworkGraph({
       }
     }
 
-    // Marcar ÚNICAMENTE el software, el hallazgo y la vulnerabilidad ESPECÍFICOS explotados en cada etapa
+    // Marcar ÚNICAMENTE el software, la imagen de contenedor, el hallazgo y la vulnerabilidad ESPECÍFICOS explotados en cada etapa
     (selectedExploitationPath.steps || []).forEach((step) => {
       if (!step) return;
       const tId = step.is_container ? step.container_id : step.targetEndpointId;
       const tName = step.is_container ? step.container_name : step.targetEndpoint;
-      const stepNode = findNodeForHostOrId(tName, tId);
-      if (!stepNode) return;
+      const sName = step.sourceEndpoint;
+      const sId = step.container_id;
 
-      const stepNodeId = getCanonicalNodeId(stepNode.id, graphData.nodes);
+      const candidateNodes = [
+        findNodeForHostOrId(tName, tId),
+        findNodeForHostOrId(sName, sId)
+      ].filter(Boolean);
+
+      if (candidateNodes.length === 0) return;
+
       const stepCve = String(step.vulnerability || step.cve_id || '').toLowerCase().trim();
       const stepSw = String(step.software_affected || '').toLowerCase().trim();
       const stepFId = String(step.finding_id || '').trim();
@@ -963,102 +969,124 @@ export function NetworkGraph({
       const nodes = graphData.nodes || [];
       const rels = graphData.relationships || [];
 
-      // 1. Obtener todas las instalaciones o imágenes conectadas a este equipo host
-      const hostInstallations = [];
-      rels.forEach(r => {
-        const s = getCanonicalNodeId(r.source, nodes);
-        const t = getCanonicalNodeId(r.target, nodes);
-        if (s === stepNodeId || t === stepNodeId) {
-          const otherId = s === stepNodeId ? t : s;
-          const otherNode = nodes.find(n => getCanonicalNodeId(n.id, nodes) === otherId);
-          if (otherNode) {
-            const cat = (otherNode.primaryLabel || otherNode.labels?.[0] || '').toLowerCase();
-            if (['softwareinstallation', 'installation', 'containerimage'].includes(cat) || (otherNode.labels || []).some(l => ['SoftwareInstallation', 'Installation', 'ContainerImage'].includes(l))) {
-              hostInstallations.push({ node: otherNode, id: otherId, relId: r.id });
-            }
-          }
-        }
-      });
+      candidateNodes.forEach(stepNode => {
+        const stepNodeId = getCanonicalNodeId(stepNode.id, graphData.nodes);
 
-      // 2. Para cada instalación del host, buscar sus Hallazgos / Vulnerabilidades / Software conectados
-      let bestInstallation = null;
-      let maxScore = -1;
-
-      hostInstallations.forEach(item => {
-        const siId = item.id;
-        const siNode = item.node;
-        const siName = String(siNode.name || siNode.properties?.name || siNode.properties?.software_name || '').toLowerCase();
-
-        // Buscar hallazgos o vulnerabilidades conectados a esta instalación
-        const connectedVulnNodes = [];
+        // 1. Obtener todas las instalaciones o imágenes conectadas a este equipo host/contenedor
+        const hostInstallations = [];
         rels.forEach(r => {
           const s = getCanonicalNodeId(r.source, nodes);
           const t = getCanonicalNodeId(r.target, nodes);
-          if (s === siId || t === siId) {
-            const vId = s === siId ? t : s;
-            const vNode = nodes.find(n => getCanonicalNodeId(n.id, nodes) === vId);
-            if (vNode) {
-              const vCat = (vNode.primaryLabel || vNode.labels?.[0] || '').toLowerCase();
-              if (['finding', 'vulnerability', 'software'].includes(vCat) || (vNode.labels || []).some(l => ['Finding', 'Vulnerability', 'Software'].includes(l))) {
-                connectedVulnNodes.push({ node: vNode, id: vId, relId: r.id });
+          if (s === stepNodeId || t === stepNodeId) {
+            const otherId = s === stepNodeId ? t : s;
+            const otherNode = nodes.find(n => getCanonicalNodeId(n.id, nodes) === otherId);
+            if (otherNode) {
+              const cat = (otherNode.primaryLabel || otherNode.labels?.[0] || '').toLowerCase();
+              if (['softwareinstallation', 'installation', 'containerimage'].includes(cat) || (otherNode.labels || []).some(l => ['SoftwareInstallation', 'Installation', 'ContainerImage'].includes(l))) {
+                hostInstallations.push({ node: otherNode, id: otherId, relId: r.id });
               }
             }
           }
         });
 
-        // Comprobar coincidencia con la etapa
-        let score = 0;
-        let hasFindingMatch = false;
+        // 2. Para cada instalación/imagen del host/contenedor, buscar sus Hallazgos / Vulnerabilidades / Software conectados (1 y 2 saltos)
+        let bestInstallation = null;
+        let maxScore = -1;
 
-        connectedVulnNodes.forEach(vItem => {
-          const vName = String(vItem.node.name || vItem.node.properties?.name || vItem.node.properties?.title || '').toLowerCase();
-          const vCve = String(vItem.node.properties?.cve_id || vItem.node.properties?.cve || vItem.node.name || '').toLowerCase();
-          const vFId = String(vItem.node.id);
-          const vPropId = String(vItem.node.properties?.id || '');
+        hostInstallations.forEach(item => {
+          const siId = item.id;
+          const siNode = item.node;
+          const siName = String(siNode.name || siNode.properties?.name || siNode.properties?.software_name || '').toLowerCase();
 
-          const matchesId = stepFId && (vFId === stepFId || vPropId === stepFId || vFId.endsWith(':' + stepFId) || stepFId.endsWith(':' + vPropId));
-          const matchesCve = stepCve && (vCve.includes(stepCve) || vName.includes(stepCve));
+          // Buscar hallazgos o vulnerabilidades conectados a esta instalación/imagen (1 y 2 saltos)
+          const connectedVulnNodes = [];
+          rels.forEach(r => {
+            const s = getCanonicalNodeId(r.source, nodes);
+            const t = getCanonicalNodeId(r.target, nodes);
+            if (s === siId || t === siId) {
+              const vId = s === siId ? t : s;
+              const vNode = nodes.find(n => getCanonicalNodeId(n.id, nodes) === vId);
+              if (vNode) {
+                const vCat = (vNode.primaryLabel || vNode.labels?.[0] || '').toLowerCase();
+                if (['finding', 'vulnerability', 'software'].includes(vCat) || (vNode.labels || []).some(l => ['Finding', 'Vulnerability', 'Software'].includes(l))) {
+                  connectedVulnNodes.push({ node: vNode, id: vId, relId: r.id });
 
-          if (matchesId) { score += 100; hasFindingMatch = true; }
-          if (matchesCve) { score += 50; hasFindingMatch = true; }
-          if (stepSw && (siName.includes(stepSw) || vName.includes(stepSw))) score += 30;
-        });
+                  // Si es un Finding, buscar su Vulnerability conectada (segundo salto)
+                  if (vCat === 'finding' || (vNode.labels || []).includes('Finding')) {
+                    rels.forEach(r2 => {
+                      const s2 = getCanonicalNodeId(r2.source, nodes);
+                      const t2 = getCanonicalNodeId(r2.target, nodes);
+                      if (s2 === vId || t2 === vId) {
+                        const subId = s2 === vId ? t2 : s2;
+                        const subNode = nodes.find(n => getCanonicalNodeId(n.id, nodes) === subId);
+                        if (subNode && (subNode.primaryLabel === 'Vulnerability' || (subNode.labels || []).includes('Vulnerability'))) {
+                          connectedVulnNodes.push({ node: subNode, id: subId, relId: r2.id, parentFindingId: vId });
+                        }
+                      }
+                    });
+                  }
+                }
+              }
+            }
+          });
 
-        // Solo considerar la instalación como el destino explotado si tiene un finding/CVE que coincide con el paso
-        if (hasFindingMatch && score > maxScore) {
-          maxScore = score;
-          bestInstallation = { ...item, vulnNodes: connectedVulnNodes };
-        }
-      });
+          // Comprobar coincidencia con la etapa
+          let score = 0;
+          let hasFindingMatch = false;
 
-      // 3. Si se encontró la instalación correspondiente al paso, marcarla junto con el finding/vuln exacto
-      if (bestInstallation) {
-        connectorNodeIdSet.add(bestInstallation.id);
-        edgeIdSet.add(bestInstallation.relId);
+          connectedVulnNodes.forEach(vItem => {
+            const vName = String(vItem.node.name || vItem.node.properties?.name || vItem.node.properties?.title || '').toLowerCase();
+            const vCve = String(vItem.node.properties?.cve_id || vItem.node.properties?.cve || vItem.node.properties?.finding_key || vItem.node.name || '').toLowerCase();
+            const vFId = String(vItem.node.id);
+            const vPropId = String(vItem.node.properties?.id || '');
 
-        // Solo añadir el finding/vuln que realmente coincide con el paso (no todos los conectados)
-        bestInstallation.vulnNodes.forEach(vItem => {
-          const vName = String(vItem.node.name || vItem.node.properties?.name || vItem.node.properties?.title || '').toLowerCase();
-          const vCve = String(vItem.node.properties?.cve_id || vItem.node.properties?.cve || vItem.node.name || '').toLowerCase();
-          const vFId = String(vItem.node.id);
-          const vPropId = String(vItem.node.properties?.id || '');
+            const matchesId = stepFId && (vFId === stepFId || vPropId === stepFId || vFId.endsWith(':' + stepFId) || stepFId.endsWith(':' + vPropId));
+            const matchesCve = stepCve && (vCve.includes(stepCve) || vName.includes(stepCve));
 
-          const matchesId = stepFId && (vFId === stepFId || vPropId === stepFId || vFId.endsWith(':' + stepFId) || stepFId.endsWith(':' + vPropId));
-          const matchesCve = stepCve && (vCve.includes(stepCve) || vName.includes(stepCve));
-          const isFindingOrVuln = vItem.node.primaryLabel === 'Finding' || vItem.node.primaryLabel === 'Vulnerability' ||
-            (vItem.node.labels || []).some(l => l === 'Finding' || l === 'Vulnerability');
+            if (matchesId) { score += 100; hasFindingMatch = true; }
+            if (matchesCve) { score += 50; hasFindingMatch = true; }
+            if (stepSw && (siName.includes(stepSw) || vName.includes(stepSw))) score += 30;
+          });
 
-          // Solo marcar si coincide exactamente con el paso, o si es el único finding conectado
-          if (matchesId || matchesCve) {
-            connectorNodeIdSet.add(vItem.id);
-            edgeIdSet.add(vItem.relId);
-          } else if (!isFindingOrVuln) {
-            // Marcar nodos Software (no Finding/Vuln) siempre que sean de la instalación
-            connectorNodeIdSet.add(vItem.id);
-            edgeIdSet.add(vItem.relId);
+          // Solo considerar la instalación/imagen como el destino explotado si tiene un finding/CVE que coincide con el paso
+          if (hasFindingMatch && score > maxScore) {
+            maxScore = score;
+            bestInstallation = { ...item, vulnNodes: connectedVulnNodes };
           }
         });
-      }
+
+        // 3. Si se encontró la instalación/imagen correspondiente al paso, marcarla junto con el finding/vuln exacto
+        if (bestInstallation) {
+          connectorNodeIdSet.add(bestInstallation.id);
+          edgeIdSet.add(bestInstallation.relId);
+
+          // Solo añadir el finding/vuln que realmente coincide con el paso (no todos los conectados)
+          bestInstallation.vulnNodes.forEach(vItem => {
+            const vName = String(vItem.node.name || vItem.node.properties?.name || vItem.node.properties?.title || '').toLowerCase();
+            const vCve = String(vItem.node.properties?.cve_id || vItem.node.properties?.cve || vItem.node.properties?.finding_key || vItem.node.name || '').toLowerCase();
+            const vFId = String(vItem.node.id);
+            const vPropId = String(vItem.node.properties?.id || '');
+
+            const matchesId = stepFId && (vFId === stepFId || vPropId === stepFId || vFId.endsWith(':' + stepFId) || stepFId.endsWith(':' + vPropId));
+            const matchesCve = stepCve && (vCve.includes(stepCve) || vName.includes(stepCve));
+            const isFindingOrVuln = vItem.node.primaryLabel === 'Finding' || vItem.node.primaryLabel === 'Vulnerability' ||
+              (vItem.node.labels || []).some(l => l === 'Finding' || l === 'Vulnerability');
+
+            // Solo marcar si coincide exactamente con el paso, o si es el único finding conectado
+            if (matchesId || matchesCve) {
+              connectorNodeIdSet.add(vItem.id);
+              edgeIdSet.add(vItem.relId);
+              if (vItem.parentFindingId) {
+                connectorNodeIdSet.add(vItem.parentFindingId);
+              }
+            } else if (!isFindingOrVuln) {
+              // Marcar nodos Software (no Finding/Vuln) siempre que sean de la instalación
+              connectorNodeIdSet.add(vItem.id);
+              edgeIdSet.add(vItem.relId);
+            }
+          });
+        }
+      });
     });
 
     return { pathEdgeIdSet: edgeIdSet, pathConnectorNodeIdSet: connectorNodeIdSet, pathNodeStepMap: nodeStepMap };
