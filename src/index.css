@@ -750,6 +750,45 @@ aside {
   color: var(--c50);
 }
 
+/* Sidebar Filter Select & Input Controls */
+.sidebar-filter-control {
+  background-color: #0d0d1a !important;
+  border: 1px solid var(--line) !important;
+  color: var(--c100) !important;
+  padding: 6px 28px 6px 10px !important;
+  border-radius: 4px !important;
+  font-size: 11px !important;
+  font-family: 'Share Tech Mono', monospace !important;
+  outline: none !important;
+  transition: all 0.2s ease !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237973FF' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 8px center !important;
+  background-size: 12px 12px !important;
+  cursor: pointer !important;
+}
+
+.sidebar-filter-control::-webkit-calendar-picker-indicator {
+  opacity: 0 !important;
+  display: none !important;
+}
+
+.sidebar-filter-control:hover {
+  border-color: var(--c400) !important;
+  box-shadow: 0 0 8px rgba(122, 115, 255, 0.25) !important;
+}
+
+.sidebar-filter-control:focus {
+  border-color: #7973FF !important;
+  box-shadow: 0 0 10px rgba(122, 115, 255, 0.4) !important;
+}
+
+
 /* Sidebar Action Buttons Group */
 .sidebar-action-group {
   display: flex;

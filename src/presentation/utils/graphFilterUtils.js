@@ -12,6 +12,7 @@ export function getGraphFacets(nodes = []) {
   const envMap = {};
   const vendorMap = {};
   const statusMap = {};
+  const networkMap = {};
   const riskMap = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
   let exposedCount = 0;
   let internalCount = 0;
@@ -64,6 +65,17 @@ export function getGraphFacets(nodes = []) {
     if (hasVulns) {
       vulnerableCount++;
     }
+
+    // 7. Redes / Segmentos (para datalist de filtro)
+    const isNetwork = primaryLabel === 'Network' || (n.labels || []).includes('Network') || (n.categoryId || '').toLowerCase() === 'red';
+    if (isNetwork) {
+      const netName = (n.name || props.name || props.nombre || '').trim();
+      const netCidr = (props.cidr || props.rango || props.subnet || '').trim();
+      const netKey = netName || netCidr;
+      if (netKey) {
+        networkMap[netKey] = { name: netName, cidr: netCidr };
+      }
+    }
   });
 
   // Convertir vendors a array ordenado por frecuencia
@@ -71,13 +83,18 @@ export function getGraphFacets(nodes = []) {
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count);
 
+  // Convertir redes a array ordenado por nombre
+  const sortedNetworks = Object.values(networkMap)
+    .sort((a, b) => (a.name || a.cidr || '').localeCompare(b.name || b.cidr || ''));
+
   return {
     environments: envMap,
     vendors: sortedVendors,
     statuses: statusMap,
     riskTiers: riskMap,
     internetExposed: { exposed: exposedCount, internal: internalCount },
-    vulnerableCount
+    vulnerableCount,
+    networks: sortedNetworks
   };
 }
 
@@ -184,6 +201,19 @@ export function isNodeMatchingGraphFilters(node, filterType = 'ALL', searchQuery
       const inPath = props.inExploitationPath === true || props.isPartOfPath === true || entity.inExploitationPath === true;
       if (!inPath) return false;
     }
+    // 8. Red / Segmento de Red
+    if (graphAdvancedFilters.networkSearch && graphAdvancedFilters.networkSearch.trim() !== '') {
+      const netQ = graphAdvancedFilters.networkSearch.toLowerCase().trim();
+      const isNetwork = primaryLabel === 'Network' || labels.includes('Network') || catId === 'red';
+      if (isNetwork) {
+        const netName = String(entity.name || props.name || props.nombre || '').toLowerCase();
+        const netCidr = String(props.cidr || props.rango || props.subnet || '').toLowerCase();
+        if (!netName.includes(netQ) && !netCidr.includes(netQ)) return false;
+      } else {
+        // Para nodos que no son redes: pasar (la propagación se maneja en lineageMaps)
+        return false;
+      }
+    }
   }
 
   return true;
@@ -210,6 +240,48 @@ export function getGraphFilterLineageMaps(nodes = [], relationships = [], filter
     (searchQuery && searchQuery.trim() !== '') ||
     (graphAdvancedFilters && Object.values(graphAdvancedFilters).some(v => v !== 'ALL' && v !== '' && v !== false))
   );
+
+  // Propagación: cuando un nodo Network coincide con el filtro activo (por nombre, CIDR o filterType),
+  // sus vecinos directos (Endpoints, Containers) también se marcan como directMatch para iluminarlos.
+  if (hasActiveFilters && directMatches.size > 0) {
+    const networkFilterActive = Boolean(
+      (filterType && filterType !== 'ALL' && filterType.toLowerCase() === 'network') ||
+      (graphAdvancedFilters?.networkSearch && graphAdvancedFilters.networkSearch.trim() !== '') ||
+      (graphAdvancedFilters?.ipSearch && graphAdvancedFilters.ipSearch.trim() !== '')
+    );
+
+    if (networkFilterActive) {
+      // Construir mapa de adyacencia para propagar
+      const adjMap = new Map();
+      relationships.forEach(r => {
+        const sId = String(typeof r.source === 'object' ? r.source.id : r.source);
+        const tId = String(typeof r.target === 'object' ? r.target.id : r.target);
+        if (!adjMap.has(sId)) adjMap.set(sId, []);
+        if (!adjMap.has(tId)) adjMap.set(tId, []);
+        adjMap.get(sId).push(tId);
+        adjMap.get(tId).push(sId);
+      });
+
+      const toAdd = new Set();
+      directMatches.forEach(nid => {
+        const node = nodeByIdMap.get(nid);
+        if (!node) return;
+        const label = node.primaryLabel || node.labels?.[0] || '';
+        const isNet = label === 'Network' || (node.labels || []).includes('Network') || (node.categoryId || '').toLowerCase() === 'red';
+        if (!isNet) return;
+
+        // Añadir todos los vecinos conectados a esta red como directMatch
+        const neighbors = adjMap.get(nid) || [];
+        neighbors.forEach(neighborId => {
+          if (!directMatches.has(neighborId)) {
+            toAdd.add(neighborId);
+          }
+        });
+      });
+
+      toAdd.forEach(id => directMatches.add(id));
+    }
+  }
 
   const contextMatches = new Set();
 

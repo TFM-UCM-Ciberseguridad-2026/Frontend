@@ -238,20 +238,28 @@ function drawCanvasNodeIcon(ctx, categoryId, primaryLabel, color, size) {
 }
 
 function getNodeDepth(n) {
-  const cat = (n.categoryId || '').toLowerCase();
-  const label = (n.primaryLabel || n.labels?.[0] || '').toLowerCase();
-  const labels = (n.labels || []).map(l => String(l).toLowerCase());
+  const cat = (n.categoryId || '').toLowerCase().trim();
+  const label = (n.primaryLabel || n.labels?.[0] || '').toLowerCase().trim();
+  const labels = (n.labels || []).map(l => String(l).toLowerCase().trim());
 
-  if (cat === 'red' || label === 'network' || labels.includes('network') || labels.includes('subnet')) return 0;
-  if (cat === 'proyecto' || label === 'project' || labels.includes('project')) return 1;
+  if (cat === 'red' || cat === 'network' || label === 'network' || labels.includes('network') || labels.includes('subnet')) return 0;
+  if (cat === 'proyecto' || cat === 'project' || label === 'project' || labels.includes('project')) return 1;
   if (cat === 'endpoint' || label === 'endpoint' || labels.includes('endpoint')) return 2;
-  // Prioridad: ContainerImage debe ser Nivel 4 (evaluado ANTES de Container Nivel 3)
-  if (cat === 'containerimage' || label === 'containerimage' || labels.includes('containerimage')) return 4;
-  if (cat === 'container' || cat === 'contenedor' || label === 'container' || labels.includes('container') || cat === 'instalacion' || label === 'installation' || labels.includes('installation') || labels.includes('softwareinstallation')) return 3;
-  if (cat === 'hardware' || label === 'hardware' || labels.includes('hardware')) return 4;
-  if (cat === 'software' || cat === 'hallazgo' || label === 'software' || label === 'finding' || labels.includes('software') || labels.includes('finding')) return 4;
-  if (cat === 'vulnerabilidad' || cat === 'remediacion' || label === 'vulnerability' || label === 'remediation' || labels.includes('vulnerability') || labels.includes('remediation')) return 5;
+  // IMPORTANTE: ContainerImage debe evaluarse ANTES que Container
+  if (cat.includes('imagen') || cat.includes('image') || label.includes('containerimage') || labels.some(l => l.includes('containerimage'))) return 3.2;
+  if (cat === 'container' || cat === 'contenedor' || label === 'container' || (labels.includes('container') && !labels.some(l => l.includes('containerimage')))) return 3;
+  if (cat === 'instalacion' || cat === 'installation' || cat === 'softwareinstallation' || label === 'installation' || label === 'softwareinstallation' || labels.includes('installation') || labels.includes('softwareinstallation')) return 3.5;
+  if (cat === 'hardware' || label === 'hardware' || labels.includes('hardware') || cat === 'software' || label === 'software' || labels.includes('software')) return 4;
+  if (cat === 'hallazgo' || cat === 'finding' || label === 'finding' || labels.includes('finding')) return 4.5;
+  if (cat === 'vulnerabilidad' || cat === 'remediacion' || cat === 'parche' || label === 'vulnerability' || label === 'remediation' || labels.includes('vulnerability') || labels.includes('remediation')) return 5;
   return 4;
+}
+
+function getCanonicalNodeId(rawId, nodes) {
+  if (!rawId || !nodes) return String(rawId);
+  const targetStr = String(rawId);
+  const found = nodes.find(n => String(n.id) === targetStr || String(n.properties?.id) === targetStr);
+  return found ? String(found.id) : targetStr;
 }
 
 function getHierarchyData(nodes, relationships) {
@@ -268,12 +276,16 @@ function getHierarchyData(nodes, relationships) {
 
   const rels = relationships || [];
   rels.forEach(rel => {
-    const s = String(rel.source);
-    const t = String(rel.target);
+    const s = getCanonicalNodeId(rel.source, nodes);
+    const t = getCanonicalNodeId(rel.target, nodes);
     const dS = depthMap.get(s);
     const dT = depthMap.get(t);
+    if (dS === undefined || dT === undefined) return;
 
-    if (dS !== undefined && dT !== undefined && dS !== 0 && dT !== 0 && dS !== dT) {
+    // Ignorar aristas donde alguno de los nodos es una Red (depth 0)
+    if (dS === 0 || dT === 0) return;
+
+    if (dS !== dT) {
       const parentId = dS < dT ? s : t;
       const childId = dS < dT ? t : s;
       const parentDepth = dS < dT ? dS : dT;
@@ -283,7 +295,30 @@ function getHierarchyData(nodes, relationships) {
         primaryParentMap.set(childId, parentId);
       } else {
         const currentParentDepth = depthMap.get(currentParentId) || 0;
+        // Preferir el padre real con mayor profundidad (más cercano al nodo hijo)
         if (parentDepth > currentParentDepth) {
+          primaryParentMap.set(childId, parentId);
+        }
+      }
+    }
+  });
+
+  // Pasada de protección: si un nodo Finding/Vulnerability/Software/ContainerImage quedó apuntando a Project (depth 1)
+  // pero tiene una conexión a un Endpoint/Container/Installation (depth >= 2), forzar la reasignación
+  // a ese Endpoint/Container para garantizar que se colapse al plegar el Endpoint.
+  rels.forEach(rel => {
+    const s = getCanonicalNodeId(rel.source, nodes);
+    const t = getCanonicalNodeId(rel.target, nodes);
+    const dS = depthMap.get(s) || 0;
+    const dT = depthMap.get(t) || 0;
+
+    if (dS >= 2 && dT >= 2 && dS !== dT) {
+      const parentId = dS < dT ? s : t;
+      const childId = dS < dT ? t : s;
+      const currentParentId = primaryParentMap.get(childId);
+      if (currentParentId) {
+        const currentParentDepth = depthMap.get(currentParentId) || 0;
+        if (currentParentDepth === 1) { // Si apuntaba a Project
           primaryParentMap.set(childId, parentId);
         }
       }
@@ -467,24 +502,30 @@ export function NetworkGraph({
     });
 
     const hiddenSubtreeNodeIds = new Set();
-    const queue = [...decomEndpointIds];
-    const visited = new Set(decomEndpointIds);
+    const collapsedArray = Array.from(collapsedNodeIds);
+    const queue = [...decomEndpointIds, ...collapsedArray];
+    const visited = new Set([...decomEndpointIds, ...collapsedArray]);
 
     while (queue.length > 0) {
       const currId = queue.shift();
+      const currNode = nodeMap.get(currId);
+      const currDepth = currNode ? getNodeDepth(currNode) : 0;
       const neighbors = adj.get(currId) || [];
 
       for (const nbrId of neighbors) {
         if (!visited.has(nbrId)) {
           const nbrNode = nodeMap.get(nbrId);
           if (nbrNode) {
+            const nbrDepth = getNodeDepth(nbrNode);
             const label = nbrNode.primaryLabel || nbrNode.labels?.[0] || '';
             const labels = nbrNode.labels || [];
             const isNet = label === 'Network' || labels.includes('Network');
             const isProj = label === 'Project' || labels.includes('Project');
             const isOtherEp = label === 'Endpoint' || labels.includes('Endpoint');
 
-            if (!isNet && !isProj && !isOtherEp) {
+            // CRÍTICO: Solamente recorrer hacia abajo en profundidad (nbrDepth > currDepth)
+            // para evitar que la semilla de un hijo oculto elimine al padre (Container) al desplegar.
+            if (!isNet && !isProj && !isOtherEp && nbrDepth > currDepth) {
               visited.add(nbrId);
               hiddenSubtreeNodeIds.add(nbrId);
               queue.push(nbrId);
@@ -905,22 +946,118 @@ export function NetworkGraph({
       }
     }
 
+    // Marcar ÚNICAMENTE el software, el hallazgo y la vulnerabilidad ESPECÍFICOS explotados en cada etapa
     (selectedExploitationPath.steps || []).forEach((step) => {
+      if (!step) return;
       const tId = step.is_container ? step.container_id : step.targetEndpointId;
       const tName = step.is_container ? step.container_name : step.targetEndpoint;
       const stepNode = findNodeForHostOrId(tName, tId);
       if (!stepNode) return;
 
-      let findingRefs = getStepFindingRefs(step);
-      if (findingRefs.length === 0 && step.vulnerability) {
-        findingRefs = [{ id: null, cve_id: step.vulnerability, title: step.vulnerability }];
-      }
+      const stepNodeId = getCanonicalNodeId(stepNode.id, graphData.nodes);
+      const stepCve = String(step.vulnerability || step.cve_id || '').toLowerCase().trim();
+      const stepSw = String(step.software_affected || '').toLowerCase().trim();
+      const stepFId = String(step.finding_id || '').trim();
 
-      findingRefs.forEach((findingRef) => {
-        let findingNode = findFindingNode(findingRef);
-        if (!findingNode) return;
-        connectorNodeIdSet.add(String(findingNode.id));
+      const nodes = graphData.nodes || [];
+      const rels = graphData.relationships || [];
+
+      // 1. Obtener todas las instalaciones o imágenes conectadas a este equipo host
+      const hostInstallations = [];
+      rels.forEach(r => {
+        const s = getCanonicalNodeId(r.source, nodes);
+        const t = getCanonicalNodeId(r.target, nodes);
+        if (s === stepNodeId || t === stepNodeId) {
+          const otherId = s === stepNodeId ? t : s;
+          const otherNode = nodes.find(n => getCanonicalNodeId(n.id, nodes) === otherId);
+          if (otherNode) {
+            const cat = (otherNode.primaryLabel || otherNode.labels?.[0] || '').toLowerCase();
+            if (['softwareinstallation', 'installation', 'containerimage'].includes(cat) || (otherNode.labels || []).some(l => ['SoftwareInstallation', 'Installation', 'ContainerImage'].includes(l))) {
+              hostInstallations.push({ node: otherNode, id: otherId, relId: r.id });
+            }
+          }
+        }
       });
+
+      // 2. Para cada instalación del host, buscar sus Hallazgos / Vulnerabilidades / Software conectados
+      let bestInstallation = null;
+      let maxScore = -1;
+
+      hostInstallations.forEach(item => {
+        const siId = item.id;
+        const siNode = item.node;
+        const siName = String(siNode.name || siNode.properties?.name || siNode.properties?.software_name || '').toLowerCase();
+
+        // Buscar hallazgos o vulnerabilidades conectados a esta instalación
+        const connectedVulnNodes = [];
+        rels.forEach(r => {
+          const s = getCanonicalNodeId(r.source, nodes);
+          const t = getCanonicalNodeId(r.target, nodes);
+          if (s === siId || t === siId) {
+            const vId = s === siId ? t : s;
+            const vNode = nodes.find(n => getCanonicalNodeId(n.id, nodes) === vId);
+            if (vNode) {
+              const vCat = (vNode.primaryLabel || vNode.labels?.[0] || '').toLowerCase();
+              if (['finding', 'vulnerability', 'software'].includes(vCat) || (vNode.labels || []).some(l => ['Finding', 'Vulnerability', 'Software'].includes(l))) {
+                connectedVulnNodes.push({ node: vNode, id: vId, relId: r.id });
+              }
+            }
+          }
+        });
+
+        // Comprobar coincidencia con la etapa
+        let score = 0;
+        let hasFindingMatch = false;
+
+        connectedVulnNodes.forEach(vItem => {
+          const vName = String(vItem.node.name || vItem.node.properties?.name || vItem.node.properties?.title || '').toLowerCase();
+          const vCve = String(vItem.node.properties?.cve_id || vItem.node.properties?.cve || vItem.node.name || '').toLowerCase();
+          const vFId = String(vItem.node.id);
+          const vPropId = String(vItem.node.properties?.id || '');
+
+          const matchesId = stepFId && (vFId === stepFId || vPropId === stepFId || vFId.endsWith(':' + stepFId) || stepFId.endsWith(':' + vPropId));
+          const matchesCve = stepCve && (vCve.includes(stepCve) || vName.includes(stepCve));
+
+          if (matchesId) { score += 100; hasFindingMatch = true; }
+          if (matchesCve) { score += 50; hasFindingMatch = true; }
+          if (stepSw && (siName.includes(stepSw) || vName.includes(stepSw))) score += 30;
+        });
+
+        // Solo considerar la instalación como el destino explotado si tiene un finding/CVE que coincide con el paso
+        if (hasFindingMatch && score > maxScore) {
+          maxScore = score;
+          bestInstallation = { ...item, vulnNodes: connectedVulnNodes };
+        }
+      });
+
+      // 3. Si se encontró la instalación correspondiente al paso, marcarla junto con el finding/vuln exacto
+      if (bestInstallation) {
+        connectorNodeIdSet.add(bestInstallation.id);
+        edgeIdSet.add(bestInstallation.relId);
+
+        // Solo añadir el finding/vuln que realmente coincide con el paso (no todos los conectados)
+        bestInstallation.vulnNodes.forEach(vItem => {
+          const vName = String(vItem.node.name || vItem.node.properties?.name || vItem.node.properties?.title || '').toLowerCase();
+          const vCve = String(vItem.node.properties?.cve_id || vItem.node.properties?.cve || vItem.node.name || '').toLowerCase();
+          const vFId = String(vItem.node.id);
+          const vPropId = String(vItem.node.properties?.id || '');
+
+          const matchesId = stepFId && (vFId === stepFId || vPropId === stepFId || vFId.endsWith(':' + stepFId) || stepFId.endsWith(':' + vPropId));
+          const matchesCve = stepCve && (vCve.includes(stepCve) || vName.includes(stepCve));
+          const isFindingOrVuln = vItem.node.primaryLabel === 'Finding' || vItem.node.primaryLabel === 'Vulnerability' ||
+            (vItem.node.labels || []).some(l => l === 'Finding' || l === 'Vulnerability');
+
+          // Solo marcar si coincide exactamente con el paso, o si es el único finding conectado
+          if (matchesId || matchesCve) {
+            connectorNodeIdSet.add(vItem.id);
+            edgeIdSet.add(vItem.relId);
+          } else if (!isFindingOrVuln) {
+            // Marcar nodos Software (no Finding/Vuln) siempre que sean de la instalación
+            connectorNodeIdSet.add(vItem.id);
+            edgeIdSet.add(vItem.relId);
+          }
+        });
+      }
     });
 
     return { pathEdgeIdSet: edgeIdSet, pathConnectorNodeIdSet: connectorNodeIdSet, pathNodeStepMap: nodeStepMap };
@@ -1053,13 +1190,30 @@ export function NetworkGraph({
           }
 
           if (layoutMode === 'stix') {
-            const isRoot = node.entity.primaryLabel === 'Project' || node.entity.categoryId === 'proyecto';
-            if (isRoot) {
-              node.fx += (WORLD_CENTER_X - node.x) * 0.15;
-              node.fy += (WORLD_CENTER_Y - node.y) * 0.15;
+            // Grafo STIX: gravedad radial por profundidad de nodo (mismos niveles que Árbol)
+            const depth = getNodeDepth(node.entity);
+            let targetRadius;
+            if (depth === 1) targetRadius = 0;        // PROYECTO → centro
+            else if (depth === 2) targetRadius = 190; // ENDPOINTS
+            else if (depth >= 3 && depth < 4) targetRadius = 330; // INSTALACIONES Y CONTENEDORES
+            else if (depth >= 4 && depth < 5) targetRadius = 480; // SOFTWARE, HALLAZGOS Y HARDWARE
+            else if (depth >= 5) targetRadius = 600;  // VULNERABILIDADES Y REMEDIACIONES
+            else targetRadius = 720;                  // REDES Y SEGMENTOS (depth 0)
+
+            const dx = node.x - WORLD_CENTER_X;
+            const dy = node.y - WORLD_CENTER_Y;
+            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+
+            if (targetRadius === 0) {
+              // Nodo raíz (Project): anclar al centro
+              node.fx += (WORLD_CENTER_X - node.x) * 0.25;
+              node.fy += (WORLD_CENTER_Y - node.y) * 0.25;
             } else {
-              node.fx += (WORLD_CENTER_X - node.x) * 0.005;
-              node.fy += (WORLD_CENTER_Y - node.y) * 0.005;
+              // Atraer hacia el radio objetivo manteniendo la dirección actual
+              const targetX = WORLD_CENTER_X + (dx / dist) * targetRadius;
+              const targetY = WORLD_CENTER_Y + (dy / dist) * targetRadius;
+              node.fx += (targetX - node.x) * 0.08;
+              node.fy += (targetY - node.y) * 0.08;
             }
           } else if (layoutMode === 'tree') {
             const targetX = node.treeX !== undefined ? node.treeX : WORLD_CENTER_X;
@@ -1155,6 +1309,42 @@ export function NetworkGraph({
         ctx.restore();
       }
 
+      // Renderizar Anillos Concéntricos en Modo STIX (Radios idénticos a las físicas)
+      if (layoutMode === 'stix') {
+        const stixRings = [
+          { radius: 190, label: 'NIVEL 2 · ENDPOINTS',                        color: 'rgba(255, 255, 255, 0.04)', stroke: 'rgba(255, 255, 255, 0.2)' },
+          { radius: 330, label: 'NIVEL 3 · INSTALACIONES Y CONTENEDORES',      color: 'rgba(13, 183, 237, 0.05)',  stroke: 'rgba(13, 183, 237, 0.25)' },
+          { radius: 480, label: 'NIVEL 4 · SOFTWARE, HALLAZGOS Y HARDWARE',    color: 'rgba(245, 158, 11, 0.05)',  stroke: 'rgba(245, 158, 11, 0.25)' },
+          { radius: 600, label: 'NIVEL 5 · VULNERABILIDADES Y REMEDIACIONES',  color: 'rgba(239, 68, 68, 0.06)',   stroke: 'rgba(239, 68, 68, 0.3)' },
+          { radius: 720, label: 'NIVEL 0 · REDES Y SEGMENTOS',                color: 'rgba(121, 115, 255, 0.06)', stroke: 'rgba(121, 115, 255, 0.25)' }
+        ];
+
+        ctx.save();
+        ctx.font = 'bold 8px Orbitron, monospace';
+        stixRings.forEach(ring => {
+          // Relleno semitransparente del anillo
+          ctx.beginPath();
+          ctx.arc(WORLD_CENTER_X, WORLD_CENTER_Y, ring.radius, 0, Math.PI * 2);
+          ctx.fillStyle = ring.color;
+          ctx.fill();
+
+          // Borde del anillo
+          ctx.beginPath();
+          ctx.arc(WORLD_CENTER_X, WORLD_CENTER_Y, ring.radius, 0, Math.PI * 2);
+          ctx.strokeStyle = ring.stroke;
+          ctx.lineWidth = 1;
+          ctx.setLineDash([4, 4]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // Etiqueta del nivel radial
+          ctx.fillStyle = ring.stroke;
+          ctx.textAlign = 'center';
+          ctx.fillText(ring.label, WORLD_CENTER_X, WORLD_CENTER_Y - ring.radius + 10);
+        });
+        ctx.restore();
+      }
+
       const pathActive = Boolean(selectedExploitationPath);
 
       // Renderizar Enlaces (Edges) en Canvas
@@ -1238,8 +1428,9 @@ export function NetworkGraph({
 
         const isSelected = selectedNode && selectedNode.id === node.id;
         const isDecom = node.isDecom || isDecommissionedEndpoint(node.entity);
-        const isNodeInPath = pathConnectorNodeIdSet.has(node.id);
-        const stepNumber = pathNodeStepMap.get(node.id);
+        const nodeIdStr2 = String(node.id);
+        const isNodeInPath = pathConnectorNodeIdSet.has(nodeIdStr2) || pathNodeStepMap.has(nodeIdStr2);
+        const stepNumber = pathNodeStepMap.get(nodeIdStr2);
         const isStepNode = stepNumber !== undefined;
 
         const pathDimmedNode = pathActive && !isNodeInPath;
@@ -1508,7 +1699,6 @@ export function NetworkGraph({
 
   // Manejo de Interacción: Mouse Down (Drag Node / Pan Canvas / Click)
   const handleMouseDown = (e) => {
-    e.preventDefault();
     const { x: wx, y: wy } = screenToWorld(e.clientX, e.clientY);
     const nodes = nodesRef.current;
 
@@ -1737,8 +1927,8 @@ export function NetworkGraph({
     }
   };
 
-  // Zoom con rueda del ratón
-  const handleWheel = (e) => {
+  // Zoom con rueda del ratón - se registra con passive:false via useEffect
+  const handleWheel = useCallback((e) => {
     e.preventDefault();
     const p = screenToWorld(e.clientX, e.clientY);
     const zoomFactor = e.deltaY > 0 ? 1.08 : 0.92;
@@ -1755,7 +1945,15 @@ export function NetworkGraph({
         h: newH
       };
     });
-  };
+  }, [screenToWorld]);
+
+  // Registrar el listener de rueda con passive:false para poder llamar preventDefault()
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', handleWheel);
+  }, [handleWheel]);
 
   const handleDoubleClick = (e) => {
     const { x: wx, y: wy } = screenToWorld(e.clientX, e.clientY);
@@ -1838,7 +2036,6 @@ export function NetworkGraph({
         style={{ width: '100%', height: '100%', display: 'block', cursor: 'grab' }}
         onMouseDown={handleMouseDown}
         onDoubleClick={handleDoubleClick}
-        onWheel={handleWheel}
       />
 
       <div className="corner-widget cw-tl">
