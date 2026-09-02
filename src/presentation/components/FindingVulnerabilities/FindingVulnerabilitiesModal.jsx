@@ -27,6 +27,22 @@ export function FindingVulnerabilitiesModal({
 
   const findingLabel = findingVulnsSourceNode?.name || 'Finding';
 
+  const displayVulns = (findingVulnsData && findingVulnsData.length > 0) ? findingVulnsData : (() => {
+    const props = findingVulnsSourceNode?.properties || {};
+    const cveId = props.cve_id || props.cve || (findingVulnsSourceNode?.name && String(findingVulnsSourceNode.name).toUpperCase().startsWith('CVE') ? findingVulnsSourceNode.name : null);
+    if (cveId) {
+      return [{
+        cveId: String(cveId),
+        baseScore: Number(props.risk_score || props.cvss || 7.5),
+        description: props.title || props.description || `Vulnerabilidad identificada en el hallazgo (${cveId}).`,
+        kev: Boolean(props.kev || props.exploitable),
+        exploit: Boolean(props.has_exploit || props.exploit),
+        cvssVector: props.cvss_vector || props.vector || ''
+      }];
+    }
+    return [];
+  })();
+
   return (
     <div
       className="apt-panel-overlay"
@@ -66,13 +82,13 @@ export function FindingVulnerabilitiesModal({
             </div>
           )}
 
-          {!findingVulnsLoading && !findingVulnsError && findingVulnsData.length === 0 && (
+          {!findingVulnsLoading && !findingVulnsError && displayVulns.length === 0 && (
             <div className="apt-panel-empty">
               <p>No hay CVEs registrados para este hallazgo.</p>
             </div>
           )}
 
-          {!findingVulnsLoading && !findingVulnsError && findingVulnsData.map((vuln, idx) => (
+          {!findingVulnsLoading && !findingVulnsError && displayVulns.map((vuln, idx) => (
             <div key={vuln.cveId || idx} className={`path-card ${getScoreTierClass(vuln.baseScore)}`}>
               <div className="path-card-header">
                 <div className="path-title-group">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { RiskSummary } from '../Risk/RiskSummary';
 import { EditNodeModal } from './EditNodeModal';
 import { DeleteNodeModal } from './DeleteNodeModal';
@@ -99,48 +99,59 @@ export function NodeInspector({
     return [];
   }, [selectedNode]);
 
+  // Calcula el conjunto de IDs de findings que pertenecen a la ruta activa
+  const pathFindingKeys = useMemo(() => {
+    const keys = { ids: new Set(), cves: new Set() };
+    if (!selectedExploitationPath?.steps) return keys;
+    selectedExploitationPath.steps.forEach(step => {
+      if (!step) return;
+      if (step.finding_id) keys.ids.add(String(step.finding_id).trim());
+      if (step.vulnerability) keys.cves.add(String(step.vulnerability).trim().toLowerCase());
+      if (Array.isArray(step.finding_ids)) step.finding_ids.forEach(id => keys.ids.add(String(id).trim()));
+      if (Array.isArray(step.findings)) {
+        step.findings.forEach(f => {
+          if (f.id) keys.ids.add(String(f.id).trim());
+          if (f.cve_id) keys.cves.add(String(f.cve_id).trim().toLowerCase());
+        });
+      }
+    });
+    return keys;
+  }, [selectedExploitationPath]);
+
+  // Determina si un finding pertenece a la ruta activa
+  const isInPath = useCallback((f) => {
+    if (!pathFindingKeys.ids.size && !pathFindingKeys.cves.size) return false;
+    const fId = String(f.id || f.properties?.id || '').trim();
+    const fCve = String(f.properties?.cve_id || f.properties?.cve || f.name || '').trim().toLowerCase();
+    const fTitle = String(f.properties?.title || f.name || '').toLowerCase();
+
+    const matchId = Array.from(pathFindingKeys.ids).some(pid =>
+      pid && (fId === pid || fId.endsWith(':' + pid) || pid.endsWith(':' + fId))
+    );
+    const matchCve = Array.from(pathFindingKeys.cves).some(pcve =>
+      pcve && (fCve === pcve || fCve.includes(pcve) || fTitle.includes(pcve))
+    );
+    return matchId || matchCve;
+  }, [pathFindingKeys]);
+
   const sortedFindings = useMemo(() => {
     if (findingsList.length === 0) return [];
-    return [...findingsList].sort((a, b) => {
-      const rA = Number(a.properties?.risk_score || 0);
-      const rB = Number(b.properties?.risk_score || 0);
-      return rB - rA;
+    const inPath = [];
+    const outPath = [];
+    findingsList.forEach(f => {
+      if (isInPath(f)) inPath.push(f);
+      else outPath.push(f);
     });
-  }, [findingsList]);
+    // Sort each group by risk_score DESC
+    const byRisk = (a, b) => Number(b.properties?.risk_score || 0) - Number(a.properties?.risk_score || 0);
+    return [...inPath.sort(byRisk), ...outPath.sort(byRisk)];
+  }, [findingsList, isInPath]);
 
   const targetPathFindingId = useMemo(() => {
     if (!selectedExploitationPath?.steps || sortedFindings.length === 0) return null;
-
-    for (const step of selectedExploitationPath.steps) {
-      if (!step) continue;
-      const sFindingId = String(step.finding_id || '').trim();
-      const sVuln = String(step.vulnerability || '').trim().toLowerCase();
-
-      for (const f of sortedFindings) {
-        const fNodeId = String(f.id || '').trim();
-        const fPropId = String(f.properties?.id ?? '').trim();
-        const fCveId = String(f.properties?.cve_id || f.properties?.cve || '').trim().toLowerCase();
-
-        const isIdMatch = Boolean(
-          sFindingId && (
-            fNodeId === sFindingId ||
-            fPropId === sFindingId ||
-            fNodeId.endsWith(':' + sFindingId) ||
-            sFindingId.endsWith(':' + fNodeId) ||
-            sFindingId.endsWith(':' + fPropId)
-          )
-        );
-
-        const isCveMatch = Boolean(sVuln && fCveId && (fCveId === sVuln || fCveId.includes(sVuln)));
-
-        if (isIdMatch || isCveMatch) {
-          return String(f.properties?.id ?? f.id);
-        }
-      }
-    }
-
-    return null;
-  }, [selectedExploitationPath, sortedFindings]);
+    const found = sortedFindings.find(f => isInPath(f));
+    return found ? String(found.properties?.id ?? found.id) : null;
+  }, [selectedExploitationPath, sortedFindings, isInPath]);
 
   useEffect(() => {
     setShowEditModal(false);
@@ -246,19 +257,30 @@ export function NodeInspector({
               const props = finding.properties || {};
               const rawId = props.id ?? finding.id ?? index;
               const fId = String(rawId);
+              const inPath = isInPath(finding);
+              // Solo muestra la CVE de la ruta en el finding que realmente pertenece a ella
+              const pathCve = inPath
+                ? (selectedExploitationPath?.steps?.find(s => {
+                    const sc = String(s.vulnerability || '').toLowerCase();
+                    const fc = String(props.cve_id || props.cve || finding.name || '').toLowerCase();
+                    return sc && fc && (sc === fc || fc.includes(sc));
+                  })?.vulnerability
+                  || selectedExploitationPath?.steps?.[0]?.vulnerability
+                  || '')
+                : '';
+              const cveId = props.cve_id || props.cve || pathCve || '';
               const titleName = props.title || finding.name || `Finding #${fId}`;
               const isExpanded = expandedFindingId === fId;
-              const isPathTarget = targetPathFindingId === fId;
+              const isPathTarget = targetPathFindingId === fId || (inPath && Boolean(targetPathFindingId === null));
               const hasVulns = Boolean(
                 props.has_vulnerabilities ||
-                finding.hasVuln
+                finding.hasVuln ||
+                cveId
               );
 
               const riskPct = toPercent(props.risk_score) ?? 0;
               const badgeClass = getRiskBadgeClass(props.risk_score, props.risk_tier);
-
               const findingPatchState = getFindingPatchState(props);
-
 
               return (
                 <div key={fId} className={`finding-accordion-card ${findingPatchState.className} ${isPathTarget ? 'is-path-target' : ''}`}>
@@ -268,6 +290,11 @@ export function NodeInspector({
                   >
                     <div className="finding-accordion-main">
                       <span className="finding-accordion-title">
+                        {cveId ? (
+                          <span className="cve-chip" style={{ marginRight: '6px', background: 'rgba(239,68,68,0.2)', color: '#f87171', border: '1px solid rgba(239,68,68,0.4)', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
+                            {cveId}
+                          </span>
+                        ) : null}
                         {titleName}
                       </span>
                       <span

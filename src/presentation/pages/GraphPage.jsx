@@ -91,6 +91,7 @@ export function GraphPage({
           graphData={graphData}
           filterType={filterType}
           searchQuery={searchQuery}
+          graphAdvancedFilters={graphAdvancedFilters}
           loading={loading}
           error={error}
           selectedNode={selectedNode}
