@@ -1,5 +1,5 @@
 export class InfrastructureRepository {
-  async getInfrastructure() {
+  async getInfrastructure(projectId) {
     throw new Error('Method getInfrastructure not implemented');
   }
 

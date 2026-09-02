@@ -1,6 +1,7 @@
 export class InfrastructureApiDataSource {
-  async fetchInfrastructure() {
-    const res = await fetch('/api/infrastructure');
+  async fetchInfrastructure(projectId) {
+    const url = projectId ? `/api/infrastructure?project_id=${projectId}` : '/api/infrastructure';
+    const res = await fetch(url);
     return await this._handleResponse(res);
   }
 

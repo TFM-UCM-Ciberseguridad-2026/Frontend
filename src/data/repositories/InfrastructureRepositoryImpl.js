@@ -10,8 +10,8 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     this.apiDataSource = apiDataSource;
   }
 
-  async getInfrastructure() {
-    const rawData = await this.apiDataSource.fetchInfrastructure();
+  async getInfrastructure(projectId) {
+    const rawData = await this.apiDataSource.fetchInfrastructure(projectId);
     const nodes = (rawData.nodes || []).map(n => new Node(n));
     const relationships = rawData.relationships || [];
     return { nodes, relationships };

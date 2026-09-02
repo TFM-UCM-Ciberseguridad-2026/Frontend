@@ -3,7 +3,7 @@ export class GetInfrastructureUseCase {
     this.infrastructureRepository = infrastructureRepository;
   }
 
-  async execute() {
-    return await this.infrastructureRepository.getInfrastructure();
+  async execute(projectId) {
+    return await this.infrastructureRepository.getInfrastructure(projectId);
   }
 }
