@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import { getGraphFacets } from '../../utils/graphFilterUtils';
 
 export function GraphFilterSidebar({
   graphData,
@@ -25,6 +26,9 @@ export function GraphFilterSidebar({
     advanced: true
   });
 
+  // Facetas dinámicas y contadores calculados en tiempo real a partir del grafo
+  const facets = useMemo(() => getGraphFacets(graphData?.nodes || []), [graphData]);
+
   const toggleSection = (sectionKey) => {
     setOpenSections(prev => ({
       ...prev,
@@ -36,20 +40,21 @@ export function GraphFilterSidebar({
   const activeAdvancedCount = [
     graphAdvancedFilters.ipSearch?.trim(),
     graphAdvancedFilters.vendorSearch?.trim(),
+    graphAdvancedFilters.networkSearch?.trim(),
     graphAdvancedFilters.environment !== 'ALL' ? graphAdvancedFilters.environment : null,
     graphAdvancedFilters.internetExposed !== 'ALL' ? graphAdvancedFilters.internetExposed : null,
     graphAdvancedFilters.status !== 'ALL' ? graphAdvancedFilters.status : null,
-    graphAdvancedFilters.riskTier !== 'ALL' ? graphAdvancedFilters.riskTier : null
+    graphAdvancedFilters.riskTier !== 'ALL' ? graphAdvancedFilters.riskTier : null,
+    graphAdvancedFilters.onlyVulnerable ? true : null
   ].filter(Boolean).length;
 
   const activeFilterCount = (filterType !== 'ALL' ? 1 : 0) + (searchQuery.trim() !== '' ? 1 : 0) + activeAdvancedCount;
 
   const handleResetFilters = () => {
+    setFilterType('ALL');
+    setSearchQuery('');
     if (clearGraphAdvancedFilters) {
       clearGraphAdvancedFilters();
-    } else {
-      setFilterType('ALL');
-      setSearchQuery('');
     }
   };
 
@@ -284,149 +289,144 @@ export function GraphFilterSidebar({
           </button>
 
           {openSections.advanced && (
-            <div className="accordion-content" style={{ padding: '10px 4px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div className="accordion-content" style={{ padding: '10px 4px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
               
+              {/* Filtro: Solo Vulnerables */}
+              <label style={{ fontSize: '11px', color: 'var(--c200)', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={Boolean(graphAdvancedFilters.onlyVulnerable)}
+                  onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('onlyVulnerable', e.target.checked)}
+                  style={{ accentColor: '#ef4444', cursor: 'pointer' }}
+                />
+                <span>Solo vulnerables / hallazgos {facets.vulnerableCount > 0 && `(${facets.vulnerableCount})`}</span>
+              </label>
+
               {/* A. EXPOSICIÓN A INTERNET */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
                   Exposición a Internet:
                 </label>
                 <select
+                  className="sidebar-filter-control"
                   value={graphAdvancedFilters.internetExposed || 'ALL'}
                   onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('internetExposed', e.target.value)}
-                  style={{
-                    background: '#0d0d1a',
-                    border: '1px solid var(--line)',
-                    color: 'var(--c100)',
-                    padding: '5px 8px',
-                    borderRadius: '4px',
-                    fontSize: '11px',
-                    fontFamily: 'Share Tech Mono, monospace'
-                  }}
                 >
-                  <option value="ALL">Todos los activos</option>
-                  <option value="TRUE">☁ Solo Expuestos</option>
-                  <option value="FALSE">🔒 Solo Internos</option>
+                  <option value="ALL">Todos los activos ({totalNodes})</option>
+                  <option value="TRUE">Solo Expuestos ({facets.internetExposed.exposed})</option>
+                  <option value="FALSE">Solo Internos ({facets.internetExposed.internal})</option>
                 </select>
               </div>
 
-              {/* B. ENTORNO */}
+              {/* B. ENTORNO DINÁMICO */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
                   Entorno de Despliegue:
                 </label>
                 <select
+                  className="sidebar-filter-control"
                   value={graphAdvancedFilters.environment || 'ALL'}
                   onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('environment', e.target.value)}
-                  style={{
-                    background: '#0d0d1a',
-                    border: '1px solid var(--line)',
-                    color: 'var(--c100)',
-                    padding: '5px 8px',
-                    borderRadius: '4px',
-                    fontSize: '11px',
-                    fontFamily: 'Share Tech Mono, monospace'
-                  }}
                 >
                   <option value="ALL">Todos los entornos</option>
-                  <option value="production">Production</option>
-                  <option value="development">Development</option>
-                  <option value="staging">Staging</option>
+                  {Object.entries(facets.environments).map(([envKey, count]) => (
+                    <option key={envKey} value={envKey}>
+                      {envKey} ({count})
+                    </option>
+                  ))}
+                  {Object.keys(facets.environments).length === 0 && (
+                    <>
+                      <option value="production">production</option>
+                      <option value="development">development</option>
+                      <option value="staging">staging</option>
+                    </>
+                  )}
                 </select>
               </div>
 
-              {/* C. DIRECCIÓN IP / SUBRED */}
+              {/* C. DIRECCIÓN IP / SUBRED / RED CON SUGERENCIAS DE DATALIST */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
                   IP / Subred (CIDR):
                 </label>
                 <input
                   type="text"
-                  placeholder="Ej. 192.168.1..."
+                  list="network-ip-suggestions"
+                  className="sidebar-filter-control"
+                  placeholder="Ej. 192.168.1..., 10.0.1.0/24..."
                   value={graphAdvancedFilters.ipSearch || ''}
                   onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('ipSearch', e.target.value)}
-                  style={{
-                    background: '#0d0d1a',
-                    border: '1px solid var(--line)',
-                    color: 'var(--c100)',
-                    padding: '5px 8px',
-                    borderRadius: '4px',
-                    fontSize: '11px',
-                    fontFamily: 'Share Tech Mono, monospace'
-                  }}
                 />
+                <datalist id="network-ip-suggestions">
+                  {(facets.networks || []).map(net => (
+                    <option key={net.name || net.cidr} value={net.cidr || net.name}>
+                      {net.name}{net.cidr && net.name ? ` (${net.cidr})` : net.cidr}
+                    </option>
+                  ))}
+                </datalist>
               </div>
 
-              {/* D. PROVEEDOR / VENDOR */}
+              {/* D. PROVEEDOR / VENDOR CON SUGERENCIAS DE DATALIST */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
                   Proveedor / Vendor:
                 </label>
                 <input
                   type="text"
+                  list="vendor-suggestions"
+                  className="sidebar-filter-control"
                   placeholder="Ej. Apache, Cisco..."
                   value={graphAdvancedFilters.vendorSearch || ''}
                   onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('vendorSearch', e.target.value)}
-                  style={{
-                    background: '#0d0d1a',
-                    border: '1px solid var(--line)',
-                    color: 'var(--c100)',
-                    padding: '5px 8px',
-                    borderRadius: '4px',
-                    fontSize: '11px',
-                    fontFamily: 'Share Tech Mono, monospace'
-                  }}
                 />
+                <datalist id="vendor-suggestions">
+                  {facets.vendors.map(v => (
+                    <option key={v.name} value={v.name}>{v.name} ({v.count})</option>
+                  ))}
+                </datalist>
               </div>
 
-              {/* E. ESTADO */}
+              {/* E. ESTADO DINÁMICO */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
                   Estado de Ejecución:
                 </label>
                 <select
+                  className="sidebar-filter-control"
                   value={graphAdvancedFilters.status || 'ALL'}
                   onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('status', e.target.value)}
-                  style={{
-                    background: '#0d0d1a',
-                    border: '1px solid var(--line)',
-                    color: 'var(--c100)',
-                    padding: '5px 8px',
-                    borderRadius: '4px',
-                    fontSize: '11px',
-                    fontFamily: 'Share Tech Mono, monospace'
-                  }}
                 >
                   <option value="ALL">Todos los estados</option>
-                  <option value="running">Running</option>
-                  <option value="stopped">Stopped</option>
-                  <option value="active">Active</option>
+                  {Object.entries(facets.statuses).map(([stKey, count]) => (
+                    <option key={stKey} value={stKey}>
+                      {stKey} ({count})
+                    </option>
+                  ))}
+                  {Object.keys(facets.statuses).length === 0 && (
+                    <>
+                      <option value="running">running</option>
+                      <option value="stopped">stopped</option>
+                      <option value="active">active</option>
+                    </>
+                  )}
                 </select>
               </div>
 
-              {/* F. NIVEL DE RIESGO */}
+              {/* F. NIVEL DE RIESGO CON CONTADORES DINÁMICOS */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
                   Nivel de Riesgo:
                 </label>
                 <select
+                  className="sidebar-filter-control"
                   value={graphAdvancedFilters.riskTier || 'ALL'}
                   onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('riskTier', e.target.value)}
-                  style={{
-                    background: '#0d0d1a',
-                    border: '1px solid var(--line)',
-                    color: 'var(--c100)',
-                    padding: '5px 8px',
-                    borderRadius: '4px',
-                    fontSize: '11px',
-                    fontFamily: 'Share Tech Mono, monospace'
-                  }}
                 >
                   <option value="ALL">Todos los niveles</option>
-                  <option value="CRITICAL">Critical</option>
-                  <option value="HIGH">High</option>
-                  <option value="MEDIUM">Medium</option>
-                  <option value="LOW">Low</option>
+                  <option value="CRITICAL">CRITICAL ({facets.riskTiers.CRITICAL || 0})</option>
+                  <option value="HIGH">HIGH ({facets.riskTiers.HIGH || 0})</option>
+                  <option value="MEDIUM">MEDIUM ({facets.riskTiers.MEDIUM || 0})</option>
+                  <option value="LOW">LOW ({facets.riskTiers.LOW || 0})</option>
                 </select>
               </div>
 

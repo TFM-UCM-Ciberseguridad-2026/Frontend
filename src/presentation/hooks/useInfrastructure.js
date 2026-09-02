@@ -64,9 +64,13 @@ export function useInfrastructure() {
     environment: 'ALL',
     internetExposed: 'ALL',
     status: 'ALL',
-    riskTier: 'ALL'
+    riskTier: 'ALL',
+    includeAncestors: false,
+    onlyVulnerable: false,
+    inExploitationPath: false
   });
   const [selectedProjectId, setSelectedProjectId] = useState(null);
+  const [projects, setProjects] = useState([]);
 
   const updateGraphAdvancedFilter = (key, value) => {
     setGraphAdvancedFilters(prev => ({
@@ -82,7 +86,10 @@ export function useInfrastructure() {
       environment: 'ALL',
       internetExposed: 'ALL',
       status: 'ALL',
-      riskTier: 'ALL'
+      riskTier: 'ALL',
+      includeAncestors: false,
+      onlyVulnerable: false,
+      inExploitationPath: false
     });
     setSearchQuery('');
     setFilterType('ALL');
@@ -181,11 +188,31 @@ export function useInfrastructure() {
     toast.showToast(msg, type, title);
   };
 
-  const fetchInfrastructure = async (quiet = false) => {
+  const fetchProjects = useCallback(async () => {
+    try {
+      const data = await getInfrastructureUseCase.execute(null);
+      if (data && data.nodes) {
+        const foundProjects = data.nodes
+          .filter(n => n.labels?.includes('Project') || n.primaryLabel === 'Project')
+          .map(n => ({
+            id: String(n.properties?.id ?? n.id),
+            name: n.properties?.name || n.properties?.nombre || n.name || `Proyecto #${n.properties?.id ?? n.id}`
+          }));
+        setProjects(foundProjects);
+        return foundProjects;
+      }
+    } catch (err) {
+      console.error('Error fetching projects list:', err);
+    }
+    return [];
+  }, [getInfrastructureUseCase]);
+
+  const fetchInfrastructure = async (quiet = false, projectIdOverride = undefined) => {
     if (!quiet) setLoading(true);
     setError(null);
     try {
-      const data = await getInfrastructureUseCase.execute();
+      const targetProjId = projectIdOverride !== undefined ? projectIdOverride : selectedProjectId;
+      const data = await getInfrastructureUseCase.execute(targetProjId);
       setGraphData(data);
     } catch (err) {
       console.error(err);
@@ -332,6 +359,7 @@ export function useInfrastructure() {
     try {
       const res = await renameProjectUseCase.execute(projectId, newName, justification);
       showToast('¡Proyecto renombrado con éxito!');
+      await fetchProjects();
       await fetchInfrastructure(true);
       return res;
     } catch (err) {
@@ -344,11 +372,11 @@ export function useInfrastructure() {
     try {
       await deleteProjectUseCase.execute(projectId, justification);
       showToast('¡Proyecto eliminado con éxito!');
+      const updatedProjects = await fetchProjects();
       await fetchInfrastructure(true);
       if (String(projectId) === String(selectedProjectId)) {
-        const remainingProjects = projects.filter(p => String(p.id) !== String(projectId));
-        if (remainingProjects.length > 0) {
-          setSelectedProjectId(remainingProjects[0].id);
+        if (updatedProjects.length > 0) {
+          setSelectedProjectId(updatedProjects[0].id);
         } else {
           setSelectedProjectId(null);
           setShowDashboard(false);
@@ -364,6 +392,7 @@ export function useInfrastructure() {
     try {
       const res = await createProjectUseCase.execute(data);
       toast.success('¡Proyecto añadido correctamente!', 'Nuevo Proyecto');
+      await fetchProjects();
       await fetchInfrastructure(true);
       return res;
     } catch (err) {
@@ -781,16 +810,32 @@ export function useInfrastructure() {
   };
 
   useEffect(() => {
-    fetchInfrastructure();
-  }, [showDashboard]);
+    const initProjects = async () => {
+      const projs = await fetchProjects();
+      if (projs.length > 0 && selectedProjectId === null) {
+        setSelectedProjectId(projs[0].id);
+      }
+    };
+    initProjects();
+  }, [fetchProjects, showDashboard]);
 
-  const projects = useMemo(() => {
-    return (graphData.nodes || []).filter(
-      n => n.labels?.includes('Project') || n.primaryLabel === 'Project'
-    ).map(n => ({
-      id: String(n.properties?.id ?? n.id),
-      name: n.properties?.name || n.properties?.nombre || n.name || `Proyecto #${n.properties?.id ?? n.id}`
-    }));
+  useEffect(() => {
+    if (graphData.nodes && graphData.nodes.length > 0) {
+      const foundProjects = graphData.nodes
+        .filter(n => n.labels?.includes('Project') || n.primaryLabel === 'Project')
+        .map(n => ({
+          id: String(n.properties?.id ?? n.id),
+          name: n.properties?.name || n.properties?.nombre || n.name || `Proyecto #${n.properties?.id ?? n.id}`
+        }));
+
+      if (foundProjects.length > 0) {
+        setProjects(prevProjects => {
+          const map = new Map(prevProjects.map(p => [String(p.id), p]));
+          foundProjects.forEach(p => map.set(String(p.id), p));
+          return Array.from(map.values());
+        });
+      }
+    }
   }, [graphData]);
 
   useEffect(() => {
@@ -803,6 +848,9 @@ export function useInfrastructure() {
   }, [projects, selectedProjectId]);
 
   useEffect(() => {
+    if (selectedProjectId !== null) {
+      fetchInfrastructure(false, selectedProjectId);
+    }
     setSelectedNode(null);
     setSelectedExploitationPath(null);
     setShowPathsModal(false);
@@ -825,6 +873,7 @@ export function useInfrastructure() {
 
     const rels = graphData.relationships || [];
     const nodeMap = new Map(graphData.nodes.map(n => [n.id, n]));
+    const nodeDecorations = new Map();
 
     rels.forEach(rel => {
       if (rel.type === 'INSTANCE_OF') {
@@ -833,9 +882,16 @@ export function useInfrastructure() {
         if (sourceNode && targetNode && 
            (sourceNode.primaryLabel === 'SoftwareInstallation' || sourceNode.labels?.includes('SoftwareInstallation')) && 
            (targetNode.primaryLabel === 'Software' || targetNode.labels?.includes('Software'))) {
-          if (!sourceNode.properties) sourceNode.properties = {};
-          sourceNode.properties.software_name = targetNode.properties?.name || targetNode.name;
+          const swName = targetNode.properties?.name || targetNode.name;
+          nodeDecorations.set(sourceNode.id, { software_name: swName });
         }
+      }
+    });
+
+    nodeDecorations.forEach((extra, nodeId) => {
+      const origNode = nodeMap.get(nodeId);
+      if (origNode) {
+        nodeMap.set(nodeId, { ...origNode, properties: { ...origNode.properties, ...extra } });
       }
     });
 
@@ -1091,92 +1147,15 @@ export function useInfrastructure() {
     };
   }, [graphData, selectedProjectId, selectedExploitationPath]);
 
-  // Grafo visible en Canvas tras aplicar filtros avanzados, búsqueda y categorías
+  // Grafo visible en Canvas tras aplicar el filtrado por proyecto (los filtros de búsqueda, categoría y avanzados atenúan visualmente en lugar de eliminar nodos)
   const displayGraphData = useMemo(() => {
     const { nodes = [], relationships = [] } = filteredGraphData || {};
-
-    const visibleNodes = nodes.filter(n => {
-      const props = n.properties || {};
-      const primaryLabel = n.primaryLabel || n.labels?.[0] || '';
-      const name = n.name || props.name || props.nombre || props.hostname || props.title || n.id || '';
-
-      // Siempre preservar el nodo Project principal
-      if (primaryLabel === 'Project' || n.labels?.includes('Project')) {
-        return true;
-      }
-
-      // A) Búsqueda general de texto
-      if (searchQuery.trim() !== '') {
-        const q = searchQuery.toLowerCase();
-        const matchesName = String(name).toLowerCase().includes(q);
-        const matchesProps = Object.values(props).some(v => String(v).toLowerCase().includes(q));
-        if (!matchesName && !matchesProps) return false;
-      }
-
-      // B) Categoría principal
-      if (filterType !== 'ALL') {
-        const hasLabel = n.labels?.includes(filterType) || primaryLabel === filterType;
-        if (!hasLabel) return false;
-      }
-
-      // C) Dirección IP / Subred CIDR
-      if (graphAdvancedFilters.ipSearch.trim() !== '') {
-        const ipQ = graphAdvancedFilters.ipSearch.toLowerCase();
-        const ips = Array.isArray(props.ips) ? props.ips : (props.ip ? [props.ip] : []);
-        const cidr = props.cidr || props.rango || '';
-        const matchesIP = ips.some(ip => String(ip).toLowerCase().includes(ipQ)) || String(cidr).toLowerCase().includes(ipQ);
-        if (!matchesIP) return false;
-      }
-
-      // D) Vendor / Proveedor
-      if (graphAdvancedFilters.vendorSearch.trim() !== '') {
-        const vQ = graphAdvancedFilters.vendorSearch.toLowerCase();
-        const vendor = props.vendor || props.software_vendor || props.manufacturer || props.fabricante || '';
-        if (!String(vendor).toLowerCase().includes(vQ)) return false;
-      }
-
-      // E) Entorno
-      if (graphAdvancedFilters.environment !== 'ALL') {
-        const env = (props.environment || props.entorno || '').toLowerCase();
-        if (env !== graphAdvancedFilters.environment.toLowerCase()) return false;
-      }
-
-      // F) Exposición a Internet
-      if (graphAdvancedFilters.internetExposed !== 'ALL') {
-        const isExp = props.internet_exposed === true || props.internet_exposed === 'true';
-        if (graphAdvancedFilters.internetExposed === 'TRUE' && !isExp) return false;
-        if (graphAdvancedFilters.internetExposed === 'FALSE' && isExp) return false;
-      }
-
-      // G) Estado
-      if (graphAdvancedFilters.status !== 'ALL') {
-        const st = (props.status || props.estado || '').toLowerCase();
-        if (st !== graphAdvancedFilters.status.toLowerCase()) return false;
-      }
-
-      // H) Nivel de Riesgo
-      if (graphAdvancedFilters.riskTier !== 'ALL') {
-        const risk = (props.risk_tier || props.severity || '').toUpperCase();
-        if (risk !== graphAdvancedFilters.riskTier.toUpperCase()) return false;
-      }
-
-      return true;
-    });
-
-    const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
-
-    const visibleRelationships = relationships.filter(r => {
-      const sourceId = typeof r.source === 'object' ? r.source.id : r.source;
-      const targetId = typeof r.target === 'object' ? r.target.id : r.target;
-      return visibleNodeIds.has(sourceId) && visibleNodeIds.has(targetId);
-    });
-
     return {
-      nodes: visibleNodes,
-      relationships: visibleRelationships,
-      links: visibleRelationships
+      nodes,
+      relationships,
+      links: relationships
     };
-  }, [filteredGraphData, searchQuery, filterType, graphAdvancedFilters]);
+  }, [filteredGraphData]);
 
   useEffect(() => {
     if (selectedNode && displayGraphData.nodes) {
