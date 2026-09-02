@@ -1697,7 +1697,7 @@ export function NetworkGraph({
 
     frameId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(frameId);
-  }, [graphData, layoutMode, selectedNode, filterType, searchQuery, graphAdvancedFilters, selectedExploitationPath, pathEdgeIdSet, pathConnectorNodeIdSet, pathNodeStepMap, lineageMaps, collapsedNodeIds]);
+  }, [graphData, layoutMode, selectedNode, filterType, searchQuery, graphAdvancedFilters, selectedExploitationPath, pathEdgeIdSet, pathConnectorNodeIdSet, pathNodeStepMap, lineageMaps, collapsedNodeIds, loading, error]);
 
   // Conversión de coordenadas de pantalla a coordenadas del mundo Canvas
   const screenToWorld = useCallback((clientX, clientY) => {
@@ -1982,7 +1982,7 @@ export function NetworkGraph({
     if (!canvas) return;
     canvas.addEventListener('wheel', handleWheel, { passive: false });
     return () => canvas.removeEventListener('wheel', handleWheel);
-  }, [handleWheel]);
+  }, [handleWheel, loading, error]);
 
   const handleDoubleClick = (e) => {
     const { x: wx, y: wy } = screenToWorld(e.clientX, e.clientY);
