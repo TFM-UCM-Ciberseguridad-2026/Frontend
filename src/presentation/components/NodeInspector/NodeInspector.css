@@ -336,3 +336,88 @@
 .finding-accordion-card.finding-state-mitigated {
   border-color: rgba(250, 204, 21, 0.24);
 }
+
+.endpoint-patch-history-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.endpoint-sw-history-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.6);
+  overflow: hidden;
+}
+
+.endpoint-sw-history-header {
+  padding: 10px 12px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(122, 115, 255, 0.06);
+}
+
+.endpoint-sw-history-header:hover {
+  background: rgba(122, 115, 255, 0.14);
+}
+
+.version-pill {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: #38bdf8;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+}
+
+.patches-count-badge {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+.endpoint-sw-history-body {
+  padding: 10px 12px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.endpoint-applied-patch-row {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 8px 10px;
+  border-radius: 6px;
+  border-left: 3px solid #22c55e;
+}
+
+.patch-cve-badge {
+  font-family: 'Share Tech Mono', monospace;
+  font-weight: bold;
+  color: #fca5a5;
+  font-size: 11px;
+}
+
+.patch-level-tag {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+.patch-level-tag.official_fix {
+  background: rgba(34, 197, 94, 0.2);
+  color: #86efac;
+}
+
+.patch-level-tag.workaround,
+.patch-level-tag.temporary_fix {
+  background: rgba(234, 179, 8, 0.2);
+  color: #fde047;
+}

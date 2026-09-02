@@ -130,6 +130,10 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     return await this.apiDataSource.fetchAppliedPatchHistory(installationId);
   }
 
+  async getEndpointPatchHistory(endpointId) {
+    return await this.apiDataSource.fetchEndpointPatchHistory(endpointId);
+  }
+
   async updateEndpoint(id, payload) { return await this.apiDataSource.updateEndpoint(id, payload); }
   async deleteEndpoint(id, justification) { return await this.apiDataSource.deleteEndpoint(id, justification); }
   async updateNetwork(id, payload) { return await this.apiDataSource.updateNetwork(id, payload); }

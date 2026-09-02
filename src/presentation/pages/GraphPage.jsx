@@ -44,7 +44,8 @@ export function GraphPage({
   analyzeProjectVulnerabilities,
   computeSelectedProjectRisk,
   fetchFindingVulnerabilities,
-  isAnalysisPending
+  isAnalysisPending,
+  fetchEndpointPatchHistory
 }) {
   return (
     <>
@@ -72,7 +73,6 @@ export function GraphPage({
 
       {/* VISTA CENTRAL: GRAFO */}
       <main className="graph-stage">
-
         <AddAssetsButton
           projects={projects}
           endpoints={endpoints}
@@ -111,6 +111,7 @@ export function GraphPage({
         selectedExploitationPath={selectedExploitationPath}
         renameProject={renameProject}
         deleteProject={deleteProject}
+        fetchEndpointPatchHistory={fetchEndpointPatchHistory}
       />
     </>
   );

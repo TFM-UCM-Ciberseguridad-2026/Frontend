@@ -45,7 +45,6 @@ function shouldForceVulnRefresh(installationNode) {
   return Date.now() - completedAtMs >= VULN_SCAN_CACHE_TTL_MS;
 }
 
-
 export function useInfrastructure() {
   const toast = useToast();
   const [showDashboard, setShowDashboard] = useState(false);
@@ -105,6 +104,7 @@ export function useInfrastructure() {
   const [vulnScanLoading, setVulnScanLoading] = useState(false);
   const [riskComputeLoading, setRiskComputeLoading] = useState(false);
   const [riskActionError, setRiskActionError] = useState(null);
+
   // Estado de enriquecimiento NVD en background (para polling)
   const [isAnalysisPending, setIsAnalysisPending] = useState(false);
   const pendingPollRef = useRef(null);
@@ -137,7 +137,6 @@ export function useInfrastructure() {
   const [appliedPatchHistoryLoading, setAppliedPatchHistoryLoading] = useState(false);
   const [appliedPatchHistoryError, setAppliedPatchHistoryError] = useState(null);
   const [appliedPatchHistoryInstallationId, setAppliedPatchHistoryInstallationId] = useState(null);
-
 
   // Inyección de dependencias (Clean Architecture)
   const apiDataSource = useMemo(() => new InfrastructureApiDataSource(), []);
@@ -203,7 +202,6 @@ export function useInfrastructure() {
    * y muestra una notificación al usuario.
    */
   const startPendingPolling = useCallback((projectId) => {
-    // Limpiar intervalo anterior si existía
     if (pendingPollRef.current) {
       clearInterval(pendingPollRef.current);
       pendingPollRef.current = null;
@@ -219,7 +217,6 @@ export function useInfrastructure() {
         if (!res.ok) return;
         const data = await res.json();
         if (!data.pending) {
-          // Enriquecimiento terminado: limpiar polling y recargar
           clearInterval(pendingPollRef.current);
           pendingPollRef.current = null;
           setIsAnalysisPending(false);
@@ -236,7 +233,6 @@ export function useInfrastructure() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Limpiar polling al desmontar el componente
   useEffect(() => {
     return () => {
       if (pendingPollRef.current) {
@@ -244,7 +240,6 @@ export function useInfrastructure() {
       }
     };
   }, []);
-
 
   const handleReset = async () => {
     setLoading(true);
@@ -557,7 +552,6 @@ export function useInfrastructure() {
     }
   };
 
-
   const declarePatchApplied = async (installationId, payload, applyingKey = null) => {
     setPatchApplyingKey(applyingKey);
     setPatchApplyError(null);
@@ -604,7 +598,6 @@ export function useInfrastructure() {
     return null;
   };
 
-
   const fetchAppliedPatchHistory = async (installationId) => {
     if (!installationId) {
       setAppliedPatchHistory([]);
@@ -626,6 +619,16 @@ export function useInfrastructure() {
       throw err;
     } finally {
       setAppliedPatchHistoryLoading(false);
+    }
+  };
+
+  const fetchEndpointPatchHistory = async (endpointId) => {
+    if (!endpointId) return null;
+    try {
+      return await repository.getEndpointPatchHistory(endpointId);
+    } catch (err) {
+      console.error('Error cargando histórico de parches del endpoint:', err);
+      return null;
     }
   };
 
@@ -1100,12 +1103,10 @@ export function useInfrastructure() {
       const primaryLabel = n.primaryLabel || n.labels?.[0] || '';
       const name = n.name || props.name || props.nombre || props.hostname || props.title || n.id || '';
 
-      // Siempre preservar el nodo Project principal
       if (primaryLabel === 'Project' || n.labels?.includes('Project')) {
         return true;
       }
 
-      // A) Búsqueda general de texto
       if (searchQuery.trim() !== '') {
         const q = searchQuery.toLowerCase();
         const matchesName = String(name).toLowerCase().includes(q);
@@ -1113,13 +1114,11 @@ export function useInfrastructure() {
         if (!matchesName && !matchesProps) return false;
       }
 
-      // B) Categoría principal
       if (filterType !== 'ALL') {
         const hasLabel = n.labels?.includes(filterType) || primaryLabel === filterType;
         if (!hasLabel) return false;
       }
 
-      // C) Dirección IP / Subred CIDR
       if (graphAdvancedFilters.ipSearch.trim() !== '') {
         const ipQ = graphAdvancedFilters.ipSearch.toLowerCase();
         const ips = Array.isArray(props.ips) ? props.ips : (props.ip ? [props.ip] : []);
@@ -1128,33 +1127,28 @@ export function useInfrastructure() {
         if (!matchesIP) return false;
       }
 
-      // D) Vendor / Proveedor
       if (graphAdvancedFilters.vendorSearch.trim() !== '') {
         const vQ = graphAdvancedFilters.vendorSearch.toLowerCase();
         const vendor = props.vendor || props.software_vendor || props.manufacturer || props.fabricante || '';
         if (!String(vendor).toLowerCase().includes(vQ)) return false;
       }
 
-      // E) Entorno
       if (graphAdvancedFilters.environment !== 'ALL') {
         const env = (props.environment || props.entorno || '').toLowerCase();
         if (env !== graphAdvancedFilters.environment.toLowerCase()) return false;
       }
 
-      // F) Exposición a Internet
       if (graphAdvancedFilters.internetExposed !== 'ALL') {
         const isExp = props.internet_exposed === true || props.internet_exposed === 'true';
         if (graphAdvancedFilters.internetExposed === 'TRUE' && !isExp) return false;
         if (graphAdvancedFilters.internetExposed === 'FALSE' && isExp) return false;
       }
 
-      // G) Estado
       if (graphAdvancedFilters.status !== 'ALL') {
         const st = (props.status || props.estado || '').toLowerCase();
         if (st !== graphAdvancedFilters.status.toLowerCase()) return false;
       }
 
-      // H) Nivel de Riesgo
       if (graphAdvancedFilters.riskTier !== 'ALL') {
         const risk = (props.risk_tier || props.severity || '').toUpperCase();
         if (risk !== graphAdvancedFilters.riskTier.toUpperCase()) return false;
@@ -1342,8 +1336,6 @@ export function useInfrastructure() {
         toast.error(errorMsg, 'Falló el Análisis');
       }
 
-      // Si hay imágenes de contenedor escaneadas, iniciar polling para detectar
-      // cuándo el enriquecimiento NVD de background finaliza y recargar el grafo.
       if (successCount > 0 && containerImages.length > 0) {
         startPendingPolling(selectedProjectId);
       }
@@ -1402,7 +1394,6 @@ export function useInfrastructure() {
       String(n.properties?.id ?? n.id) === selectedProjectId
     ) || null;
   }, [graphData, selectedProjectId]);
-
 
   const refreshPatchesForProject = async () => {
     if (!selectedProjectId) {
@@ -1578,10 +1569,11 @@ export function useInfrastructure() {
     patchProjectRefreshLoading,
     patchProjectRefreshError,
     patchProjectRefreshProgress,
-  appliedPatchHistory,
-  appliedPatchHistoryLoading,
-  appliedPatchHistoryError,
-  appliedPatchHistoryInstallationId,
-  fetchAppliedPatchHistory
+    appliedPatchHistory,
+    appliedPatchHistoryLoading,
+    appliedPatchHistoryError,
+    appliedPatchHistoryInstallationId,
+    fetchAppliedPatchHistory,
+    fetchEndpointPatchHistory
   };
 }

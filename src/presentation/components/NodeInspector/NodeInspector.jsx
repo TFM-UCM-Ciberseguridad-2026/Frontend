@@ -17,7 +17,6 @@ const getRiskBadgeClass = (score, tier) => {
   return 'risk-badge-low';
 };
 
-
 const getFindingPatchState = (props = {}) => {
   const status = String(props.status || '').toUpperCase();
   const remediationKind = String(props.remediation_kind || '').toUpperCase();
@@ -60,8 +59,6 @@ const getFindingPatchState = (props = {}) => {
   };
 };
 
-
-
 export function NodeInspector({
   selectedNode,
   updateNode,
@@ -69,13 +66,22 @@ export function NodeInspector({
   fetchFindingVulnerabilities,
   selectedExploitationPath,
   renameProject,
-  deleteProject
+  deleteProject,
+  fetchEndpointPatchHistory
 }) {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showRenameProjectModal, setShowRenameProjectModal] = useState(false);
   const [showDeleteProjectModal, setShowDeleteProjectModal] = useState(false);
   const [expandedFindingId, setExpandedFindingId] = useState(null);
+
+  // Estados para el histórico de parches del Endpoint agrupado por software
+  const [endpointHistory, setEndpointHistory] = useState(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [expandedSwGroup, setExpandedSwGroup] = useState(null);
+
+  const categoryLabel = selectedNode?.primaryLabel || selectedNode?.labels?.[0] || 'Unknown';
+  const isEndpoint = categoryLabel === 'Endpoint';
 
   const findingsList = useMemo(() => {
     if (!selectedNode) return [];
@@ -135,6 +141,8 @@ export function NodeInspector({
   useEffect(() => {
     setShowEditModal(false);
     setShowDeleteModal(false);
+    setShowRenameProjectModal(false);
+    setShowDeleteProjectModal(false);
 
     if (targetPathFindingId) {
       setExpandedFindingId(targetPathFindingId);
@@ -145,6 +153,49 @@ export function NodeInspector({
       setExpandedFindingId(null);
     }
   }, [selectedNode?.id, targetPathFindingId, sortedFindings]);
+
+  // Carga segura del histórico de parches (evita bucles infinitos y llamadas a funciones inexistentes)
+  useEffect(() => {
+    let isMounted = true;
+
+    if (isEndpoint && selectedNode?.id) {
+      const epId = selectedNode.properties?.id ?? selectedNode.id;
+      setHistoryLoading(true);
+
+      if (typeof fetchEndpointPatchHistory === 'function') {
+        fetchEndpointPatchHistory(epId)
+          .then(data => {
+            if (isMounted) {
+              setEndpointHistory(data || null);
+              if (data?.software_groups?.length > 0) {
+                setExpandedSwGroup(data.software_groups[0].installation_id);
+              }
+            }
+          })
+          .catch(err => {
+            if (isMounted) {
+              console.error('Error recuperando histórico de parches del endpoint:', err);
+              setEndpointHistory(null);
+            }
+          })
+          .finally(() => {
+            if (isMounted) {
+              setHistoryLoading(false);
+            }
+          });
+      } else {
+        setHistoryLoading(false);
+        setEndpointHistory(null);
+      }
+    } else {
+      setEndpointHistory(null);
+      setHistoryLoading(false);
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedNode?.id, isEndpoint, fetchEndpointPatchHistory]);
 
   if (!selectedNode) {
     return (
@@ -160,7 +211,6 @@ export function NodeInspector({
     );
   }
 
-  const categoryLabel = selectedNode.primaryLabel || selectedNode.labels?.[0] || 'Unknown';
   const nodeName = selectedNode.name || selectedNode.properties?.title || selectedNode.properties?.nombre || 'Sin Nombre';
   const isManageableAsset = ['Endpoint', 'Network', 'Hardware', 'Container', 'Software', 'SoftwareInstallation'].includes(categoryLabel);
   const canEdit = isManageableAsset && typeof updateNode === 'function';
@@ -182,7 +232,7 @@ export function NodeInspector({
         <span className="badge">{categoryLabel.toUpperCase()}</span>
         <h2 className="node-title">{nodeName}</h2>
 
-        {/* ACCIONES DE GESTIÓN */}
+        {/* ACCIONES DE GESTIÓN (EDITAR / ELIMINAR / RENOMBRAR) */}
         {(canDelete || canEdit || canEditProject || canDeleteProject) && (
           <div className="node-actions-group">
             {canEdit && (
@@ -229,7 +279,7 @@ export function NodeInspector({
           </div>
         )}
 
-        {/* VISTA DE ACORDEÓN DE HALLAZGOS */}
+        {/* VISTA DE ACORDEÓN DE HALLAZGOS (FINDINGS) */}
         {isFindingGroup ? (
           <div className="findings-accordion-list">
             {sortedFindings.map((finding, index) => {
@@ -243,12 +293,13 @@ export function NodeInspector({
 
               const riskPct = toPercent(props.risk_score) ?? 0;
               const badgeClass = getRiskBadgeClass(props.risk_score, props.risk_tier);
-
               const findingPatchState = getFindingPatchState(props);
 
-
               return (
-                <div key={fId} className={`finding-accordion-card ${findingPatchState.className} ${isPathTarget ? 'is-path-target' : ''}`}>
+                <div
+                  key={fId}
+                  className={`finding-accordion-card ${findingPatchState.className} ${isPathTarget ? 'is-path-target' : ''}`}
+                >
                   <div
                     className={`finding-accordion-header ${isExpanded ? 'is-expanded' : ''}`}
                     onClick={() => toggleFinding(fId)}
@@ -328,7 +379,98 @@ export function NodeInspector({
           <>
             <RiskSummary node={selectedNode} />
 
-            <div className="props">
+            {/* SECCIÓN: HISTÓRICO DE PARCHES POR SOFTWARE (SOLO EN ENDPOINTS) */}
+            {isEndpoint && (
+              <div className="endpoint-patch-history-section">
+                <div
+                  className="eyebrow"
+                  style={{
+                    color: '#38bdf8',
+                    marginTop: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <span>🛡️</span> HISTÓRICO DE PARCHES POR SOFTWARE
+                </div>
+
+                {historyLoading && (
+                  <div className="detail-empty" style={{ margin: '10px 0', fontSize: '11px' }}>
+                    Cargando histórico de remediaciones...
+                  </div>
+                )}
+
+                {!historyLoading && (!endpointHistory?.software_groups || endpointHistory.software_groups.length === 0) && (
+                  <div style={{ color: 'var(--muted)', fontSize: '12px', fontStyle: 'italic', padding: '8px 0' }}>
+                    No hay software instalado con parches registrados en este equipo.
+                  </div>
+                )}
+
+                {!historyLoading && endpointHistory?.software_groups?.map((group) => {
+                  const isSwExpanded = expandedSwGroup === group.installation_id;
+                  const patchesCount = group.applied_patches?.length || 0;
+                  const resolvedCount = group.resolved_findings?.length || 0;
+
+                  return (
+                    <div key={group.installation_id} className="endpoint-sw-history-card">
+                      <div
+                        className="endpoint-sw-history-header"
+                        onClick={() => setExpandedSwGroup(isSwExpanded ? null : group.installation_id)}
+                      >
+                        <div>
+                          <strong style={{ color: 'var(--c100)', fontSize: '12.5px' }}>{group.software_name}</strong>
+                          <span className="version-pill">v{group.current_version}</span>
+                        </div>
+                        <span className="patches-count-badge">
+                          {resolvedCount > 0 ? `${resolvedCount} findings resueltos` : `${patchesCount} parches`} {isSwExpanded ? '▲' : '▼'}
+                        </span>
+                      </div>
+
+                      {isSwExpanded && (
+                        <div className="endpoint-sw-history-body">
+                          {resolvedCount === 0 && patchesCount === 0 ? (
+                            <div style={{ color: 'var(--muted)', fontSize: '11px', padding: '4px' }}>
+                              Sin parches aplicados aún en esta instalación.
+                            </div>
+                          ) : (
+                            (group.resolved_findings || []).map((f, fIdx) => (
+                              <div key={fIdx} className="endpoint-applied-patch-row">
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <span className="patch-cve-badge">{f.cve_id}</span>
+                                  <span className={`patch-level-tag ${String(f.remediation_level || 'OFFICIAL_FIX').toLowerCase()}`}>
+                                    {f.remediation_level || 'OFFICIAL_FIX'}
+                                  </span>
+                                </div>
+                                <div style={{ fontSize: '11px', color: 'var(--c200)', marginTop: '4px' }}>
+                                  {f.patch_description || 'Finding solucionado mediante parche'}
+                                </div>
+                                {f.expected_version && (
+                                  <div style={{ fontSize: '10px', color: '#4ade80', marginTop: '2px' }}>
+                                    Versión objetivo: {f.expected_version}
+                                  </div>
+                                )}
+                                <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '4px' }}>
+                                  Aplicado por: <strong>{f.applied_by || 'operator'}</strong> · {f.applied_at ? new Date(f.applied_at).toLocaleDateString() : 'N/A'}
+                                </div>
+                                {f.notes && (
+                                  <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px', fontStyle: 'italic' }}>
+                                    {f.notes}
+                                  </div>
+                                )}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* TABLA DE PROPIEDADES GENERALES DEL NODO */}
+            <div className="props" style={{ marginTop: '16px' }}>
               <div className="prop-row">
                 <div className="k">ID Interno Neo4j</div>
                 <div className="v">{selectedNode.id}</div>
@@ -355,6 +497,7 @@ export function NodeInspector({
         )}
       </div>
 
+      {/* MODALES DE EDICIÓN Y BORRADO */}
       {showEditModal && (
         <EditNodeModal
           node={selectedNode}
