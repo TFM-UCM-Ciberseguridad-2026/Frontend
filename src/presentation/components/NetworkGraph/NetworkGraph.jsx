@@ -562,14 +562,8 @@ export function NetworkGraph({
 
     return graphData.nodes.filter(n => {
       const idStr = String(n.id);
-      if (n.labels.includes('TTP') || n.labels.includes('ThreatActor')) {
+      if (n.labels.includes('TTP') || n.labels.includes('ThreatActor') || n.labels.includes('Vulnerability')) {
         return false;
-      }
-      if (n.labels.includes('Vulnerability')) {
-        const isFromContainerImage = rels.some(r =>
-          r.type === 'HAS_VULNERABILITY' && (r.source === n.id || r.target === n.id)
-        );
-        if (!isFromContainerImage) return false;
       }
       if (hiddenSubtreeNodeIds.has(idStr)) return false;
       if (isAncestorCollapsed(idStr)) return false;
@@ -1077,10 +1071,13 @@ export function NetworkGraph({
             const isFindingOrVuln = vItem.node.primaryLabel === 'Finding' || vItem.node.primaryLabel === 'Vulnerability' ||
               (vItem.node.labels || []).some(l => l === 'Finding' || l === 'Vulnerability');
 
-            // Solo marcar si coincide exactamente con el paso, o si es el único finding conectado
+            // Solo marcar si coincide exactamente con el paso (excluyendo el nodo Vulnerability puro)
             if (matchesId || matchesCve) {
-              connectorNodeIdSet.add(vItem.id);
-              edgeIdSet.add(vItem.relId);
+              const isVulnNode = vItem.node.primaryLabel === 'Vulnerability' || (vItem.node.labels || []).includes('Vulnerability');
+              if (!isVulnNode) {
+                connectorNodeIdSet.add(vItem.id);
+                edgeIdSet.add(vItem.relId);
+              }
               if (vItem.parentFindingId) {
                 connectorNodeIdSet.add(vItem.parentFindingId);
               }

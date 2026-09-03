@@ -120,19 +120,60 @@ export function NodeInspector({
 
   // Determina si un finding pertenece a la ruta activa
   const isInPath = useCallback((f) => {
-    if (!pathFindingKeys.ids.size && !pathFindingKeys.cves.size) return false;
-    const fId = String(f.id || f.properties?.id || '').trim();
-    const fCve = String(f.properties?.cve_id || f.properties?.cve || f.name || '').trim().toLowerCase();
-    const fTitle = String(f.properties?.title || f.name || '').toLowerCase();
+    if (!selectedExploitationPath?.steps || selectedExploitationPath.steps.length === 0) return false;
 
-    const matchId = Array.from(pathFindingKeys.ids).some(pid =>
-      pid && (fId === pid || fId.endsWith(':' + pid) || pid.endsWith(':' + fId))
-    );
-    const matchCve = Array.from(pathFindingKeys.cves).some(pcve =>
-      pcve && (fCve === pcve || fCve.includes(pcve) || fTitle.includes(pcve))
-    );
-    return matchId || matchCve;
-  }, [pathFindingKeys]);
+    const rawId = String(f.id ?? '').trim();
+    const propId = String(f.properties?.id ?? '').trim();
+    const findingId = String(f.properties?.finding_id ?? '').trim();
+    const fName = String(f.name || f.properties?.title || f.properties?.nombre || '').trim();
+    const fKey = String(f.properties?.finding_key || '').trim().toLowerCase();
+    const fCve = String(f.properties?.cve_id || f.properties?.cve || '').trim().toLowerCase();
+
+    const nameMatch = fName.match(/#?(\d+)/);
+    const nameNumId = nameMatch ? nameMatch[1] : '';
+
+    const candidateIds = [rawId, propId, findingId, nameNumId].filter(Boolean);
+
+    return selectedExploitationPath.steps.some(step => {
+      if (!step) return false;
+
+      const stepFId = String(step.finding_id ?? '').trim();
+      const stepVuln = String(step.vulnerability ?? '').trim().toLowerCase();
+
+      if (stepFId) {
+        for (const cid of candidateIds) {
+          if (cid === stepFId || cid.endsWith(':' + stepFId) || stepFId.endsWith(':' + cid)) {
+            return true;
+          }
+        }
+      }
+
+      if (stepVuln) {
+        if (fCve && (fCve === stepVuln || fCve.includes(stepVuln) || stepVuln.includes(fCve))) {
+          return true;
+        }
+        if (fKey && fKey.includes(stepVuln)) {
+          return true;
+        }
+        if (fName.toLowerCase().includes(stepVuln)) {
+          return true;
+        }
+      }
+
+      if (Array.isArray(step.finding_ids)) {
+        for (const pid of step.finding_ids) {
+          const pidStr = String(pid).trim();
+          for (const cid of candidateIds) {
+            if (cid === pidStr || cid.endsWith(':' + pidStr) || pidStr.endsWith(':' + cid)) {
+              return true;
+            }
+          }
+        }
+      }
+
+      return false;
+    });
+  }, [selectedExploitationPath]);
 
   const sortedFindings = useMemo(() => {
     if (findingsList.length === 0) return [];
@@ -258,20 +299,42 @@ export function NodeInspector({
               const rawId = props.id ?? finding.id ?? index;
               const fId = String(rawId);
               const inPath = isInPath(finding);
-              // Solo muestra la CVE de la ruta en el finding que realmente pertenece a ella
+              const propFindingId = String(props.finding_id || '').trim();
+              const propId = String(props.id || '').trim();
+              const fNameStr = String(finding.name || props.title || props.nombre || '').trim();
+              const nameMatchStr = fNameStr.match(/#?(\d+)/);
+              const numIdStr = nameMatchStr ? nameMatchStr[1] : '';
+              const cIds = [fId, propId, propFindingId, numIdStr].filter(Boolean);
+
+              // Intentar extraer la CVE directamente de las propiedades del hallazgo (cve_id, cve, finding_key, title, name)
+              const directCve = (() => {
+                if (props.cve_id) return String(props.cve_id).trim();
+                if (props.cve) return String(props.cve).trim();
+                if (finding.cve_id) return String(finding.cve_id).trim();
+                if (finding.cve) return String(finding.cve).trim();
+
+                const combinedStr = `${props.finding_key || ''} ${props.title || ''} ${finding.name || ''} ${fId}`;
+                const m = combinedStr.match(/(CVE-\d{4}-\d+|GHSA-[a-z0-9-]+)/i);
+                return m ? m[1].toUpperCase() : '';
+              })();
+
+              // Muestra la CVE correspondiente a la etapa de la ruta activa para este finding
               const pathCve = inPath
                 ? (selectedExploitationPath?.steps?.find(s => {
-                    const sc = String(s.vulnerability || '').toLowerCase();
-                    const fc = String(props.cve_id || props.cve || finding.name || '').toLowerCase();
-                    return sc && fc && (sc === fc || fc.includes(sc));
-                  })?.vulnerability
-                  || selectedExploitationPath?.steps?.[0]?.vulnerability
-                  || '')
+                    if (!s) return false;
+                    const sFId = String(s.finding_id || s.findingId || '').trim();
+                    const sCve = String(s.vulnerability || s.cve_id || s.cve || '').trim().toUpperCase();
+
+                    const matchesFId = sFId && cIds.some(cid => cid === sFId || cid.endsWith(':' + sFId) || sFId.endsWith(':' + cid));
+                    const matchesCve = sCve && (directCve === sCve || fNameStr.toUpperCase().includes(sCve));
+                    return matchesFId || matchesCve;
+                  })?.vulnerability || '')
                 : '';
-              const cveId = props.cve_id || props.cve || pathCve || '';
+
+              const cveId = directCve || pathCve || '';
               const titleName = props.title || finding.name || `Finding #${fId}`;
               const isExpanded = expandedFindingId === fId;
-              const isPathTarget = targetPathFindingId === fId || (inPath && Boolean(targetPathFindingId === null));
+              const isPathTarget = inPath;
               const hasVulns = Boolean(
                 props.has_vulnerabilities ||
                 finding.hasVuln ||
