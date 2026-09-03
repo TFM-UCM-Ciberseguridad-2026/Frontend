@@ -8,7 +8,7 @@ const PHYSICS = {
   springConstant: 0.015,
   damping: 0.09,
   centralGravity: 0.02,
-  avoidOverlapPadding: 38,
+  avoidOverlapPadding: 48,
   maxSpeed: 18
 };
 
@@ -247,7 +247,7 @@ function getNodeDepth(n) {
   if (cat === 'proyecto' || cat === 'project' || label === 'project' || labels.includes('project')) return 1;
   if (cat === 'endpoint' || label === 'endpoint' || labels.includes('endpoint')) return 2;
   // IMPORTANTE: ContainerImage debe evaluarse ANTES que Container
-  if (cat.includes('imagen') || cat.includes('image') || label.includes('containerimage') || labels.some(l => l.includes('containerimage'))) return 3.2;
+  if (cat.includes('imagen') || cat.includes('image') || label.includes('containerimage') || labels.some(l => l.includes('containerimage'))) return 3.6;
   if (cat === 'container' || cat === 'contenedor' || label === 'container' || (labels.includes('container') && !labels.some(l => l.includes('containerimage')))) return 3;
   if (cat === 'instalacion' || cat === 'installation' || cat === 'softwareinstallation' || label === 'installation' || label === 'softwareinstallation' || labels.includes('installation') || labels.includes('softwareinstallation')) return 3.5;
   if (cat === 'hardware' || label === 'hardware' || labels.includes('hardware') || cat === 'software' || label === 'software' || labels.includes('software')) return 4;
