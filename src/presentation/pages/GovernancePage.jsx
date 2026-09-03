@@ -13,6 +13,50 @@ const formatDateToEuropean = (isoString) => {
   return isoString;
 };
 
+// ── SLA ────────────────────────────────────────────────────────────────────
+// El plazo de parcheo depende de dos ejes: la severidad CVSS del hallazgo y el tipo de
+// activo donde está. Hay por tanto dos acuerdos independientes, uno por categoría, y no un
+// único SLA global: un servidor de producción y el portátil de un usuario no comparten ni
+// exposición ni ventana de mantenimiento.
+const SLA_SEVERITIES = ['Critical', 'High', 'Medium', 'Low'];
+
+const SLA_CATEGORIES = [
+  {
+    value: 'Server',
+    label: 'Servidores',
+    hint: 'Servidores, controladores de dominio, firewalls y routers',
+    accent: '#00f0ff'
+  },
+  {
+    value: 'Workstation',
+    label: 'Puestos de trabajo',
+    hint: 'Equipos de usuario final',
+    accent: '#a78bfa'
+  }
+];
+
+const SLA_SEVERITY_COLORS = {
+  Critical: '#ff3264',
+  High: '#ffaa00',
+  Medium: 'var(--c400)',
+  Low: 'var(--c300)'
+};
+
+const slaCategoryLabel = (value) =>
+  SLA_CATEGORIES.find(c => c.value === value)?.label || 'Sin clasificar';
+
+const slaCategoryAccent = (value) =>
+  SLA_CATEGORIES.find(c => c.value === value)?.accent || '#ffaa00';
+
+// Un hallazgo sobre un activo sin categoría no tiene plazo que exigir, así que no se le
+// asigna estado de cumplimiento: se marca aparte para que se vea que falta clasificarlo.
+const slaStatusOf = (b) => {
+  if (!b.category || !b.sla_days) return 'Sin SLA';
+  if (b.days_remaining < 0) return 'Excedido';
+  if (b.days_remaining <= b.sla_days * 0.2) return 'Próximo a vencer';
+  return 'Dentro de plazo';
+};
+
 export function GovernancePage({ selectedProjectId }) {
   const toast = useToast();
 
@@ -31,23 +75,43 @@ export function GovernancePage({ selectedProjectId }) {
   const [slaSearchText, setSlaSearchText] = useState('');
   const [slaSeverityFilter, setSlaSeverityFilter] = useState('Todas');
   const [slaStatusFilter, setSlaStatusFilter] = useState('Todos');
+  const [slaCategoryFilter, setSlaCategoryFilter] = useState('Todas');
 
   const filteredSLABreaches = useMemo(() => {
     return slaBreaches.filter(b => {
       if (slaSearchText && !b.cve_id.toLowerCase().includes(slaSearchText.toLowerCase())) return false;
       if (slaSeverityFilter !== 'Todas' && b.severity !== slaSeverityFilter) return false;
+      if (slaCategoryFilter !== 'Todas' && (b.category || '') !== slaCategoryFilter) return false;
       if (slaStatusFilter !== 'Todos') {
-        let status = 'Dentro de plazo';
-        if (b.days_remaining < 0) {
-          status = 'Excedido';
-        } else if (b.days_remaining <= (b.sla_days * 0.2)) {
-          status = 'Próximo a vencer';
-        }
-        if (status !== slaStatusFilter) return false;
+        if (slaStatusFilter !== slaStatusOf(b)) return false;
       }
       return true;
     });
-  }, [slaBreaches, slaSearchText, slaSeverityFilter, slaStatusFilter]);
+  }, [slaBreaches, slaSearchText, slaSeverityFilter, slaStatusFilter, slaCategoryFilter]);
+
+  // Resumen de cumplimiento por categoría, calculado sobre el conjunto completo y no sobre
+  // el filtrado: es el estado real del proyecto, no el de la vista que se esté mirando.
+  const slaSummary = useMemo(() => {
+    return SLA_CATEGORIES.map(cat => {
+      const rows = slaBreaches.filter(b => (b.category || '') === cat.value);
+      const breached = rows.filter(b => b.days_remaining < 0).length;
+      const dueSoon = rows.filter(b => b.days_remaining >= 0 && b.days_remaining <= b.sla_days * 0.2).length;
+      const onTime = rows.length - breached;
+      return {
+        ...cat,
+        total: rows.length,
+        breached,
+        dueSoon,
+        onTime,
+        percent: rows.length === 0 ? 100 : Math.round((onTime / rows.length) * 1000) / 10
+      };
+    });
+  }, [slaBreaches]);
+
+  const slaUnclassified = useMemo(
+    () => slaBreaches.filter(b => !b.category).length,
+    [slaBreaches]
+  );
 
   // Modals state
   const [activeModal, setActiveModal] = useState(null); // 'policy', 'role', 'activity', 'procedure'
@@ -94,9 +158,25 @@ export function GovernancePage({ selectedProjectId }) {
   const fetchSLAConfig = () => fetch(`${API_BASE}/sla?project_id=${selectedProjectId}`).then(r => r.json()).then(d => setSLAConfig(d || []));
   const fetchSLABreaches = () => fetch(`${API_BASE}/sla/breaches?project_id=${selectedProjectId}`).then(r => r.json()).then(d => setSLABreaches(d || []));
 
-  const handleSLAChange = (severity, newDays) => {
-    setSLAConfig(prev => prev.map(c => c.severity === severity ? { ...c, days: parseInt(newDays, 10) || 0 } : c));
+  // La clave de una fila de configuración es el par (categoría, severidad): sin la categoría
+  // se editarían a la vez el plazo de servidores y el de puestos.
+  const handleSLAChange = (category, severity, newDays) => {
+    const days = parseInt(newDays, 10) || 0;
+    setSLAConfig(prev => {
+      const exists = prev.some(c => c.category === category && c.severity === severity);
+      if (exists) {
+        return prev.map(c =>
+          c.category === category && c.severity === severity ? { ...c, days } : c
+        );
+      }
+      // La fila puede no venir del backend si la configuración se guardó antes de separar
+      // por tipo de activo; se crea al vuelo para que el input sea editable igualmente.
+      return [...prev, { category, severity, days }];
+    });
   };
+
+  const slaDaysFor = (category, severity) =>
+    slaConfig.find(c => c.category === category && c.severity === severity)?.days ?? 0;
 
   const saveSLAConfig = async () => {
     try {
@@ -660,7 +740,8 @@ export function GovernancePage({ selectedProjectId }) {
                   Configuración de SLA (Días)
                 </h3>
                 <p style={{ color: 'var(--c300)', fontSize: '13px', margin: '4px 0 0 0' }}>
-                  Define el límite máximo de días permitidos para parchear vulnerabilidades según su severidad CVSS.
+                  Define el límite máximo de días permitidos para parchear vulnerabilidades según su severidad CVSS
+                  y el tipo de activo afectado.
                 </p>
               </div>
               <button 
@@ -671,31 +752,96 @@ export function GovernancePage({ selectedProjectId }) {
               </button>
             </div>
             
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
-              {['Critical', 'High', 'Medium', 'Low'].map(severity => {
-                const config = slaConfig.find(c => c.severity === severity) || { days: 0 };
-                let color = 'var(--c300)';
-                if (severity === 'Critical') color = '#ff3264';
-                if (severity === 'High') color = '#ffaa00';
-                if (severity === 'Medium') color = 'var(--c400)';
-                if (severity === 'Low') color = 'var(--c300)';
-                
-                return (
-                  <div key={severity} style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--line)', borderRadius: '8px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    <div style={{ color, fontSize: '14px', fontFamily: 'Orbitron, sans-serif', fontWeight: 'bold' }}>{severity}</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <input 
-                        type="number" 
-                        value={config.days} 
-                        onChange={(e) => handleSLAChange(severity, e.target.value)}
-                        style={{ width: '80px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--line)', color: 'white', padding: '8px 12px', borderRadius: '4px', fontSize: '16px', fontFamily: 'Share Tech Mono, monospace' }} 
-                      />
-                      <span style={{ color: 'var(--c300)', fontSize: '12px' }}>Días</span>
-                    </div>
+            {/* Un bloque por acuerdo: los servidores y los puestos tienen SLA propio. */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {SLA_CATEGORIES.map(category => (
+                <div
+                  key={category.value}
+                  style={{
+                    border: '1px solid var(--line)',
+                    borderLeft: `3px solid ${category.accent}`,
+                    borderRadius: '10px',
+                    padding: '18px 20px',
+                    background: 'rgba(255,255,255,0.015)'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', flexWrap: 'wrap', marginBottom: '14px' }}>
+                    <h4 style={{ margin: 0, fontFamily: 'Orbitron, sans-serif', fontSize: '13px', textTransform: 'uppercase', color: category.accent, letterSpacing: '1px' }}>
+                      SLA · {category.label}
+                    </h4>
+                    <span style={{ color: 'var(--c300)', fontSize: '12px' }}>{category.hint}</span>
                   </div>
-                )
-              })}
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
+                    {SLA_SEVERITIES.map(severity => (
+                      <div
+                        key={severity}
+                        style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--line)', borderRadius: '8px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}
+                      >
+                        <div style={{ color: SLA_SEVERITY_COLORS[severity], fontSize: '14px', fontFamily: 'Orbitron, sans-serif', fontWeight: 'bold' }}>
+                          {severity}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <input
+                            type="number"
+                            min="1"
+                            aria-label={`Días de SLA para severidad ${severity} en ${category.label}`}
+                            value={slaDaysFor(category.value, severity)}
+                            onChange={(e) => handleSLAChange(category.value, severity, e.target.value)}
+                            style={{ width: '80px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--line)', color: 'white', padding: '8px 12px', borderRadius: '4px', fontSize: '16px', fontFamily: 'Share Tech Mono, monospace' }}
+                          />
+                          <span style={{ color: 'var(--c300)', fontSize: '12px' }}>Días</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
+
+            {/* Cumplimiento actual de cada acuerdo, sobre el total del proyecto */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px', marginTop: '20px' }}>
+              {slaSummary.map(s => (
+                <div
+                  key={s.value}
+                  style={{
+                    border: '1px solid var(--line)',
+                    borderRadius: '10px',
+                    padding: '16px 18px',
+                    background: 'rgba(0,0,0,0.25)'
+                  }}
+                >
+                  <div style={{ color: 'var(--c300)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1.5px', fontFamily: 'Share Tech Mono, monospace' }}>
+                    Cumplimiento · {s.label}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', margin: '8px 0 10px' }}>
+                    <strong style={{ fontSize: '26px', color: s.total === 0 ? 'var(--c300)' : (s.percent >= 95 ? '#33e08a' : s.percent >= 80 ? '#ffaa00' : '#ff3264'), fontFamily: 'Orbitron, sans-serif' }}>
+                      {s.percent}%
+                    </strong>
+                    <span style={{ color: 'var(--c300)', fontSize: '12px' }}>
+                      {s.total === 0 ? 'sin vulnerabilidades activas' : `${s.onTime} de ${s.total} en plazo`}
+                    </span>
+                  </div>
+                  <div style={{ height: '5px', borderRadius: '999px', background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${Math.min(100, Math.max(0, s.percent))}%`, background: s.percent >= 95 ? '#33e08a' : s.percent >= 80 ? '#ffaa00' : '#ff3264' }} />
+                  </div>
+                  <div style={{ display: 'flex', gap: '16px', marginTop: '10px', fontSize: '12px', color: 'var(--c300)' }}>
+                    <span>Excedidas <strong style={{ color: '#ff3264' }}>{s.breached}</strong></span>
+                    <span>Por vencer <strong style={{ color: '#ffaa00' }}>{s.dueSoon}</strong></span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {slaUnclassified > 0 && (
+              <p style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px dashed var(--line)', color: 'var(--c300)', fontSize: '12.5px', lineHeight: 1.55 }}>
+                <strong style={{ color: '#ffaa00' }}>{slaUnclassified}</strong>{' '}
+                {slaUnclassified === 1 ? 'vulnerabilidad activa queda' : 'vulnerabilidades activas quedan'} fuera de
+                ambos acuerdos: {slaUnclassified === 1 ? 'el activo afectado no tiene' : 'los activos afectados no tienen'} un
+                tipo reconocido, así que no se les puede exigir plazo. Corrige el tipo del endpoint en el
+                inventario para incorporarlas al SLA que les corresponda.
+              </p>
+            )}
             
             <div style={{ marginTop: '40px' }}>
               <h3 style={{ fontFamily: 'Orbitron, sans-serif', color: 'var(--c50)', textTransform: 'uppercase', margin: '0 0 16px 0', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -740,8 +886,31 @@ export function GovernancePage({ selectedProjectId }) {
                 </div>
 
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <span style={{ color: 'var(--c300)', fontSize: '12px', textTransform: 'uppercase', fontFamily: 'Orbitron, sans-serif' }}>Activo:</span>
+                  {[{ value: 'Todas', label: 'Todos' }, ...SLA_CATEGORIES, { value: '', label: 'Sin clasificar' }].map(c => (
+                    <button
+                      key={c.value || 'none'}
+                      onClick={() => setSlaCategoryFilter(c.value)}
+                      style={{
+                        background: slaCategoryFilter === c.value ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)',
+                        border: `1px solid ${slaCategoryFilter === c.value ? 'var(--c50)' : 'var(--line)'}`,
+                        color: slaCategoryFilter === c.value ? '#fff' : 'var(--c300)',
+                        padding: '6px 12px',
+                        borderRadius: '16px',
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                        fontFamily: 'Share Tech Mono, monospace',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
                   <span style={{ color: 'var(--c300)', fontSize: '12px', textTransform: 'uppercase', fontFamily: 'Orbitron, sans-serif' }}>Estado:</span>
-                  {['Todos', 'Excedido', 'Próximo a vencer', 'Dentro de plazo'].map(st => (
+                  {['Todos', 'Excedido', 'Próximo a vencer', 'Dentro de plazo', 'Sin SLA'].map(st => (
                     <button
                       key={st}
                       onClick={() => setSlaStatusFilter(st)}
@@ -769,6 +938,7 @@ export function GovernancePage({ selectedProjectId }) {
                     <tr style={{ borderBottom: '1px solid var(--line)', background: 'rgba(0,0,0,0.2)' }}>
                       <th style={{ padding: '12px 16px', color: 'var(--c300)', fontWeight: 'normal', fontFamily: 'Orbitron, sans-serif' }}>CVE ID</th>
                       <th style={{ padding: '12px 16px', color: 'var(--c300)', fontWeight: 'normal', fontFamily: 'Orbitron, sans-serif' }}>Severidad</th>
+                      <th style={{ padding: '12px 16px', color: 'var(--c300)', fontWeight: 'normal', fontFamily: 'Orbitron, sans-serif' }}>Tipo de activo</th>
                       <th style={{ padding: '12px 16px', color: 'var(--c300)', fontWeight: 'normal', fontFamily: 'Orbitron, sans-serif' }}>CVSS</th>
                       <th style={{ padding: '12px 16px', color: 'var(--c300)', fontWeight: 'normal', fontFamily: 'Orbitron, sans-serif' }}>Detectado el</th>
                       <th style={{ padding: '12px 16px', color: 'var(--c300)', fontWeight: 'normal', fontFamily: 'Orbitron, sans-serif' }}>Días de SLA</th>
@@ -778,13 +948,13 @@ export function GovernancePage({ selectedProjectId }) {
                   <tbody>
                     {slaBreaches.length === 0 ? (
                       <tr>
-                        <td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: 'var(--c300)', fontStyle: 'italic' }}>
+                        <td colSpan={7} style={{ padding: '24px', textAlign: 'center', color: 'var(--c300)', fontStyle: 'italic' }}>
                           No hay vulnerabilidades activas monitorizadas
                         </td>
                       </tr>
                     ) : filteredSLABreaches.length === 0 ? (
                       <tr>
-                        <td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: 'var(--c300)', fontStyle: 'italic' }}>
+                        <td colSpan={7} style={{ padding: '24px', textAlign: 'center', color: 'var(--c300)', fontStyle: 'italic' }}>
                           No hay vulnerabilidades que coincidan con los filtros
                         </td>
                       </tr>
@@ -795,13 +965,17 @@ export function GovernancePage({ selectedProjectId }) {
                         if (b.severity === 'High') sevColor = '#ffaa00';
                         if (b.severity === 'Medium') sevColor = 'var(--c400)';
 
+                        const status = slaStatusOf(b);
                         let statusText = '';
                         let statusColor = 'var(--c50)';
-                        
-                        if (b.days_remaining < 0) {
+
+                        if (status === 'Sin SLA') {
+                          statusText = 'Sin SLA (activo sin clasificar)';
+                          statusColor = '#ffaa00';
+                        } else if (status === 'Excedido') {
                           statusText = `Excedido hace ${Math.abs(b.days_remaining)} días`;
                           statusColor = '#ff3264';
-                        } else if (b.days_remaining <= (b.sla_days * 0.2)) {
+                        } else if (status === 'Próximo a vencer') {
                           statusText = `Vence en ${b.days_remaining} días`;
                           statusColor = '#ffaa00';
                         } else {
@@ -809,15 +983,39 @@ export function GovernancePage({ selectedProjectId }) {
                           statusColor = 'var(--c400)';
                         }
 
+                        const catAccent = slaCategoryAccent(b.category);
+
                         return (
-                          <tr key={`${b.cve_id}-${idx}`} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                          <tr key={`${b.cve_id}-${b.category || 'none'}-${idx}`} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                             <td style={{ padding: '12px 16px', color: 'var(--c50)', fontFamily: 'Share Tech Mono, monospace' }}>{b.cve_id}</td>
                             <td style={{ padding: '12px 16px', color: sevColor, fontWeight: 'bold' }}>{b.severity}</td>
+                            <td style={{ padding: '12px 16px' }}>
+                              <span style={{
+                                display: 'inline-block',
+                                padding: '3px 10px',
+                                borderRadius: '999px',
+                                fontSize: '11.5px',
+                                fontWeight: 'bold',
+                                border: `1px solid ${catAccent}`,
+                                color: catAccent,
+                                background: 'rgba(255,255,255,0.03)',
+                                whiteSpace: 'nowrap'
+                              }}>
+                                {slaCategoryLabel(b.category)}
+                              </span>
+                              {b.asset_count > 1 && (
+                                <span style={{ color: 'var(--c300)', fontSize: '11px', marginLeft: '8px' }}>
+                                  ×{b.asset_count}
+                                </span>
+                              )}
+                            </td>
                             <td style={{ padding: '12px 16px', color: 'var(--c200)' }}>{b.base_score.toFixed(1)}</td>
                             <td style={{ padding: '12px 16px', color: 'var(--c300)' }}>
                               {new Date(b.first_detected_at).toLocaleDateString()}
                             </td>
-                            <td style={{ padding: '12px 16px', color: 'var(--c300)' }}>{b.sla_days}</td>
+                            <td style={{ padding: '12px 16px', color: 'var(--c300)' }}>
+                              {b.sla_days > 0 ? b.sla_days : '—'}
+                            </td>
                             <td style={{ padding: '12px 16px', color: statusColor, fontWeight: 'bold' }}>
                               {statusText}
                             </td>

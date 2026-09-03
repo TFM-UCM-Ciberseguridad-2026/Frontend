@@ -1,6 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import '../AddAssets/AddAssetsButton.css';
 
+// Los cinco roles que acepta el backend (domain.IsValidEndpointType). De este tipo depende
+// la categoría del activo y, con ella, el SLA de parcheo que se le exige.
+const ENDPOINT_TYPES = [
+  { value: 'Server', label: 'Servidor (Server)' },
+  { value: 'Workstation', label: 'Estación de Trabajo (Workstation)' },
+  { value: 'Domain Controller', label: 'Controlador de Dominio (Domain Controller)' },
+  { value: 'Firewall', label: 'Firewall' },
+  { value: 'Router', label: 'Router' }
+];
+
+// Activos antiguos pueden traer un tipo libre ('Linux', 'Linux Server'…) de antes de que se
+// validara. No se sustituye en silencio por 'Server': eso reclasificaría el activo sin que
+// nadie lo decida. Se muestra tal cual, marcado como inválido, para forzar una elección
+// consciente antes de guardar.
+const isKnownEndpointType = (value) => ENDPOINT_TYPES.some(t => t.value === value);
+
 export function EditNodeModal({ node, onClose, updateNode }) {
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState(null);
@@ -230,12 +246,21 @@ export function EditNodeModal({ node, onClose, updateNode }) {
                     value={formData.tipo || 'Server'}
                     onChange={(e) => updateField('tipo', e.target.value)}
                   >
-                    <option value="Server">Servidor (Server)</option>
-                    <option value="Workstation">Estación de Trabajo (Workstation)</option>
-                    <option value="Domain Controller">Controlador de Dominio (Domain Controller)</option>
-                    <option value="Firewall">Firewall</option>
-                    <option value="Router">Router</option>
+                    {!isKnownEndpointType(formData.tipo) && (
+                      <option value={formData.tipo} disabled>
+                        {formData.tipo ? `${formData.tipo} — tipo no reconocido` : 'Sin tipo asignado'}
+                      </option>
+                    )}
+                    {ENDPOINT_TYPES.map(t => (
+                      <option key={t.value} value={t.value}>{t.label}</option>
+                    ))}
                   </select>
+                  {!isKnownEndpointType(formData.tipo) && (
+                    <p className="asset-field-warning">
+                      Este activo no tiene un tipo válido, así que queda fuera del SLA de parcheo.
+                      Elige si es un servidor o un puesto de trabajo para incorporarlo.
+                    </p>
+                  )}
                 </div>
 
                 <div>

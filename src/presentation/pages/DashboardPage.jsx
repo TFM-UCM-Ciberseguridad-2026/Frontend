@@ -58,7 +58,8 @@ export function DashboardPage({
   exportProject,
   exportMitreNavigator,
   exportInventory,
-  exportVulnReport,
+  exportWeeklyReport,
+  exportMonthlyReport,
   importProject,
   vulnScanLoading,
   riskComputeLoading,
@@ -290,7 +291,8 @@ export function DashboardPage({
         onExportProject={(targetProjectId) => exportProject(targetProjectId)}
         onExportMitre={(targetProjectId) => exportMitreNavigator(targetProjectId)}
         onExportInventory={(targetProjectId) => exportInventory(targetProjectId)}
-        onExportVulnReport={(targetProjectId) => exportVulnReport(targetProjectId)}
+        onExportWeeklyReport={(targetProjectId) => exportWeeklyReport(targetProjectId)}
+        onExportMonthlyReport={(targetProjectId) => exportMonthlyReport(targetProjectId)}
       />
 
       {/* MODAL IMPORTAR ARCHIVE */}

@@ -9,12 +9,16 @@ export function ExportModal({
   onExportProject,
   onExportMitre,
   onExportInventory,
-  onExportVulnReport
+  onExportWeeklyReport,
+  onExportMonthlyReport
 }) {
   const [exportProjectChecked, setExportProjectChecked] = useState(true);
   const [exportInventoryChecked, setExportInventoryChecked] = useState(true);
   const [exportMitreChecked, setExportMitreChecked] = useState(false);
-  const [exportVulnReportChecked, setExportVulnReportChecked] = useState(false);
+  // Los dos informes PPTX se descargan por separado porque cubren cadencias distintas:
+  // el semanal es operativo y el mensual es de gobierno.
+  const [exportWeeklyChecked, setExportWeeklyChecked] = useState(false);
+  const [exportMonthlyChecked, setExportMonthlyChecked] = useState(false);
   const [targetProjectId, setTargetProjectId] = useState(selectedProjectId || (projects[0]?.id ?? '1'));
 
   React.useEffect(() => {
@@ -35,8 +39,11 @@ export function ExportModal({
     if (exportMitreChecked && onExportMitre) {
       onExportMitre(targetProjectId);
     }
-    if (exportVulnReportChecked && onExportVulnReport) {
-      onExportVulnReport(targetProjectId);
+    if (exportWeeklyChecked && onExportWeeklyReport) {
+      onExportWeeklyReport(targetProjectId);
+    }
+    if (exportMonthlyChecked && onExportMonthlyReport) {
+      onExportMonthlyReport(targetProjectId);
     }
     onClose();
   };
@@ -111,12 +118,24 @@ export function ExportModal({
           <label className="archive-checkbox-card">
             <input
               type="checkbox"
-              checked={exportVulnReportChecked}
-              onChange={e => setExportVulnReportChecked(e.target.checked)}
+              checked={exportWeeklyChecked}
+              onChange={e => setExportWeeklyChecked(e.target.checked)}
             />
             <div className="archive-checkbox-info">
-              <h4>Exportar Reporte de Vulnerabilidades a PowerPoint (.pptx)</h4>
-              <p>Genera un reporte ejecutivo con gráficas de distribución de vulnerabilidades por severidad (Crítica, Alta, Media, Baja) y tabla Top-10 CVEs.</p>
+              <h4>Informe Semanal de Vulnerabilidades a PowerPoint (.pptx)</h4>
+              <p>Informe operativo para el equipo: situación de la semana, inventario y grupos de mantenimiento, cumplimiento de SLA, vencimientos próximos, cola de remediación, envejecimiento del backlog y matriz MITRE ATT&amp;CK. Estructurado según NIST SP 800-40 Rev. 4.</p>
+            </div>
+          </label>
+
+          <label className="archive-checkbox-card">
+            <input
+              type="checkbox"
+              checked={exportMonthlyChecked}
+              onChange={e => setExportMonthlyChecked(e.target.checked)}
+            />
+            <div className="archive-checkbox-info">
+              <h4>Informe Mensual de Gobierno a PowerPoint (.pptx)</h4>
+              <p>Informe para el Comité de Seguridad: marco de referencia y alcance, situación del mes, matriz de decisión y respuesta al riesgo, concentración por táctica, gobierno documental con matriz RACI y trazabilidad de controles SP 800-53 Rev. 4.</p>
             </div>
           </label>
         </div>
@@ -128,7 +147,7 @@ export function ExportModal({
           <button
             className="archive-btn archive-btn-primary"
             onClick={handleExport}
-            disabled={!exportProjectChecked && !exportInventoryChecked && !exportMitreChecked && !exportVulnReportChecked}
+            disabled={!exportProjectChecked && !exportInventoryChecked && !exportMitreChecked && !exportWeeklyChecked && !exportMonthlyChecked}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
