@@ -359,6 +359,11 @@ export function NetworkGraph({
   const dragSnapTargetRef = useRef(null);
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
+  const [canvasEl, setCanvasEl] = useState(null);
+  const canvasCallbackRef = useCallback((node) => {
+    canvasRef.current = node;
+    setCanvasEl(node);
+  }, []);
   const animationFrameRef = useRef(null);
   const hasInitialTreeFitRef = useRef(false);
 
@@ -1697,7 +1702,7 @@ export function NetworkGraph({
 
     frameId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(frameId);
-  }, [graphData, layoutMode, selectedNode, filterType, searchQuery, graphAdvancedFilters, selectedExploitationPath, pathEdgeIdSet, pathConnectorNodeIdSet, pathNodeStepMap, lineageMaps, collapsedNodeIds]);
+  }, [canvasEl, graphData, layoutMode, selectedNode, filterType, searchQuery, graphAdvancedFilters, selectedExploitationPath, pathEdgeIdSet, pathConnectorNodeIdSet, pathNodeStepMap, lineageMaps, collapsedNodeIds]);
 
   // Conversión de coordenadas de pantalla a coordenadas del mundo Canvas
   const screenToWorld = useCallback((clientX, clientY) => {
@@ -1978,11 +1983,10 @@ export function NetworkGraph({
 
   // Registrar el listener de rueda con passive:false para poder llamar preventDefault()
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    canvas.addEventListener('wheel', handleWheel, { passive: false });
-    return () => canvas.removeEventListener('wheel', handleWheel);
-  }, [handleWheel]);
+    if (!canvasEl) return;
+    canvasEl.addEventListener('wheel', handleWheel, { passive: false });
+    return () => canvasEl.removeEventListener('wheel', handleWheel);
+  }, [canvasEl, handleWheel]);
 
   const handleDoubleClick = (e) => {
     const { x: wx, y: wy } = screenToWorld(e.clientX, e.clientY);
@@ -2061,7 +2065,7 @@ export function NetworkGraph({
 
       {/* LIENZO CANVAS DE ALTO RENDIMIENTO */}
       <canvas
-        ref={canvasRef}
+        ref={canvasCallbackRef}
         style={{ width: '100%', height: '100%', display: 'block', cursor: 'grab' }}
         onMouseDown={handleMouseDown}
         onDoubleClick={handleDoubleClick}
