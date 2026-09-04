@@ -88,7 +88,7 @@ export function PatchQueuePage({
   };
 
   const getPatchQueueItemKey = (item) =>
-    `${item.installation_id}-${item.cve_id}-${item.finding_id}`;
+    `${item.asset_type || 'SOFTWARE_INSTALLATION'}-${item.asset_id || item.installation_id}-${item.cve_id}-${item.finding_id}`;
 
   const selectedPatchItemKey = selectedPatchItem ? getPatchQueueItemKey(selectedPatchItem) : null;
   const currentSelectedPatchItem = selectedPatchItemKey
@@ -98,14 +98,16 @@ export function PatchQueuePage({
   const submitPatchApplication = async (payload) => {
     if (!currentSelectedPatchItem) return;
 
+    const assetType = currentSelectedPatchItem.asset_type || 'SOFTWARE_INSTALLATION';
+    const assetId = currentSelectedPatchItem.asset_id || currentSelectedPatchItem.installation_id;
     await declarePatchApplied?.(
-      currentSelectedPatchItem.installation_id,
-      payload,
+      assetId,
+      { ...payload, asset_type: assetType, asset_id: assetId, finding_id: currentSelectedPatchItem.finding_id },
       getPatchQueueItemKey(currentSelectedPatchItem)
     );
 
-    if (selectedHistoryItem?.installation_id === currentSelectedPatchItem.installation_id) {
-      await fetchAppliedPatchHistory?.(currentSelectedPatchItem.installation_id);
+    if (selectedHistoryItem && getPatchQueueItemKey(selectedHistoryItem) === getPatchQueueItemKey(currentSelectedPatchItem)) {
+      await fetchAppliedPatchHistory?.(assetId, assetType);
     }
 
     setSelectedPatchItem(null);
@@ -147,7 +149,7 @@ export function PatchQueuePage({
 
   const selectHistoryItem = async (item) => {
     setSelectedHistoryItem(item);
-    await fetchAppliedPatchHistory?.(item.installation_id);
+    await fetchAppliedPatchHistory?.(item.asset_id || item.installation_id, item.asset_type);
   };
 
   const handleMetricBadgeClick = (tier) => {
@@ -170,9 +172,9 @@ export function PatchQueuePage({
         </div>
         <button
           className="btn btn-secondary"
-          onClick={() => {
-            refreshPatchesForProject?.();
-            refetch();
+          onClick={async () => {
+            await refreshPatchesForProject?.(queue);
+            await refetch();
           }}
           disabled={patchQueueLoading || patchProjectRefreshLoading}
         >
@@ -322,7 +324,7 @@ export function PatchQueuePage({
                       </td>
                       <td>
                         <strong>{item.software_name || 'N/A'}</strong>
-                        <small>{item.installation_id}</small>
+                        <small>{item.asset_type === 'CONTAINER' ? `Container: ${item.container_id || item.asset_id || 'N/A'}` : item.installation_id}</small>
                       </td>
                       <td>
                         <span>{item.software_version || 'N/A'}</span>

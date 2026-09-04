@@ -10,8 +10,8 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     this.apiDataSource = apiDataSource;
   }
 
-  async getInfrastructure() {
-    const rawData = await this.apiDataSource.fetchInfrastructure();
+  async getInfrastructure(projectId) {
+    const rawData = await this.apiDataSource.fetchInfrastructure(projectId);
     const nodes = (rawData.nodes || []).map(n => new Node(n));
     const relationships = rawData.relationships || [];
     return { nodes, relationships };
@@ -118,16 +118,16 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     return await this.apiDataSource.fetchPatchesForVulnerability(cveId);
   }
 
-  async declarePatchApplied(installationId, payload) {
-    return await this.apiDataSource.declarePatchApplied(installationId, payload);
+  async declarePatchApplied(assetId, payload) {
+    return await this.apiDataSource.declarePatchApplied(assetId, payload);
   }
 
   async refreshPatchesForProject(projectId, options) {
     return await this.apiDataSource.refreshPatchesForProject(projectId, options);
   }
 
-  async getAppliedPatchHistory(installationId) {
-    return await this.apiDataSource.fetchAppliedPatchHistory(installationId);
+  async getAppliedPatchHistory(assetId, assetType) {
+    return await this.apiDataSource.fetchAppliedPatchHistory(assetId, assetType);
   }
 
   async getEndpointPatchHistory(endpointId) {

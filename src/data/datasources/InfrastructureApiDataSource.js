@@ -1,6 +1,7 @@
 export class InfrastructureApiDataSource {
-  async fetchInfrastructure() {
-    const res = await fetch('/api/infrastructure');
+  async fetchInfrastructure(projectId) {
+    const url = projectId ? `/api/infrastructure?project_id=${projectId}` : '/api/infrastructure';
+    const res = await fetch(url);
     return await this._handleResponse(res);
   }
 
@@ -370,8 +371,9 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
-  async declarePatchApplied(installationId, payload) {
-    const res = await fetch(`/api/installations/${encodeURIComponent(installationId)}/applied-patches`, {
+  async declarePatchApplied(assetId, payload) {
+    const isContainer = payload?.asset_type === 'CONTAINER';
+    const res = await fetch(`/${isContainer ? 'api/containers' : 'api/installations'}/${encodeURIComponent(assetId)}/applied-patches`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -379,8 +381,9 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
-  async fetchAppliedPatchHistory(installationId) {
-    const res = await fetch(`/api/installations/${encodeURIComponent(installationId)}/applied-patches`);
+  async fetchAppliedPatchHistory(assetId, assetType = 'SOFTWARE_INSTALLATION') {
+    const resource = assetType === 'CONTAINER' ? 'containers' : 'installations';
+    const res = await fetch(`/api/${resource}/${encodeURIComponent(assetId)}/applied-patches`);
     return await this._handleResponse(res);
   }
 

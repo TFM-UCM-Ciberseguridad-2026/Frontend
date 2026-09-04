@@ -33,6 +33,14 @@ import { DeclarePatchAppliedUseCase } from '../../domain/usecases/DeclarePatchAp
 import { GetPatchesForVulnerabilityUseCase } from '../../domain/usecases/GetPatchesForVulnerabilityUseCase';
 import { GetAppliedPatchHistoryUseCase } from '../../domain/usecases/GetAppliedPatchHistoryUseCase';
 
+const isSoftwareInstallationNode = node =>
+  node?.primaryLabel === 'SoftwareInstallation' ||
+  node?.labels?.includes('SoftwareInstallation');
+
+const isSoftwareNode = node =>
+  node?.primaryLabel === 'Software' ||
+  node?.labels?.includes('Software');
+
 const VULN_SCAN_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
 function shouldForceVulnRefresh(installationNode) {
@@ -63,9 +71,13 @@ export function useInfrastructure() {
     environment: 'ALL',
     internetExposed: 'ALL',
     status: 'ALL',
-    riskTier: 'ALL'
+    riskTier: 'ALL',
+    includeAncestors: false,
+    onlyVulnerable: false,
+    inExploitationPath: false
   });
   const [selectedProjectId, setSelectedProjectId] = useState(null);
+  const [projects, setProjects] = useState([]);
 
   const updateGraphAdvancedFilter = (key, value) => {
     setGraphAdvancedFilters(prev => ({
@@ -81,7 +93,10 @@ export function useInfrastructure() {
       environment: 'ALL',
       internetExposed: 'ALL',
       status: 'ALL',
-      riskTier: 'ALL'
+      riskTier: 'ALL',
+      includeAncestors: false,
+      onlyVulnerable: false,
+      inExploitationPath: false
     });
     setSearchQuery('');
     setFilterType('ALL');
@@ -180,11 +195,31 @@ export function useInfrastructure() {
     toast.showToast(msg, type, title);
   };
 
-  const fetchInfrastructure = async (quiet = false) => {
+  const fetchProjects = useCallback(async () => {
+    try {
+      const data = await getInfrastructureUseCase.execute(null);
+      if (data && data.nodes) {
+        const foundProjects = data.nodes
+          .filter(n => n.labels?.includes('Project') || n.primaryLabel === 'Project')
+          .map(n => ({
+            id: String(n.properties?.id ?? n.id),
+            name: n.properties?.name || n.properties?.nombre || n.name || `Proyecto #${n.properties?.id ?? n.id}`
+          }));
+        setProjects(foundProjects);
+        return foundProjects;
+      }
+    } catch (err) {
+      console.error('Error fetching projects list:', err);
+    }
+    return [];
+  }, [getInfrastructureUseCase]);
+
+  const fetchInfrastructure = async (quiet = false, projectIdOverride = undefined) => {
     if (!quiet) setLoading(true);
     setError(null);
     try {
-      const data = await getInfrastructureUseCase.execute();
+      const targetProjId = projectIdOverride !== undefined ? projectIdOverride : selectedProjectId;
+      const data = await getInfrastructureUseCase.execute(targetProjId);
       setGraphData(data);
     } catch (err) {
       console.error(err);
@@ -327,6 +362,7 @@ export function useInfrastructure() {
     try {
       const res = await renameProjectUseCase.execute(projectId, newName, justification);
       showToast('¡Proyecto renombrado con éxito!');
+      await fetchProjects();
       await fetchInfrastructure(true);
       return res;
     } catch (err) {
@@ -339,11 +375,11 @@ export function useInfrastructure() {
     try {
       await deleteProjectUseCase.execute(projectId, justification);
       showToast('¡Proyecto eliminado con éxito!');
+      const updatedProjects = await fetchProjects();
       await fetchInfrastructure(true);
       if (String(projectId) === String(selectedProjectId)) {
-        const remainingProjects = projects.filter(p => String(p.id) !== String(projectId));
-        if (remainingProjects.length > 0) {
-          setSelectedProjectId(remainingProjects[0].id);
+        if (updatedProjects.length > 0) {
+          setSelectedProjectId(updatedProjects[0].id);
         } else {
           setSelectedProjectId(null);
           setShowDashboard(false);
@@ -359,6 +395,7 @@ export function useInfrastructure() {
     try {
       const res = await createProjectUseCase.execute(data);
       toast.success('¡Proyecto añadido correctamente!', 'Nuevo Proyecto');
+      await fetchProjects();
       await fetchInfrastructure(true);
       return res;
     } catch (err) {
@@ -598,8 +635,8 @@ export function useInfrastructure() {
     return null;
   };
 
-  const fetchAppliedPatchHistory = async (installationId) => {
-    if (!installationId) {
+  const fetchAppliedPatchHistory = async (assetId, assetType = 'SOFTWARE_INSTALLATION') => {
+    if (!assetId) {
       setAppliedPatchHistory([]);
       setAppliedPatchHistoryInstallationId(null);
       return [];
@@ -607,10 +644,10 @@ export function useInfrastructure() {
 
     setAppliedPatchHistoryLoading(true);
     setAppliedPatchHistoryError(null);
-    setAppliedPatchHistoryInstallationId(installationId);
+      setAppliedPatchHistoryInstallationId(assetId);
 
     try {
-      const history = await getAppliedPatchHistoryUseCase.execute(installationId);
+      const history = await getAppliedPatchHistoryUseCase.execute(assetId, assetType);
       setAppliedPatchHistory(history);
       return history;
     } catch (err) {
@@ -784,16 +821,32 @@ export function useInfrastructure() {
   };
 
   useEffect(() => {
-    fetchInfrastructure();
-  }, [showDashboard]);
+    const initProjects = async () => {
+      const projs = await fetchProjects();
+      if (projs.length > 0 && selectedProjectId === null) {
+        setSelectedProjectId(projs[0].id);
+      }
+    };
+    initProjects();
+  }, [fetchProjects, showDashboard]);
 
-  const projects = useMemo(() => {
-    return (graphData.nodes || []).filter(
-      n => n.labels?.includes('Project') || n.primaryLabel === 'Project'
-    ).map(n => ({
-      id: String(n.properties?.id ?? n.id),
-      name: n.properties?.name || n.properties?.nombre || n.name || `Proyecto #${n.properties?.id ?? n.id}`
-    }));
+  useEffect(() => {
+    if (graphData.nodes && graphData.nodes.length > 0) {
+      const foundProjects = graphData.nodes
+        .filter(n => n.labels?.includes('Project') || n.primaryLabel === 'Project')
+        .map(n => ({
+          id: String(n.properties?.id ?? n.id),
+          name: n.properties?.name || n.properties?.nombre || n.name || `Proyecto #${n.properties?.id ?? n.id}`
+        }));
+
+      if (foundProjects.length > 0) {
+        setProjects(prevProjects => {
+          const map = new Map(prevProjects.map(p => [String(p.id), p]));
+          foundProjects.forEach(p => map.set(String(p.id), p));
+          return Array.from(map.values());
+        });
+      }
+    }
   }, [graphData]);
 
   useEffect(() => {
@@ -806,6 +859,9 @@ export function useInfrastructure() {
   }, [projects, selectedProjectId]);
 
   useEffect(() => {
+    if (selectedProjectId !== null) {
+      fetchInfrastructure(false, selectedProjectId);
+    }
     setSelectedNode(null);
     setSelectedExploitationPath(null);
     setShowPathsModal(false);
@@ -828,6 +884,7 @@ export function useInfrastructure() {
 
     const rels = graphData.relationships || [];
     const nodeMap = new Map(graphData.nodes.map(n => [n.id, n]));
+    const nodeDecorations = new Map();
 
     rels.forEach(rel => {
       if (rel.type === 'INSTANCE_OF') {
@@ -836,9 +893,16 @@ export function useInfrastructure() {
         if (sourceNode && targetNode && 
            (sourceNode.primaryLabel === 'SoftwareInstallation' || sourceNode.labels?.includes('SoftwareInstallation')) && 
            (targetNode.primaryLabel === 'Software' || targetNode.labels?.includes('Software'))) {
-          if (!sourceNode.properties) sourceNode.properties = {};
-          sourceNode.properties.software_name = targetNode.properties?.name || targetNode.name;
+          const swName = targetNode.properties?.name || targetNode.name;
+          nodeDecorations.set(sourceNode.id, { software_name: swName });
         }
+      }
+    });
+
+    nodeDecorations.forEach((extra, nodeId) => {
+      const origNode = nodeMap.get(nodeId);
+      if (origNode) {
+        nodeMap.set(nodeId, { ...origNode, properties: { ...origNode.properties, ...extra } });
       }
     });
 
@@ -952,45 +1016,110 @@ export function useInfrastructure() {
       }
     });
 
-    const installationFindingsMap = new Map();
+    rels.forEach(rel => {
+      if (rel.type !== 'INSTANCE_OF') return;
+
+      const sourceNode = nodeMap.get(rel.source);
+      const targetNode = nodeMap.get(rel.target);
+      if (!sourceNode || !targetNode) return;
+
+      const sourceIsInstallation = isSoftwareInstallationNode(sourceNode);
+      const targetIsInstallation = isSoftwareInstallationNode(targetNode);
+      const sourceIsSoftware = isSoftwareNode(sourceNode);
+      const targetIsSoftware = isSoftwareNode(targetNode);
+
+      if (sourceIsInstallation && targetIsSoftware && reachableIds.has(rel.source)) {
+        reachableIds.add(rel.target);
+        return;
+      }
+
+      if (sourceIsSoftware && targetIsInstallation && reachableIds.has(rel.target)) {
+        reachableIds.add(rel.source);
+      }
+    });
+
+    const findingOwners = new Map();
+
+    projectInstallationIds.forEach(ownerId => {
+      findingOwners.set(ownerId, {
+        owner_id: ownerId,
+        owner_type: 'SoftwareInstallation'
+      });
+    });
+
+    projectContainerIds.forEach(ownerId => {
+      findingOwners.set(ownerId, {
+        owner_id: ownerId,
+        owner_type: 'Container'
+      });
+    });
+
+    projectContainerImageIds.forEach(ownerId => {
+      findingOwners.set(ownerId, {
+        owner_id: ownerId,
+        owner_type: 'ContainerImage'
+      });
+    });
+
+    const findingOwnerMap = new Map();
 
     rels.forEach(rel => {
-      const sourceIsInst = projectInstallationIds.has(rel.source);
-      const targetIsInst = projectInstallationIds.has(rel.target);
-      const sourceIsImage = projectContainerImageIds.has(rel.source);
-      const targetIsImage = projectContainerImageIds.has(rel.target);
+      if (rel.type !== 'HAS_FINDING') return;
 
-      if (sourceIsInst || targetIsInst || sourceIsImage || targetIsImage) {
-        const instId = (sourceIsInst || targetIsInst)
-          ? (sourceIsInst ? rel.source : rel.target)
-          : (sourceIsImage ? rel.source : rel.target);
-        const otherId = (sourceIsInst || sourceIsImage) ? rel.target : rel.source;
-        const otherNode = nodeMap.get(otherId);
-        if (!otherNode) return;
+      const sourceOwner = findingOwners.get(rel.source);
+      const targetOwner = findingOwners.get(rel.target);
+      const owner = sourceOwner || targetOwner;
 
-        const primaryLabel = otherNode.primaryLabel || otherNode.labels?.[0];
-        const labels = otherNode.labels || [];
+      if (!owner) return;
 
-        if (primaryLabel === 'Finding' || labels.includes('Finding') || rel.type === 'HAS_FINDING' || primaryLabel === 'Vulnerability' || labels.includes('Vulnerability') || rel.type === 'HAS_VULNERABILITY') {
-          if (!installationFindingsMap.has(instId)) {
-            installationFindingsMap.set(instId, []);
-          }
-          installationFindingsMap.get(instId).push(otherNode);
-        } else if (primaryLabel === 'Software' || labels.includes('Software') || rel.type === 'INSTANCE_OF') {
-          reachableIds.add(otherId);
-        }
+      const findingNodeId = sourceOwner ? rel.target : rel.source;
+      const findingNode = nodeMap.get(findingNodeId);
+      if (!findingNode) return;
+
+      const labels = findingNode.labels || [];
+      const isFinding =
+        findingNode.primaryLabel === 'Finding' ||
+        labels.includes('Finding');
+
+      if (!isFinding) return;
+
+      if (!findingOwnerMap.has(owner.owner_id)) {
+        findingOwnerMap.set(owner.owner_id, {
+          owner_id: owner.owner_id,
+          owner_type: owner.owner_type,
+          findings: [],
+          finding_ids: new Set()
+        });
       }
+
+      const ownerEntry = findingOwnerMap.get(owner.owner_id);
+      const findingIdentity = String(
+        findingNode.properties?.finding_key ||
+        findingNode.properties?.id ||
+        findingNode.id
+      );
+
+      if (ownerEntry.finding_ids.has(findingIdentity)) return;
+
+      ownerEntry.finding_ids.add(findingIdentity);
+      ownerEntry.findings.push(findingNode);
     });
 
     const groupedFindingNodesMap = new Map();
     const groupedFindingNodeIds = new Set();
     const routeFindingNodes = new Map();
 
-    installationFindingsMap.forEach((findingsList, instId) => {
+    findingOwnerMap.forEach(ownerEntry => {
+      const {
+        owner_id: ownerId,
+        owner_type: ownerType,
+        findings: findingsList
+      } = ownerEntry;
+
       if (findingsList.length === 0) return;
 
       const visibleFindings = findingsList.filter(isRouteFinding);
-      const groupedFindings = findingsList.filter(f => !isRouteFinding(f));
+      const groupedFindings = findingsList.filter(finding => !isRouteFinding(finding));
 
       visibleFindings.forEach(finding => {
         routeFindingNodes.set(finding.id, finding);
@@ -999,7 +1128,7 @@ export function useInfrastructure() {
 
       if (groupedFindings.length === 0) return;
 
-      const groupedNodeId = `findings-group-${instId}`;
+      const groupedNodeId = `findings-group-${ownerType}-${ownerId}`;
       groupedFindingNodeIds.add(groupedNodeId);
 
       const groupedNode = {
@@ -1010,13 +1139,25 @@ export function useInfrastructure() {
         name: `Hallazgos (${groupedFindings.length})`,
         properties: {
           id: groupedNodeId,
-          software_installation_id: instId,
+          owner_id: ownerId,
+          owner_type: ownerType,
+          software_installation_id:
+            ownerType === 'SoftwareInstallation' ? ownerId : null,
+          container_id:
+            ownerType === 'Container' ? ownerId : null,
+          container_image_id:
+            ownerType === 'ContainerImage' ? ownerId : null,
           findings: groupedFindings,
-          has_vulnerabilities: groupedFindings.some(f => Boolean(f.properties?.has_vulnerabilities))
+          has_vulnerabilities: groupedFindings.some(finding =>
+            Boolean(
+              finding.hasVuln ||
+              finding.properties?.has_vulnerabilities
+            )
+          )
         }
       };
 
-      groupedFindingNodesMap.set(instId, groupedNode);
+      groupedFindingNodesMap.set(ownerId, groupedNode);
     });
 
     rels.forEach(rel => {
@@ -1046,13 +1187,18 @@ export function useInfrastructure() {
       return reachableIds.has(r.source) && reachableIds.has(r.target);
     });
 
-    groupedFindingNodesMap.forEach((groupedNode, instId) => {
+    groupedFindingNodesMap.forEach((groupedNode, ownerId) => {
+      const ownerType = groupedNode.properties.owner_type;
+
       finalRelationships.push({
-        id: `rel-group-${instId}`,
-        source: instId,
+        id: `rel-group-${ownerType}-${ownerId}`,
+        source: ownerId,
         target: groupedNode.id,
         type: 'HAS_FINDING',
-        properties: { virtual: true }
+        properties: {
+          virtual: true,
+          owner_type: ownerType
+        }
       });
     });
 
@@ -1094,10 +1240,9 @@ export function useInfrastructure() {
     };
   }, [graphData, selectedProjectId, selectedExploitationPath]);
 
-  // Grafo visible en Canvas tras aplicar filtros avanzados, búsqueda y categorías
+  // Grafo visible en Canvas tras aplicar el filtrado por proyecto (los filtros de búsqueda, categoría y avanzados atenúan visualmente en lugar de eliminar nodos)
   const displayGraphData = useMemo(() => {
     const { nodes = [], relationships = [] } = filteredGraphData || {};
-
     const visibleNodes = nodes.filter(n => {
       const props = n.properties || {};
       const primaryLabel = n.primaryLabel || n.labels?.[0] || '';
@@ -1166,11 +1311,11 @@ export function useInfrastructure() {
     });
 
     return {
-      nodes: visibleNodes,
-      relationships: visibleRelationships,
-      links: visibleRelationships
+      nodes,
+      relationships,
+      links: relationships
     };
-  }, [filteredGraphData, searchQuery, filterType, graphAdvancedFilters]);
+  }, [filteredGraphData]);
 
   useEffect(() => {
     if (selectedNode && displayGraphData.nodes) {
@@ -1191,12 +1336,12 @@ export function useInfrastructure() {
 
     const softwareByElementId = new Map(
       nodes
-        .filter(n => n.primaryLabel === 'Software')
+        .filter(n => n.primaryLabel === 'Software' || n.labels?.includes('Software'))
         .map(n => [n.id, n])
     );
 
     return nodes
-      .filter(n => n.primaryLabel === 'SoftwareInstallation')
+      .filter(isSoftwareInstallationNode)
       .map(installationNode => {
         const rel = relationships.find(r =>
           r.type === 'INSTANCE_OF' &&
@@ -1224,7 +1369,10 @@ export function useInfrastructure() {
 
   const getSelectedProjectContainerImages = useCallback(() => {
     return (filteredGraphData?.nodes || [])
-      .filter(n => n.primaryLabel === 'ContainerImage')
+      .filter(n =>
+        n.primaryLabel === 'ContainerImage' ||
+        n.labels?.includes('ContainerImage')
+      )
       .map(n => ({
         imageId: n.properties?.id,
         imageName: n.properties?.id || n.properties?.name,
@@ -1395,7 +1543,7 @@ export function useInfrastructure() {
     ) || null;
   }, [graphData, selectedProjectId]);
 
-  const refreshPatchesForProject = async () => {
+  const refreshPatchesForProject = async (queueItems = patchQueue) => {
     if (!selectedProjectId) {
       const message = 'Selecciona un proyecto antes de refrescar patches';
       setPatchProjectRefreshError(message);
@@ -1410,7 +1558,7 @@ export function useInfrastructure() {
     try {
       const visibleCVEs = [
         ...new Set(
-          patchQueue
+          queueItems
             .map(item => item.cve_id)
             .filter(Boolean)
         )
