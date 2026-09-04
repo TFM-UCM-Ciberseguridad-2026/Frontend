@@ -33,6 +33,27 @@ import { DeclarePatchAppliedUseCase } from '../../domain/usecases/DeclarePatchAp
 import { GetPatchesForVulnerabilityUseCase } from '../../domain/usecases/GetPatchesForVulnerabilityUseCase';
 import { ExportWeeklyReportUseCase } from '../../domain/usecases/ExportWeeklyReportUseCase';
 import { ExportMonthlyReportUseCase } from '../../domain/usecases/ExportMonthlyReportUseCase';
+import { GetAppliedPatchHistoryUseCase } from '../../domain/usecases/GetAppliedPatchHistoryUseCase';
+
+const isSoftwareInstallationNode = node =>
+  node?.primaryLabel === 'SoftwareInstallation' ||
+  node?.labels?.includes('SoftwareInstallation');
+
+const isSoftwareNode = node =>
+  node?.primaryLabel === 'Software' ||
+  node?.labels?.includes('Software');
+
+const VULN_SCAN_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+
+function shouldForceVulnRefresh(installationNode) {
+  const completedAt = installationNode?.properties?.vuln_scan_completed_at;
+  if (!completedAt) return true;
+
+  const completedAtMs = new Date(completedAt).getTime();
+  if (!Number.isFinite(completedAtMs)) return true;
+
+  return Date.now() - completedAtMs >= VULN_SCAN_CACHE_TTL_MS;
+}
 
 export function useInfrastructure() {
   const toast = useToast();
@@ -46,7 +67,42 @@ export function useInfrastructure() {
   const [selectedNode, setSelectedNode] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('ALL');
+  const [graphAdvancedFilters, setGraphAdvancedFilters] = useState({
+    ipSearch: '',
+    vendorSearch: '',
+    environment: 'ALL',
+    internetExposed: 'ALL',
+    status: 'ALL',
+    riskTier: 'ALL',
+    includeAncestors: false,
+    onlyVulnerable: false,
+    inExploitationPath: false
+  });
   const [selectedProjectId, setSelectedProjectId] = useState(null);
+  const [projects, setProjects] = useState([]);
+
+  const updateGraphAdvancedFilter = (key, value) => {
+    setGraphAdvancedFilters(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
+  const clearGraphAdvancedFilters = () => {
+    setGraphAdvancedFilters({
+      ipSearch: '',
+      vendorSearch: '',
+      environment: 'ALL',
+      internetExposed: 'ALL',
+      status: 'ALL',
+      riskTier: 'ALL',
+      includeAncestors: false,
+      onlyVulnerable: false,
+      inExploitationPath: false
+    });
+    setSearchQuery('');
+    setFilterType('ALL');
+  };
 
   // Estados de APTs
   const [showAPTPanel, setShowAPTPanel] = useState(false);
@@ -79,6 +135,10 @@ export function useInfrastructure() {
   // Estados para la cola de parches
   const [patchQueue, setPatchQueue] = useState([]);
   const [patchQueueCount, setPatchQueueCount] = useState(0);
+  const [patchQueuePage, setPatchQueuePage] = useState(1);
+  const [patchQueueLimit, setPatchQueueLimit] = useState(20);
+  const [patchQueueTotal, setPatchQueueTotal] = useState(0);
+  const [patchQueueTotalPages, setPatchQueueTotalPages] = useState(1);
   const [patchQueueLoading, setPatchQueueLoading] = useState(false);
   const [patchQueueError, setPatchQueueError] = useState(null);
   const [patchApplyingKey, setPatchApplyingKey] = useState(null);
@@ -86,6 +146,14 @@ export function useInfrastructure() {
   const [patchesByCVE, setPatchesByCVE] = useState({});
   const [patchDetailsLoading, setPatchDetailsLoading] = useState(false);
   const [patchDetailsError, setPatchDetailsError] = useState(null);
+  const [patchProjectRefreshLoading, setPatchProjectRefreshLoading] = useState(false);
+  const [patchProjectRefreshError, setPatchProjectRefreshError] = useState(null);
+  const [patchProjectRefreshProgress, setPatchProjectRefreshProgress] = useState(null);
+  const [appliedPatchHistory, setAppliedPatchHistory] = useState([]);
+  const [appliedPatchHistoryLoading, setAppliedPatchHistoryLoading] = useState(false);
+  const [appliedPatchHistoryError, setAppliedPatchHistoryError] = useState(null);
+  const [appliedPatchHistoryInstallationId, setAppliedPatchHistoryInstallationId] = useState(null);
+
 
   // Inyección de dependencias (Clean Architecture)
   const apiDataSource = useMemo(() => new InfrastructureApiDataSource(), []);
@@ -125,16 +193,37 @@ export function useInfrastructure() {
   const refreshPatchesForVulnerabilityUseCase = useMemo(() => new RefreshPatchesForVulnerabilityUseCase(repository), [repository]);
   const declarePatchAppliedUseCase = useMemo(() => new DeclarePatchAppliedUseCase(repository), [repository]);
   const getPatchesForVulnerabilityUseCase = useMemo(() => new GetPatchesForVulnerabilityUseCase(repository), [repository]);
+  const getAppliedPatchHistoryUseCase = useMemo(() => new GetAppliedPatchHistoryUseCase(repository), [repository]);
 
   const showToast = (msg, type = 'info', title = null) => {
     toast.showToast(msg, type, title);
   };
 
-  const fetchInfrastructure = async (quiet = false) => {
+  const fetchProjects = useCallback(async () => {
+    try {
+      const data = await getInfrastructureUseCase.execute(null);
+      if (data && data.nodes) {
+        const foundProjects = data.nodes
+          .filter(n => n.labels?.includes('Project') || n.primaryLabel === 'Project')
+          .map(n => ({
+            id: String(n.properties?.id ?? n.id),
+            name: n.properties?.name || n.properties?.nombre || n.name || `Proyecto #${n.properties?.id ?? n.id}`
+          }));
+        setProjects(foundProjects);
+        return foundProjects;
+      }
+    } catch (err) {
+      console.error('Error fetching projects list:', err);
+    }
+    return [];
+  }, [getInfrastructureUseCase]);
+
+  const fetchInfrastructure = async (quiet = false, projectIdOverride = undefined) => {
     if (!quiet) setLoading(true);
     setError(null);
     try {
-      const data = await getInfrastructureUseCase.execute();
+      const targetProjId = projectIdOverride !== undefined ? projectIdOverride : selectedProjectId;
+      const data = await getInfrastructureUseCase.execute(targetProjId);
       setGraphData(data);
     } catch (err) {
       console.error(err);
@@ -281,6 +370,7 @@ export function useInfrastructure() {
     try {
       const res = await renameProjectUseCase.execute(projectId, newName, justification);
       showToast('¡Proyecto renombrado con éxito!');
+      await fetchProjects();
       await fetchInfrastructure(true);
       return res;
     } catch (err) {
@@ -293,11 +383,11 @@ export function useInfrastructure() {
     try {
       await deleteProjectUseCase.execute(projectId, justification);
       showToast('¡Proyecto eliminado con éxito!');
+      const updatedProjects = await fetchProjects();
       await fetchInfrastructure(true);
       if (String(projectId) === String(selectedProjectId)) {
-        const remainingProjects = projects.filter(p => String(p.id) !== String(projectId));
-        if (remainingProjects.length > 0) {
-          setSelectedProjectId(remainingProjects[0].id);
+        if (updatedProjects.length > 0) {
+          setSelectedProjectId(updatedProjects[0].id);
         } else {
           setSelectedProjectId(null);
           setShowDashboard(false);
@@ -313,6 +403,7 @@ export function useInfrastructure() {
     try {
       const res = await createProjectUseCase.execute(data);
       toast.success('¡Proyecto añadido correctamente!', 'Nuevo Proyecto');
+      await fetchProjects();
       await fetchInfrastructure(true);
       return res;
     } catch (err) {
@@ -442,13 +533,17 @@ export function useInfrastructure() {
     }
   };
 
-  const fetchPatchQueue = async (limit = 100) => {
+  const fetchPatchQueue = async (page = 1, limit = 20) => {
     setPatchQueueLoading(true);
     setPatchQueueError(null);
     try {
-      const data = await getPatchQueueUseCase.execute(selectedProjectId, limit);
+      const data = await getPatchQueueUseCase.execute(selectedProjectId, page, limit);
       setPatchQueue(data.queue);
-      setPatchQueueCount(data.count);
+      setPatchQueueTotal(data.total);
+      setPatchQueueCount(data.total);
+      setPatchQueuePage(data.page);
+      setPatchQueueLimit(data.limit);
+      setPatchQueueTotalPages(data.totalPages);
       return data;
     } catch (err) {
       setPatchQueueError(err.message);
@@ -502,6 +597,7 @@ export function useInfrastructure() {
     }
   };
 
+
   const declarePatchApplied = async (installationId, payload, applyingKey = null) => {
     setPatchApplyingKey(applyingKey);
     setPatchApplyError(null);
@@ -511,6 +607,8 @@ export function useInfrastructure() {
       toast.success('Parche declarado como aplicado', 'Patch aplicado');
       await fetchPatchQueue();
       await fetchInfrastructure(true);
+      clearSelectedExploitationPath();
+      setExploitationPaths([]);
       return result;
     } catch (err) {
       setPatchApplyError(err.message);
@@ -544,6 +642,31 @@ export function useInfrastructure() {
 
     toast.warning(`No se encontró ${item.cve_id} en el grafo visible`, 'Nodo no encontrado');
     return null;
+  };
+
+
+  const fetchAppliedPatchHistory = async (assetId, assetType = 'SOFTWARE_INSTALLATION') => {
+    if (!assetId) {
+      setAppliedPatchHistory([]);
+      setAppliedPatchHistoryInstallationId(null);
+      return [];
+    }
+
+    setAppliedPatchHistoryLoading(true);
+    setAppliedPatchHistoryError(null);
+      setAppliedPatchHistoryInstallationId(assetId);
+
+    try {
+      const history = await getAppliedPatchHistoryUseCase.execute(assetId, assetType);
+      setAppliedPatchHistory(history);
+      return history;
+    } catch (err) {
+      setAppliedPatchHistoryError(err.message);
+      setAppliedPatchHistory([]);
+      throw err;
+    } finally {
+      setAppliedPatchHistoryLoading(false);
+    }
   };
 
   const _triggerDownload = (filename, jsonText) => {
@@ -733,16 +856,32 @@ export function useInfrastructure() {
   };
 
   useEffect(() => {
-    fetchInfrastructure();
-  }, [showDashboard]);
+    const initProjects = async () => {
+      const projs = await fetchProjects();
+      if (projs.length > 0 && selectedProjectId === null) {
+        setSelectedProjectId(projs[0].id);
+      }
+    };
+    initProjects();
+  }, [fetchProjects, showDashboard]);
 
-  const projects = useMemo(() => {
-    return (graphData.nodes || []).filter(
-      n => n.labels?.includes('Project') || n.primaryLabel === 'Project'
-    ).map(n => ({
-      id: String(n.properties?.id ?? n.id),
-      name: n.properties?.name || n.properties?.nombre || n.name || `Proyecto #${n.properties?.id ?? n.id}`
-    }));
+  useEffect(() => {
+    if (graphData.nodes && graphData.nodes.length > 0) {
+      const foundProjects = graphData.nodes
+        .filter(n => n.labels?.includes('Project') || n.primaryLabel === 'Project')
+        .map(n => ({
+          id: String(n.properties?.id ?? n.id),
+          name: n.properties?.name || n.properties?.nombre || n.name || `Proyecto #${n.properties?.id ?? n.id}`
+        }));
+
+      if (foundProjects.length > 0) {
+        setProjects(prevProjects => {
+          const map = new Map(prevProjects.map(p => [String(p.id), p]));
+          foundProjects.forEach(p => map.set(String(p.id), p));
+          return Array.from(map.values());
+        });
+      }
+    }
   }, [graphData]);
 
   useEffect(() => {
@@ -755,6 +894,9 @@ export function useInfrastructure() {
   }, [projects, selectedProjectId]);
 
   useEffect(() => {
+    if (selectedProjectId !== null) {
+      fetchInfrastructure(false, selectedProjectId);
+    }
     setSelectedNode(null);
     setSelectedExploitationPath(null);
     setShowPathsModal(false);
@@ -777,6 +919,7 @@ export function useInfrastructure() {
 
     const rels = graphData.relationships || [];
     const nodeMap = new Map(graphData.nodes.map(n => [n.id, n]));
+    const nodeDecorations = new Map();
 
     rels.forEach(rel => {
       if (rel.type === 'INSTANCE_OF') {
@@ -785,9 +928,16 @@ export function useInfrastructure() {
         if (sourceNode && targetNode && 
            (sourceNode.primaryLabel === 'SoftwareInstallation' || sourceNode.labels?.includes('SoftwareInstallation')) && 
            (targetNode.primaryLabel === 'Software' || targetNode.labels?.includes('Software'))) {
-          if (!sourceNode.properties) sourceNode.properties = {};
-          sourceNode.properties.software_name = targetNode.properties?.name || targetNode.name;
+          const swName = targetNode.properties?.name || targetNode.name;
+          nodeDecorations.set(sourceNode.id, { software_name: swName });
         }
+      }
+    });
+
+    nodeDecorations.forEach((extra, nodeId) => {
+      const origNode = nodeMap.get(nodeId);
+      if (origNode) {
+        nodeMap.set(nodeId, { ...origNode, properties: { ...origNode.properties, ...extra } });
       }
     });
 
@@ -901,45 +1051,110 @@ export function useInfrastructure() {
       }
     });
 
-    const installationFindingsMap = new Map();
+    rels.forEach(rel => {
+      if (rel.type !== 'INSTANCE_OF') return;
+
+      const sourceNode = nodeMap.get(rel.source);
+      const targetNode = nodeMap.get(rel.target);
+      if (!sourceNode || !targetNode) return;
+
+      const sourceIsInstallation = isSoftwareInstallationNode(sourceNode);
+      const targetIsInstallation = isSoftwareInstallationNode(targetNode);
+      const sourceIsSoftware = isSoftwareNode(sourceNode);
+      const targetIsSoftware = isSoftwareNode(targetNode);
+
+      if (sourceIsInstallation && targetIsSoftware && reachableIds.has(rel.source)) {
+        reachableIds.add(rel.target);
+        return;
+      }
+
+      if (sourceIsSoftware && targetIsInstallation && reachableIds.has(rel.target)) {
+        reachableIds.add(rel.source);
+      }
+    });
+
+    const findingOwners = new Map();
+
+    projectInstallationIds.forEach(ownerId => {
+      findingOwners.set(ownerId, {
+        owner_id: ownerId,
+        owner_type: 'SoftwareInstallation'
+      });
+    });
+
+    projectContainerIds.forEach(ownerId => {
+      findingOwners.set(ownerId, {
+        owner_id: ownerId,
+        owner_type: 'Container'
+      });
+    });
+
+    projectContainerImageIds.forEach(ownerId => {
+      findingOwners.set(ownerId, {
+        owner_id: ownerId,
+        owner_type: 'ContainerImage'
+      });
+    });
+
+    const findingOwnerMap = new Map();
 
     rels.forEach(rel => {
-      const sourceIsInst = projectInstallationIds.has(rel.source);
-      const targetIsInst = projectInstallationIds.has(rel.target);
-      const sourceIsImage = projectContainerImageIds.has(rel.source);
-      const targetIsImage = projectContainerImageIds.has(rel.target);
+      if (rel.type !== 'HAS_FINDING') return;
 
-      if (sourceIsInst || targetIsInst || sourceIsImage || targetIsImage) {
-        const instId = (sourceIsInst || targetIsInst)
-          ? (sourceIsInst ? rel.source : rel.target)
-          : (sourceIsImage ? rel.source : rel.target);
-        const otherId = (sourceIsInst || sourceIsImage) ? rel.target : rel.source;
-        const otherNode = nodeMap.get(otherId);
-        if (!otherNode) return;
+      const sourceOwner = findingOwners.get(rel.source);
+      const targetOwner = findingOwners.get(rel.target);
+      const owner = sourceOwner || targetOwner;
 
-        const primaryLabel = otherNode.primaryLabel || otherNode.labels?.[0];
-        const labels = otherNode.labels || [];
+      if (!owner) return;
 
-        if (primaryLabel === 'Finding' || labels.includes('Finding') || rel.type === 'HAS_FINDING' || primaryLabel === 'Vulnerability' || labels.includes('Vulnerability') || rel.type === 'HAS_VULNERABILITY') {
-          if (!installationFindingsMap.has(instId)) {
-            installationFindingsMap.set(instId, []);
-          }
-          installationFindingsMap.get(instId).push(otherNode);
-        } else if (primaryLabel === 'Software' || labels.includes('Software') || rel.type === 'INSTANCE_OF') {
-          reachableIds.add(otherId);
-        }
+      const findingNodeId = sourceOwner ? rel.target : rel.source;
+      const findingNode = nodeMap.get(findingNodeId);
+      if (!findingNode) return;
+
+      const labels = findingNode.labels || [];
+      const isFinding =
+        findingNode.primaryLabel === 'Finding' ||
+        labels.includes('Finding');
+
+      if (!isFinding) return;
+
+      if (!findingOwnerMap.has(owner.owner_id)) {
+        findingOwnerMap.set(owner.owner_id, {
+          owner_id: owner.owner_id,
+          owner_type: owner.owner_type,
+          findings: [],
+          finding_ids: new Set()
+        });
       }
+
+      const ownerEntry = findingOwnerMap.get(owner.owner_id);
+      const findingIdentity = String(
+        findingNode.properties?.finding_key ||
+        findingNode.properties?.id ||
+        findingNode.id
+      );
+
+      if (ownerEntry.finding_ids.has(findingIdentity)) return;
+
+      ownerEntry.finding_ids.add(findingIdentity);
+      ownerEntry.findings.push(findingNode);
     });
 
     const groupedFindingNodesMap = new Map();
     const groupedFindingNodeIds = new Set();
     const routeFindingNodes = new Map();
 
-    installationFindingsMap.forEach((findingsList, instId) => {
+    findingOwnerMap.forEach(ownerEntry => {
+      const {
+        owner_id: ownerId,
+        owner_type: ownerType,
+        findings: findingsList
+      } = ownerEntry;
+
       if (findingsList.length === 0) return;
 
       const visibleFindings = findingsList.filter(isRouteFinding);
-      const groupedFindings = findingsList.filter(f => !isRouteFinding(f));
+      const groupedFindings = findingsList.filter(finding => !isRouteFinding(finding));
 
       visibleFindings.forEach(finding => {
         routeFindingNodes.set(finding.id, finding);
@@ -948,7 +1163,7 @@ export function useInfrastructure() {
 
       if (groupedFindings.length === 0) return;
 
-      const groupedNodeId = `findings-group-${instId}`;
+      const groupedNodeId = `findings-group-${ownerType}-${ownerId}`;
       groupedFindingNodeIds.add(groupedNodeId);
 
       const groupedNode = {
@@ -959,13 +1174,25 @@ export function useInfrastructure() {
         name: `Hallazgos (${groupedFindings.length})`,
         properties: {
           id: groupedNodeId,
-          software_installation_id: instId,
+          owner_id: ownerId,
+          owner_type: ownerType,
+          software_installation_id:
+            ownerType === 'SoftwareInstallation' ? ownerId : null,
+          container_id:
+            ownerType === 'Container' ? ownerId : null,
+          container_image_id:
+            ownerType === 'ContainerImage' ? ownerId : null,
           findings: groupedFindings,
-          has_vulnerabilities: groupedFindings.some(f => Boolean(f.properties?.has_vulnerabilities))
+          has_vulnerabilities: groupedFindings.some(finding =>
+            Boolean(
+              finding.hasVuln ||
+              finding.properties?.has_vulnerabilities
+            )
+          )
         }
       };
 
-      groupedFindingNodesMap.set(instId, groupedNode);
+      groupedFindingNodesMap.set(ownerId, groupedNode);
     });
 
     rels.forEach(rel => {
@@ -995,13 +1222,18 @@ export function useInfrastructure() {
       return reachableIds.has(r.source) && reachableIds.has(r.target);
     });
 
-    groupedFindingNodesMap.forEach((groupedNode, instId) => {
+    groupedFindingNodesMap.forEach((groupedNode, ownerId) => {
+      const ownerType = groupedNode.properties.owner_type;
+
       finalRelationships.push({
-        id: `rel-group-${instId}`,
-        source: instId,
+        id: `rel-group-${ownerType}-${ownerId}`,
+        source: ownerId,
         target: groupedNode.id,
         type: 'HAS_FINDING',
-        properties: { virtual: true }
+        properties: {
+          virtual: true,
+          owner_type: ownerType
+        }
       });
     });
 
@@ -1043,14 +1275,24 @@ export function useInfrastructure() {
     };
   }, [graphData, selectedProjectId, selectedExploitationPath]);
 
+  // Grafo visible en Canvas tras aplicar el filtrado por proyecto (los filtros de búsqueda, categoría y avanzados atenúan visualmente en lugar de eliminar nodos)
+  const displayGraphData = useMemo(() => {
+    const { nodes = [], relationships = [] } = filteredGraphData || {};
+    return {
+      nodes,
+      relationships,
+      links: relationships
+    };
+  }, [filteredGraphData]);
+
   useEffect(() => {
-    if (selectedNode && filteredGraphData.nodes) {
-      const freshNode = filteredGraphData.nodes.find(n => n.id === selectedNode.id);
+    if (selectedNode && displayGraphData.nodes) {
+      const freshNode = displayGraphData.nodes.find(n => n.id === selectedNode.id);
       if (freshNode && JSON.stringify(freshNode) !== JSON.stringify(selectedNode)) {
         setSelectedNode(freshNode);
       }
     }
-  }, [filteredGraphData, selectedNode]);
+  }, [displayGraphData, selectedNode]);
 
   const getNodeCountByType = useCallback((type) => {
     return filteredGraphData.nodes.filter(n => n.labels.includes(type)).length;
@@ -1062,12 +1304,12 @@ export function useInfrastructure() {
 
     const softwareByElementId = new Map(
       nodes
-        .filter(n => n.primaryLabel === 'Software')
+        .filter(n => n.primaryLabel === 'Software' || n.labels?.includes('Software'))
         .map(n => [n.id, n])
     );
 
     return nodes
-      .filter(n => n.primaryLabel === 'SoftwareInstallation')
+      .filter(isSoftwareInstallationNode)
       .map(installationNode => {
         const rel = relationships.find(r =>
           r.type === 'INSTANCE_OF' &&
@@ -1085,7 +1327,8 @@ export function useInfrastructure() {
           installationId: installationNode.properties?.id || installationNode.properties?.installation_id,
           softwareId: softwareNode.properties?.id || softwareNode.properties?.software_id,
           installationName: installationNode.name,
-          softwareName: softwareNode.name
+          softwareName: softwareNode.name,
+          installationNode
         };
       })
       .filter(Boolean)
@@ -1094,10 +1337,14 @@ export function useInfrastructure() {
 
   const getSelectedProjectContainerImages = useCallback(() => {
     return (filteredGraphData?.nodes || [])
-      .filter(n => n.primaryLabel === 'ContainerImage')
+      .filter(n =>
+        n.primaryLabel === 'ContainerImage' ||
+        n.labels?.includes('ContainerImage')
+      )
       .map(n => ({
         imageId: n.properties?.id,
-        imageName: n.properties?.id || n.properties?.name
+        imageName: n.properties?.id || n.properties?.name,
+        imageNode: n
       }))
       .filter(item => item.imageId);
   }, [filteredGraphData]);
@@ -1109,6 +1356,12 @@ export function useInfrastructure() {
     setRiskActionError(null);
 
     let successCount = 0;
+    let processedCVEs = 0;
+    let findingsCreated = 0;
+    let findingsExisting = 0;
+    let cacheHits = 0;
+    let freshQueries = 0;
+
     try {
       const installations = getSelectedProjectSoftwareInstallations();
       const containerImages = getSelectedProjectContainerImages();
@@ -1123,11 +1376,24 @@ export function useInfrastructure() {
 
       for (const installation of installations) {
         try {
-          await scanInstallationVulnerabilitiesUseCase.execute(
+          const result = await scanInstallationVulnerabilitiesUseCase.execute(
             installation.installationId,
             installation.softwareId,
-            100
+            {
+              forceRefresh: shouldForceVulnRefresh(installation.installationNode)
+            }
           );
+
+          processedCVEs += Number(result?.processed || result?.vulnerabilities_found || 0);
+          findingsCreated += Number(result?.findings_created || 0);
+          findingsExisting += Number(result?.findings_existing || 0);
+
+          if (result?.cache_hit) {
+            cacheHits++;
+          } else {
+            freshQueries++;
+          }
+
           successCount++;
         } catch (err) {
           console.error(`Error analizando software ${installation.softwareName || installation.installationId}:`, err);
@@ -1137,10 +1403,24 @@ export function useInfrastructure() {
 
       for (const image of containerImages) {
         try {
-          await scanContainerImageVulnerabilitiesUseCase.execute(
+          const result = await scanContainerImageVulnerabilitiesUseCase.execute(
             image.imageId,
-            image.imageName
+            image.imageName,
+            {
+              forceRefresh: shouldForceVulnRefresh(image.imageNode)
+            }
           );
+
+          processedCVEs += Number(result?.processed || result?.vulnerabilities_found || 0);
+          findingsCreated += Number(result?.findings_created || 0);
+          findingsExisting += Number(result?.findings_existing || 0);
+
+          if (result?.cache_hit) {
+            cacheHits++;
+          } else {
+            freshQueries++;
+          }
+
           successCount++;
         } catch (err) {
           console.error(`Error analizando imagen ${image.imageName || image.imageId}:`, err);
@@ -1151,10 +1431,21 @@ export function useInfrastructure() {
       await fetchInfrastructure(true);
 
       const totalItems = installations.length + containerImages.length;
+      const summaryLines = [
+        `Vulnerabilidades analizadas: ${successCount} elemento(s).`,
+        `Instalaciones software: ${installations.length}.`,
+        `Imágenes contenedor: ${containerImages.length}.`,
+        `CVEs procesadas: ${processedCVEs}.`,
+        `Nuevos findings: ${findingsCreated}.`,
+        `Findings existentes: ${findingsExisting}.`,
+        `Cache usada: ${cacheHits} instalación(es).`,
+        `Consultas frescas: ${freshQueries} instalación(es).`
+      ];
+
       if (failedItems.length === 0) {
-        toast.success(`Vulnerabilidades analizadas con éxito para ${successCount} elemento(s).`, 'Análisis Completado');
+        toast.success(summaryLines.join('\n'), 'Análisis Completado');
       } else if (successCount > 0) {
-        toast.warning(`Análisis completado para ${successCount} de ${totalItems} elemento(s). No se pudo analizar: ${failedItems.join(', ')}.`, 'Análisis Parcial');
+        toast.warning(`${summaryLines.join('\n')}\nNo se pudo analizar: ${failedItems.join(', ')}.`, `Análisis Parcial (${successCount}/${totalItems})`);
       } else {
         const errorMsg = `No se pudo analizar ningún elemento. Fallaron: ${failedItems.join(', ')}`;
         setRiskActionError(errorMsg);
@@ -1222,12 +1513,92 @@ export function useInfrastructure() {
     ) || null;
   }, [graphData, selectedProjectId]);
 
+
+  const refreshPatchesForProject = async (queueItems = patchQueue) => {
+    if (!selectedProjectId) {
+      const message = 'Selecciona un proyecto antes de refrescar patches';
+      setPatchProjectRefreshError(message);
+      toast.error(message, 'Error refrescando patches');
+      throw new Error(message);
+    }
+
+    setPatchProjectRefreshLoading(true);
+    setPatchProjectRefreshError(null);
+    setPatchProjectRefreshProgress(null);
+
+    try {
+      const visibleCVEs = [
+        ...new Set(
+          queueItems
+            .map(item => item.cve_id)
+            .filter(Boolean)
+        )
+      ];
+
+      if (visibleCVEs.length === 0) {
+        toast.info('No hay CVEs visibles en la Patch Queue', 'Patch Queue');
+        return { total_cves: 0, refreshed: 0, failed: 0, not_found: 0, processed: 0 };
+      }
+
+      let refreshed = 0;
+      let failed = 0;
+      let notFound = 0;
+      let processed = 0;
+
+      for (const cveId of visibleCVEs) {
+        try {
+          const result = await refreshPatchesForVulnerabilityUseCase.execute(cveId);
+          if (result?.found === false) {
+            notFound += 1;
+          } else {
+            refreshed += 1;
+          }
+        } catch (err) {
+          failed += 1;
+          console.warn(`Error refrescando patches para ${cveId}`, err);
+        }
+
+        processed += 1;
+
+        setPatchProjectRefreshProgress({
+          processed,
+          total: visibleCVEs.length,
+          failed,
+          notFound
+        });
+
+        if (processed < visibleCVEs.length) {
+          await new Promise(resolve => setTimeout(resolve, 1200));
+        }
+      }
+
+      setPatchesByCVE({});
+      await fetchPatchQueue();
+      await fetchInfrastructure(true);
+
+      toast.success(
+        `Patches refrescados: ${refreshed}/${visibleCVEs.length}. Fallidos: ${failed}. Sin datos: ${notFound}.`,
+        'Patch Queue actualizada'
+      );
+
+      return { total_cves: visibleCVEs.length, refreshed, failed, not_found: notFound, processed };
+    } catch (err) {
+      setPatchProjectRefreshError(err.message);
+      toast.error(err.message, 'Error refrescando patches del proyecto');
+      throw err;
+    } finally {
+      setPatchProjectRefreshLoading(false);
+      setPatchProjectRefreshProgress(null);
+    }
+  };
+
   return {
     showDashboard,
     setShowDashboard,
     clicks,
     setClicks,
-    graphData: filteredGraphData,
+    graphData: displayGraphData,
+    filteredGraphData: filteredGraphData,
     allGraphData: graphData,
     loading,
     error,
@@ -1237,6 +1608,9 @@ export function useInfrastructure() {
     setSearchQuery,
     filterType,
     setFilterType,
+    graphAdvancedFilters,
+    updateGraphAdvancedFilter,
+    clearGraphAdvancedFilters,
     showAPTPanel,
     setShowAPTPanel,
     aptData,
@@ -1295,6 +1669,10 @@ export function useInfrastructure() {
     findingVulnsSourceNode,
     patchQueue,
     patchQueueCount,
+    patchQueuePage,
+    patchQueueLimit,
+    patchQueueTotal,
+    patchQueueTotalPages,
     patchQueueLoading,
     patchQueueError,
     fetchPatchQueue,
@@ -1307,6 +1685,15 @@ export function useInfrastructure() {
     patchesByCVE,
     patchDetailsLoading,
     patchDetailsError,
-    fetchPatchesForCVE
+    fetchPatchesForCVE,
+    refreshPatchesForProject,
+    patchProjectRefreshLoading,
+    patchProjectRefreshError,
+    patchProjectRefreshProgress,
+  appliedPatchHistory,
+  appliedPatchHistoryLoading,
+  appliedPatchHistoryError,
+  appliedPatchHistoryInstallationId,
+  fetchAppliedPatchHistory
   };
 }

@@ -1,5 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { ApplyPatchModal } from '../components/PatchQueue/ApplyPatchModal';
+import { AppliedPatchHistoryPanel } from '../components/PatchQueue/AppliedPatchHistoryPanel';
+import { PatchQueueFilters } from '../components/PatchQueue/PatchQueueFilters';
+import { ActivePatchQueueFilterChips } from '../components/PatchQueue/ActivePatchQueueFilterChips';
+import { usePatchQueue } from '../hooks/usePatchQueue';
 import './PatchQueuePage.css';
 
 const percent = (value) => `${Math.round(Number(value || 0) * 100)}%`;
@@ -8,13 +12,22 @@ function tierClass(tier) {
   return `patch-tier patch-tier-${String(tier || 'low').toLowerCase()}`;
 }
 
+function patchAvailability(item) {
+  switch (item.remediation_kind) {
+    case 'OFFICIAL_FIX':
+      return { label: 'Patch oficial', className: 'yes' };
+    case 'WORKAROUND':
+      return { label: 'Mitigación', className: 'warning' };
+    case 'TEMPORARY_FIX':
+      return { label: 'Temporal', className: 'warning' };
+    case 'UNAVAILABLE':
+    default:
+      return { label: 'Sin remediación', className: 'no' };
+  }
+}
+
 export function PatchQueuePage({
   selectedProjectId,
-  patchQueue,
-  patchQueueCount,
-  patchQueueLoading,
-  patchQueueError,
-  fetchPatchQueue,
   refreshPatchesForCVE,
   focusPatchQueueItem,
   patchApplyLoading,
@@ -25,19 +38,47 @@ export function PatchQueuePage({
   patchDetailsLoading,
   patchDetailsError,
   fetchPatchesForCVE,
-  setActiveNav
+  setActiveNav,
+  refreshPatchesForProject,
+  patchProjectRefreshLoading,
+  patchProjectRefreshError,
+  patchProjectRefreshProgress,
+  appliedPatchHistory,
+  appliedPatchHistoryLoading,
+  appliedPatchHistoryError,
+  fetchAppliedPatchHistory
 }) {
+  // Centralized hook for advanced filtering, sorting, and pagination
+  const {
+    filters,
+    updateFilter,
+    removeFilter,
+    clearAllFilters,
+    sortField,
+    sortDirection,
+    handleSort,
+    page,
+    totalPages,
+    totalItems,
+    priorityTierCounts,
+    queue,
+    loading: patchQueueLoading,
+    error: patchQueueError,
+    goToPage,
+    refetch
+  } = usePatchQueue(selectedProjectId);
 
   const [selectedPatchItem, setSelectedPatchItem] = useState(null);
+  const [selectedHistoryItem, setSelectedHistoryItem] = useState(null);
 
   useEffect(() => {
-    fetchPatchQueue?.();
+    setSelectedHistoryItem(null);
   }, [selectedProjectId]);
 
   useEffect(() => {
     if (!selectedPatchItem?.cve_id) return;
     fetchPatchesForCVE?.(selectedPatchItem.cve_id);
-  }, [selectedPatchItem?.cve_id]);
+  }, [selectedPatchItem?.cve_id, fetchPatchesForCVE]);
 
   const openInGraph = (item) => {
     const found = focusPatchQueueItem?.(item);
@@ -46,28 +87,78 @@ export function PatchQueuePage({
     }
   };
 
-
   const getPatchQueueItemKey = (item) =>
-    `${item.installation_id}-${item.cve_id}-${item.finding_id}`;
+    `${item.asset_type || 'SOFTWARE_INSTALLATION'}-${item.asset_id || item.installation_id}-${item.cve_id}-${item.finding_id}`;
 
   const selectedPatchItemKey = selectedPatchItem ? getPatchQueueItemKey(selectedPatchItem) : null;
   const currentSelectedPatchItem = selectedPatchItemKey
-    ? patchQueue.find(item => getPatchQueueItemKey(item) === selectedPatchItemKey) || selectedPatchItem
+    ? queue.find(item => getPatchQueueItemKey(item) === selectedPatchItemKey) || selectedPatchItem
     : null;
 
   const submitPatchApplication = async (payload) => {
     if (!currentSelectedPatchItem) return;
 
+    const assetType = currentSelectedPatchItem.asset_type || 'SOFTWARE_INSTALLATION';
+    const assetId = currentSelectedPatchItem.asset_id || currentSelectedPatchItem.installation_id;
     await declarePatchApplied?.(
-      currentSelectedPatchItem.installation_id,
-      payload,
+      assetId,
+      { ...payload, asset_type: assetType, asset_id: assetId, finding_id: currentSelectedPatchItem.finding_id },
       getPatchQueueItemKey(currentSelectedPatchItem)
     );
 
+    if (selectedHistoryItem && getPatchQueueItemKey(selectedHistoryItem) === getPatchQueueItemKey(currentSelectedPatchItem)) {
+      await fetchAppliedPatchHistory?.(assetId, assetType);
+    }
+
     setSelectedPatchItem(null);
-  };  
+    refetch();
+  };
 
+  const startItem = totalItems === 0 ? 0 : (page - 1) * 20 + 1;
+  const endItem = Math.min(page * 20, totalItems);
 
+  const renderSortIcon = (field) => {
+    if (sortField !== field) return null;
+    return <span className="patch-sort-icon">{sortDirection === 'asc' ? '▲' : '▼'}</span>;
+  };
+
+  const renderPageNumbers = () => {
+    const pages = [];
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, page - 2);
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+    if (endPage - startPage < maxVisiblePages - 1) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(
+        <button
+          key={i}
+          className={`patch-pagination-page ${i === page ? 'active' : ''}`}
+          onClick={() => goToPage(i)}
+          disabled={patchQueueLoading}
+        >
+          {i}
+        </button>
+      );
+    }
+    return pages;
+  };
+
+  const selectHistoryItem = async (item) => {
+    setSelectedHistoryItem(item);
+    await fetchAppliedPatchHistory?.(item.asset_id || item.installation_id, item.asset_type);
+  };
+
+  const handleMetricBadgeClick = (tier) => {
+    if (filters.priorityTier === tier) {
+      updateFilter('priorityTier', 'ALL');
+    } else {
+      updateFilter('priorityTier', tier);
+    }
+  };
 
   return (
     <section className="patch-queue-page">
@@ -76,13 +167,74 @@ export function PatchQueuePage({
           <p className="eyebrow">Blue Team Operations</p>
           <h2>Patch Queue</h2>
           <p className="patch-queue-subtitle">
-            Findings pendientes ordenados por prioridad de parcheo.
+            Cola priorizada de remediación según vulnerabilidad y criticidad contextual del activo.
           </p>
         </div>
-        <button className="btn btn-secondary" onClick={() => fetchPatchQueue?.()} disabled={patchQueueLoading}>
-          {patchQueueLoading ? 'Actualizando...' : 'Refrescar cola'}
+        <button
+          className="btn btn-secondary"
+          onClick={async () => {
+            await refreshPatchesForProject?.(queue);
+            await refetch();
+          }}
+          disabled={patchQueueLoading || patchProjectRefreshLoading}
+        >
+          {patchProjectRefreshLoading ? 'Refrescando patches...' : 'Refrescar cola'}
         </button>
       </div>
+
+      {/* Badges de métricas por Nivel de Prioridad */}
+      <div className="patch-queue-metrics-bar">
+        <div
+          className={`patch-metric-badge ${filters.priorityTier === 'ALL' ? 'active' : ''}`}
+          onClick={() => handleMetricBadgeClick('ALL')}
+          title="Filtrar todas las prioridades"
+        >
+          <span className="patch-metric-label">TOTAL PENDIENTES</span>
+          <span className="patch-metric-count">{totalItems}</span>
+        </div>
+        <div
+          className={`patch-metric-badge patch-metric-critical ${filters.priorityTier === 'CRITICAL' ? 'active' : ''}`}
+          onClick={() => handleMetricBadgeClick('CRITICAL')}
+          title="Filtrar prioridad CRITICAL"
+        >
+          <span className="patch-metric-label">🔴 CRITICAL</span>
+          <span className="patch-metric-count">{priorityTierCounts.CRITICAL || 0}</span>
+        </div>
+        <div
+          className={`patch-metric-badge patch-metric-high ${filters.priorityTier === 'HIGH' ? 'active' : ''}`}
+          onClick={() => handleMetricBadgeClick('HIGH')}
+          title="Filtrar prioridad HIGH"
+        >
+          <span className="patch-metric-label">🟠 HIGH</span>
+          <span className="patch-metric-count">{priorityTierCounts.HIGH || 0}</span>
+        </div>
+        <div
+          className={`patch-metric-badge patch-metric-medium ${filters.priorityTier === 'MEDIUM' ? 'active' : ''}`}
+          onClick={() => handleMetricBadgeClick('MEDIUM')}
+          title="Filtrar prioridad MEDIUM"
+        >
+          <span className="patch-metric-label">🟡 MEDIUM</span>
+          <span className="patch-metric-count">{priorityTierCounts.MEDIUM || 0}</span>
+        </div>
+        <div
+          className={`patch-metric-badge patch-metric-low ${filters.priorityTier === 'LOW' ? 'active' : ''}`}
+          onClick={() => handleMetricBadgeClick('LOW')}
+          title="Filtrar prioridad LOW"
+        >
+          <span className="patch-metric-label">🔵 LOW</span>
+          <span className="patch-metric-count">{priorityTierCounts.LOW || 0}</span>
+        </div>
+      </div>
+
+      {/* Controles de Filtro Avanzado */}
+      <PatchQueueFilters filters={filters} onUpdateFilter={updateFilter} />
+
+      {/* Chips de Filtros Activos */}
+      <ActivePatchQueueFilterChips
+        filters={filters}
+        onRemoveFilter={removeFilter}
+        onClearAll={clearAllFilters}
+      />
 
       {patchQueueError && (
         <div className="patch-queue-error">⚠️ {patchQueueError}</div>
@@ -90,103 +242,185 @@ export function PatchQueuePage({
       {patchApplyError && (
         <div className="patch-queue-error">⚠️ {patchApplyError}</div>
       )}
+      {patchProjectRefreshError && (
+        <div className="patch-queue-error">⚠️ {patchProjectRefreshError}</div>
+      )}
 
       <div className="patch-queue-summary">
-        <span>{patchQueueCount || patchQueue.length} elementos pendientes</span>
+        <span>
+          Mostrando {startItem} - {endItem} de {totalItems} parches pendientes
+        </span>
+        {patchProjectRefreshProgress && (
+          <span className="patch-queue-refresh-progress">
+            Refrescando patches... {patchProjectRefreshProgress.processed}/{patchProjectRefreshProgress.total || '?'}
+          </span>
+        )}
       </div>
 
-      <div className="patch-queue-table-wrap">
-        <table className="patch-queue-table">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Patch Priority</th>
-              <th>CVE</th>
-              <th>Activo</th>
-              <th>Software</th>
-              <th>Versiones</th>
-              <th>Risk</th>
-              <th>Patch</th>
-              <th>Contexto</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {patchQueueLoading && (
-              <tr>
-                <td colSpan="10">Cargando Patch Queue...</td>
-              </tr>
-            )}
+      <div className="patch-queue-content-layout">
+        <div className="patch-queue-main-column">
+          <div className="patch-queue-table-wrap">
+            <table className="patch-queue-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th className="sortable-th" onClick={() => handleSort('priority_score')}>
+                    Patch Priority {renderSortIcon('priority_score')}
+                  </th>
+                  <th className="sortable-th" onClick={() => handleSort('cve')}>
+                    CVE {renderSortIcon('cve')}
+                  </th>
+                  <th className="sortable-th" onClick={() => handleSort('hostname')}>
+                    Activo {renderSortIcon('hostname')}
+                  </th>
+                  <th className="sortable-th" onClick={() => handleSort('software')}>
+                    Software {renderSortIcon('software')}
+                  </th>
+                  <th>Versiones</th>
+                  <th className="sortable-th" onClick={() => handleSort('risk')}>
+                    Risk {renderSortIcon('risk')}
+                  </th>
+                  <th>Patch</th>
+                  <th>Contexto</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {patchQueueLoading && (
+                  <tr>
+                    <td colSpan="10">Cargando Patch Queue...</td>
+                  </tr>
+                )}
 
-            {!patchQueueLoading && patchQueue.length === 0 && (
-              <tr>
-                <td colSpan="10">No hay findings pendientes de parcheo.</td>
-              </tr>
-            )}
+                {!patchQueueLoading && queue.length === 0 && (
+                  <tr>
+                    <td colSpan="10">No hay findings pendientes que coincidan con los filtros aplicados.</td>
+                  </tr>
+                )}
 
-            {!patchQueueLoading && patchQueue.map(item => {
-              const itemKey = getPatchQueueItemKey(item);
-              const isApplyingThisRow = patchApplyingKey === itemKey;
-              const hasPatchAvailable = Boolean(item.patch_available);
+                {!patchQueueLoading && queue.map(item => {
+                  const itemKey = getPatchQueueItemKey(item);
+                  const isApplyingThisRow = patchApplyingKey === itemKey;
+                  const hasPatchAvailable = Boolean(item.patch_available);
+                  const patchState = patchAvailability(item);
+                  const isSelectedHistoryRow = selectedHistoryItem && getPatchQueueItemKey(selectedHistoryItem) === itemKey;
 
-              return (
-              <tr key={itemKey}>
-                <td>{item.position}</td>
-                <td>
-                  <span className={tierClass(item.priority_tier)}>
-                    {item.priority_tier || 'LOW'} · {percent(item.priority_score)}
-                  </span>
-                </td>
-                <td className="patch-cve">{item.cve_id}</td>
-                <td>
-                  <strong>{item.hostname || 'N/A'}</strong>
-                  <small>#{item.endpoint_id}</small>
-                </td>
-                <td>
-                  <strong>{item.software_name || 'N/A'}</strong>
-                  <small>{item.installation_id}</small>
-                </td>
-                <td>
-                  <span>{item.software_version || 'N/A'}</span>
-                  <small>fix: {item.fixed_version || 'pendiente'}</small>
-                </td>
-                <td>{percent(item.risk_score)}</td>
-                <td>
-                  <span className={`patch-available ${item.patch_available ? 'yes' : 'no'}`}>
-                    {item.patch_available ? 'Disponible' : 'Sin patch'}
-                  </span>
-                </td>
-                <td>
-                  {item.in_container
-                    ? `Container: ${item.container_name || 'N/A'}`
-                    : `Host · ${item.environment || 'N/A'}`}
-                </td>
-                <td>
-                  <div className="patch-actions">
-                    <button type="button" onClick={() => openInGraph(item)}>
-                      Ver
-                    </button>
-                    <button type="button" onClick={() => refreshPatchesForCVE?.(item.cve_id)}>
-                      Refresh patches
-                    </button>
-                    {hasPatchAvailable && (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedPatchItem(item)}
-                        disabled={isApplyingThisRow}
-                        title="Aplicar patch a esta instalación"
-                      >
-                        {isApplyingThisRow ? 'Aplicando...' : 'Aplicar patch'}
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                  return (
+                    <tr
+                      key={itemKey}
+                      className={isSelectedHistoryRow ? 'is-selected-history-row' : ''}
+                      onClick={() => selectHistoryItem(item)}
+                    >
+                      <td>{item.position}</td>
+                      <td>
+                        <span className={tierClass(item.priority_tier)}>
+                          {item.priority_tier || 'LOW'} · {percent(item.priority_score)}
+                        </span>
+                      </td>
+                      <td className="patch-cve">{item.cve_id}</td>
+                      <td>
+                        <strong>{item.hostname || 'N/A'}</strong>
+                        <small>#{item.endpoint_id}</small>
+                      </td>
+                      <td>
+                        <strong>{item.software_name || 'N/A'}</strong>
+                        <small>{item.asset_type === 'CONTAINER' ? `Container: ${item.container_id || item.asset_id || 'N/A'}` : item.installation_id}</small>
+                      </td>
+                      <td>
+                        <span>{item.software_version || 'N/A'}</span>
+                        <small>fix: {item.fixed_version || 'pendiente'}</small>
+                      </td>
+                      <td>{percent(item.risk_score)}</td>
+                      <td>
+                        <span className={`patch-available ${patchState.className}`}>
+                          {patchState.label}
+                        </span>
+                      </td>
+                      <td>
+                        {item.in_container
+                          ? `Container: ${item.container_name || 'N/A'}`
+                          : `Host · ${item.environment || 'N/A'}`}
+                      </td>
+                      <td>
+                        <div className="patch-actions">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openInGraph(item);
+                            }}
+                          >
+                            Ver
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              refreshPatchesForCVE?.(item.cve_id);
+                              refetch();
+                            }}
+                          >
+                            Refresh CVE
+                          </button>
+                          {hasPatchAvailable && (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setSelectedPatchItem(item);
+                              }}
+                              disabled={isApplyingThisRow}
+                              title="Aplicar patch a esta instalación"
+                            >
+                              {isApplyingThisRow ? 'Aplicando...' : 'Aplicar patch'}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {totalPages > 1 && (
+            <div className="patch-pagination-container">
+              <button
+                className="patch-pagination-btn"
+                onClick={() => goToPage(page - 1)}
+                disabled={page <= 1 || patchQueueLoading}
+              >
+                &laquo; Anterior
+              </button>
+
+              <div className="patch-pagination-pages">
+                {renderPageNumbers()}
+              </div>
+
+              <button
+                className="patch-pagination-btn"
+                onClick={() => goToPage(page + 1)}
+                disabled={page >= totalPages || patchQueueLoading}
+              >
+                Siguiente &raquo;
+              </button>
+
+              <span className="patch-pagination-info">
+                Página {page} de {totalPages}
+              </span>
+            </div>
+          )}
+        </div>
+
+        <AppliedPatchHistoryPanel
+          selectedItem={selectedHistoryItem}
+          history={appliedPatchHistory}
+          loading={appliedPatchHistoryLoading}
+          error={appliedPatchHistoryError}
+        />
       </div>
+
       <ApplyPatchModal
         isOpen={Boolean(currentSelectedPatchItem)}
         item={currentSelectedPatchItem}

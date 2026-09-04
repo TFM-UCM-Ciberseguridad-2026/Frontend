@@ -11,6 +11,9 @@ export function GraphPage({
   setFilterType,
   searchQuery,
   setSearchQuery,
+  graphAdvancedFilters,
+  updateGraphAdvancedFilter,
+  clearGraphAdvancedFilters,
   selectedNode,
   setSelectedNode,
   loading,
@@ -45,13 +48,16 @@ export function GraphPage({
 }) {
   return (
     <>
-      {/* PANEL IZQUIERDO: FILTROS COMPACTOS */}
+      {/* PANEL IZQUIERDO: FILTROS COMPACTOS Y AVANZADOS */}
       <GraphFilterSidebar
         graphData={graphData}
         filterType={filterType}
         setFilterType={setFilterType}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
+        graphAdvancedFilters={graphAdvancedFilters}
+        updateGraphAdvancedFilter={updateGraphAdvancedFilter}
+        clearGraphAdvancedFilters={clearGraphAdvancedFilters}
         categories={categories}
         getNodeCountByType={getNodeCountByType}
         fetchExploitationPaths={fetchExploitationPaths}
@@ -85,6 +91,7 @@ export function GraphPage({
           graphData={graphData}
           filterType={filterType}
           searchQuery={searchQuery}
+          graphAdvancedFilters={graphAdvancedFilters}
           loading={loading}
           error={error}
           selectedNode={selectedNode}

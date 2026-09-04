@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { RiskSummary } from '../Risk/RiskSummary';
 import { EditNodeModal } from './EditNodeModal';
 import { DeleteNodeModal } from './DeleteNodeModal';
@@ -16,6 +16,61 @@ const getRiskBadgeClass = (score, tier) => {
   if (t === 'MEDIUM' || numScore >= 0.4) return 'risk-badge-medium';
   return 'risk-badge-low';
 };
+
+
+const getFindingPatchState = (props = {}) => {
+  const status = String(props.status || 'OPEN').toUpperCase();
+  const remediationKind = String(
+    props.remediation_kind || 'UNAVAILABLE'
+  ).toUpperCase();
+
+  const remediationFactorRaw = Number(props.remediation_factor);
+  const hasValidRemediationFactor = Number.isFinite(remediationFactorRaw);
+  const remediationFactor = hasValidRemediationFactor
+    ? remediationFactorRaw
+    : 1;
+
+  const hasAvailableRemediation = Boolean(
+    props.patch_available ||
+    props.fixed_version ||
+    (remediationKind && remediationKind !== 'UNAVAILABLE')
+  );
+
+  if (status === 'PATCHED') {
+    return {
+      label: 'PATCHED',
+      className: 'finding-state-patched',
+      help: 'Finding corregido mediante una remediación oficial aplicada.'
+    };
+  }
+
+  if (
+    status === 'MITIGATED' ||
+    (remediationFactor > 0 && remediationFactor < 1)
+  ) {
+    return {
+      label: 'MITIGATED',
+      className: 'finding-state-mitigated',
+      help: 'Finding tratado con mitigación o corrección temporal. Mantiene riesgo residual.'
+    };
+  }
+
+  if (hasAvailableRemediation) {
+    return {
+      label: 'ANALYSED',
+      className: 'finding-state-analysed',
+      help: 'Finding con remediación conocida disponible, pendiente de aplicar.'
+    };
+  }
+
+  return {
+    label: 'IDENTIFIED',
+    className: 'finding-state-identified',
+    help: 'Finding identificado sin remediación conocida.'
+  };
+};
+
+
 
 export function NodeInspector({
   selectedNode,
@@ -44,48 +99,100 @@ export function NodeInspector({
     return [];
   }, [selectedNode]);
 
+  // Calcula el conjunto de IDs de findings que pertenecen a la ruta activa
+  const pathFindingKeys = useMemo(() => {
+    const keys = { ids: new Set(), cves: new Set() };
+    if (!selectedExploitationPath?.steps) return keys;
+    selectedExploitationPath.steps.forEach(step => {
+      if (!step) return;
+      if (step.finding_id) keys.ids.add(String(step.finding_id).trim());
+      if (step.vulnerability) keys.cves.add(String(step.vulnerability).trim().toLowerCase());
+      if (Array.isArray(step.finding_ids)) step.finding_ids.forEach(id => keys.ids.add(String(id).trim()));
+      if (Array.isArray(step.findings)) {
+        step.findings.forEach(f => {
+          if (f.id) keys.ids.add(String(f.id).trim());
+          if (f.cve_id) keys.cves.add(String(f.cve_id).trim().toLowerCase());
+        });
+      }
+    });
+    return keys;
+  }, [selectedExploitationPath]);
+
+  // Determina si un finding pertenece a la ruta activa
+  const isInPath = useCallback((f) => {
+    if (!selectedExploitationPath?.steps || selectedExploitationPath.steps.length === 0) return false;
+
+    const rawId = String(f.id ?? '').trim();
+    const propId = String(f.properties?.id ?? '').trim();
+    const findingId = String(f.properties?.finding_id ?? '').trim();
+    const fName = String(f.name || f.properties?.title || f.properties?.nombre || '').trim();
+    const fKey = String(f.properties?.finding_key || '').trim().toLowerCase();
+    const fCve = String(f.properties?.cve_id || f.properties?.cve || '').trim().toLowerCase();
+
+    const nameMatch = fName.match(/#?(\d+)/);
+    const nameNumId = nameMatch ? nameMatch[1] : '';
+
+    const candidateIds = [rawId, propId, findingId, nameNumId].filter(Boolean);
+
+    return selectedExploitationPath.steps.some(step => {
+      if (!step) return false;
+
+      const stepFId = String(step.finding_id ?? '').trim();
+      const stepVuln = String(step.vulnerability ?? '').trim().toLowerCase();
+
+      if (stepFId) {
+        for (const cid of candidateIds) {
+          if (cid === stepFId || cid.endsWith(':' + stepFId) || stepFId.endsWith(':' + cid)) {
+            return true;
+          }
+        }
+      }
+
+      if (stepVuln) {
+        if (fCve && (fCve === stepVuln || fCve.includes(stepVuln) || stepVuln.includes(fCve))) {
+          return true;
+        }
+        if (fKey && fKey.includes(stepVuln)) {
+          return true;
+        }
+        if (fName.toLowerCase().includes(stepVuln)) {
+          return true;
+        }
+      }
+
+      if (Array.isArray(step.finding_ids)) {
+        for (const pid of step.finding_ids) {
+          const pidStr = String(pid).trim();
+          for (const cid of candidateIds) {
+            if (cid === pidStr || cid.endsWith(':' + pidStr) || pidStr.endsWith(':' + cid)) {
+              return true;
+            }
+          }
+        }
+      }
+
+      return false;
+    });
+  }, [selectedExploitationPath]);
+
   const sortedFindings = useMemo(() => {
     if (findingsList.length === 0) return [];
-    return [...findingsList].sort((a, b) => {
-      const rA = Number(a.properties?.risk_score || 0);
-      const rB = Number(b.properties?.risk_score || 0);
-      return rB - rA;
+    const inPath = [];
+    const outPath = [];
+    findingsList.forEach(f => {
+      if (isInPath(f)) inPath.push(f);
+      else outPath.push(f);
     });
-  }, [findingsList]);
+    // Sort each group by risk_score DESC
+    const byRisk = (a, b) => Number(b.properties?.risk_score || 0) - Number(a.properties?.risk_score || 0);
+    return [...inPath.sort(byRisk), ...outPath.sort(byRisk)];
+  }, [findingsList, isInPath]);
 
   const targetPathFindingId = useMemo(() => {
     if (!selectedExploitationPath?.steps || sortedFindings.length === 0) return null;
-
-    for (const step of selectedExploitationPath.steps) {
-      if (!step) continue;
-      const sFindingId = String(step.finding_id || '').trim();
-      const sVuln = String(step.vulnerability || '').trim().toLowerCase();
-
-      for (const f of sortedFindings) {
-        const fNodeId = String(f.id || '').trim();
-        const fPropId = String(f.properties?.id ?? '').trim();
-        const fCveId = String(f.properties?.cve_id || f.properties?.cve || '').trim().toLowerCase();
-
-        const isIdMatch = Boolean(
-          sFindingId && (
-            fNodeId === sFindingId ||
-            fPropId === sFindingId ||
-            fNodeId.endsWith(':' + sFindingId) ||
-            sFindingId.endsWith(':' + fNodeId) ||
-            sFindingId.endsWith(':' + fPropId)
-          )
-        );
-
-        const isCveMatch = Boolean(sVuln && fCveId && (fCveId === sVuln || fCveId.includes(sVuln)));
-
-        if (isIdMatch || isCveMatch) {
-          return String(f.properties?.id ?? f.id);
-        }
-      }
-    }
-
-    return null;
-  }, [selectedExploitationPath, sortedFindings]);
+    const found = sortedFindings.find(f => isInPath(f));
+    return found ? String(found.properties?.id ?? found.id) : null;
+  }, [selectedExploitationPath, sortedFindings, isInPath]);
 
   useEffect(() => {
     setShowEditModal(false);
@@ -203,23 +310,73 @@ export function NodeInspector({
               const props = finding.properties || {};
               const rawId = props.id ?? finding.id ?? index;
               const fId = String(rawId);
+              const inPath = isInPath(finding);
+              const propFindingId = String(props.finding_id || '').trim();
+              const propId = String(props.id || '').trim();
+              const fNameStr = String(finding.name || props.title || props.nombre || '').trim();
+              const nameMatchStr = fNameStr.match(/#?(\d+)/);
+              const numIdStr = nameMatchStr ? nameMatchStr[1] : '';
+              const cIds = [fId, propId, propFindingId, numIdStr].filter(Boolean);
+
+              // Intentar extraer la CVE directamente de las propiedades del hallazgo (cve_id, cve, finding_key, title, name)
+              const directCve = (() => {
+                if (props.cve_id) return String(props.cve_id).trim();
+                if (props.cve) return String(props.cve).trim();
+                if (finding.cve_id) return String(finding.cve_id).trim();
+                if (finding.cve) return String(finding.cve).trim();
+
+                const combinedStr = `${props.finding_key || ''} ${props.title || ''} ${finding.name || ''} ${fId}`;
+                const m = combinedStr.match(/(CVE-\d{4}-\d+|GHSA-[a-z0-9-]+)/i);
+                return m ? m[1].toUpperCase() : '';
+              })();
+
+              // Muestra la CVE correspondiente a la etapa de la ruta activa para este finding
+              const pathCve = inPath
+                ? (selectedExploitationPath?.steps?.find(s => {
+                    if (!s) return false;
+                    const sFId = String(s.finding_id || s.findingId || '').trim();
+                    const sCve = String(s.vulnerability || s.cve_id || s.cve || '').trim().toUpperCase();
+
+                    const matchesFId = sFId && cIds.some(cid => cid === sFId || cid.endsWith(':' + sFId) || sFId.endsWith(':' + cid));
+                    const matchesCve = sCve && (directCve === sCve || fNameStr.toUpperCase().includes(sCve));
+                    return matchesFId || matchesCve;
+                  })?.vulnerability || '')
+                : '';
+
+              const cveId = directCve || pathCve || '';
               const titleName = props.title || finding.name || `Finding #${fId}`;
               const isExpanded = expandedFindingId === fId;
-              const isPathTarget = targetPathFindingId === fId;
-              const hasVulns = Boolean(props.has_vulnerabilities);
+              const isPathTarget = inPath;
+              const hasVulns = Boolean(
+                props.has_vulnerabilities ||
+                finding.hasVuln ||
+                cveId
+              );
 
               const riskPct = toPercent(props.risk_score) ?? 0;
               const badgeClass = getRiskBadgeClass(props.risk_score, props.risk_tier);
+              const findingPatchState = getFindingPatchState(props);
 
               return (
-                <div key={fId} className={`finding-accordion-card ${isPathTarget ? 'is-path-target' : ''}`}>
+                <div key={fId} className={`finding-accordion-card ${findingPatchState.className} ${isPathTarget ? 'is-path-target' : ''}`}>
                   <div
                     className={`finding-accordion-header ${isExpanded ? 'is-expanded' : ''}`}
                     onClick={() => toggleFinding(fId)}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div className="finding-accordion-main">
                       <span className="finding-accordion-title">
+                        {cveId ? (
+                          <span className="cve-chip" style={{ marginRight: '6px', background: 'rgba(239,68,68,0.2)', color: '#f87171', border: '1px solid rgba(239,68,68,0.4)', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
+                            {cveId}
+                          </span>
+                        ) : null}
                         {titleName}
+                      </span>
+                      <span
+                        className={`finding-state-badge ${findingPatchState.className}`}
+                        title={findingPatchState.help}
+                      >
+                        {findingPatchState.label}
                       </span>
                       {isPathTarget && (
                         <span className="path-target-badge" title="Vulnerabilidad de la ruta de ataque activa">
@@ -247,20 +404,53 @@ export function NodeInspector({
 
                       <div className="props finding-props-container">
                         <div className="prop-row">
+                          <div className="k">STATUS</div>
+                          <div className="v">{props.status || 'OPEN'}</div>
+                        </div>
+
+                        <div className="prop-row">
+                          <div className="k">PATCH STATE</div>
+                          <div className="v">{findingPatchState.label}</div>
+                        </div>
+
+                        <div className="prop-row">
+                          <div className="k">RISK TIER</div>
+                          <div className="v">{props.risk_tier || 'UNKNOWN'}</div>
+                        </div>
+
+                        <div className="prop-row">
+                          <div className="k">PRIORITY TIER</div>
+                          <div className="v">{props.priority_tier || 'UNKNOWN'}</div>
+                        </div>
+
+                        <div className="prop-row">
                           <div className="k">IMPACT</div>
                           <div className="v">{props.impact_score ?? 'N/A'}</div>
                         </div>
+
                         <div className="prop-row">
                           <div className="k">LIKELIHOOD</div>
                           <div className="v">{props.likelihood ?? 'N/A'}</div>
                         </div>
+
                         <div className="prop-row">
                           <div className="k">EXPOSURE</div>
                           <div className="v">{props.exposure_factor ?? 'N/A'}</div>
                         </div>
+
                         <div className="prop-row">
-                          <div className="k">REMEDIATION</div>
+                          <div className="k">REMEDIATION FACTOR</div>
                           <div className="v">{props.remediation_factor ?? 'N/A'}</div>
+                        </div>
+
+                        <div className="prop-row">
+                          <div className="k">REMEDIATION KIND</div>
+                          <div className="v">{props.remediation_kind || 'UNAVAILABLE'}</div>
+                        </div>
+
+                        <div className="prop-row">
+                          <div className="k">PATCH AVAILABLE</div>
+                          <div className="v">{props.patch_available ? 'Sí' : 'No'}</div>
                         </div>
                       </div>
 

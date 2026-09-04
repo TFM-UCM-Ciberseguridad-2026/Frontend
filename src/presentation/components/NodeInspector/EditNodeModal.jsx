@@ -17,10 +17,29 @@ const ENDPOINT_TYPES = [
 // consciente antes de guardar.
 const isKnownEndpointType = (value) => ENDPOINT_TYPES.some(t => t.value === value);
 
+const normalizeLegacyEndpointType = (rawTipo) => {
+  if (!rawTipo) return 'Server';
+  const lower = String(rawTipo).toLowerCase().trim();
+  if (lower.includes('workstation') || lower.includes('puesto') || lower.includes('pc') || lower.includes('laptop')) {
+    return 'Workstation';
+  }
+  if (lower.includes('domain') || lower.includes('dc') || lower.includes('ad')) {
+    return 'Domain Controller';
+  }
+  if (lower.includes('firewall') || lower.includes('fw')) {
+    return 'Firewall';
+  }
+  if (lower.includes('router') || lower.includes('switch')) {
+    return 'Router';
+  }
+  return 'Server';
+};
+
 export function EditNodeModal({ node, onClose, updateNode }) {
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState(null);
   const [formData, setFormData] = useState({ justification: '' });
+  const [originalRawTipo, setOriginalRawTipo] = useState(null);
 
   useEffect(() => {
     if (!node || !node.properties) return;
@@ -28,6 +47,11 @@ export function EditNodeModal({ node, onClose, updateNode }) {
     const label = node.primaryLabel;
 
     if (label === 'Endpoint') {
+      const rawTipo = props.tipo || props.type;
+      const isUnrecognized = Boolean(rawTipo && !isKnownEndpointType(rawTipo));
+      const initialTipo = isKnownEndpointType(rawTipo) ? rawTipo : normalizeLegacyEndpointType(rawTipo);
+      setOriginalRawTipo(isUnrecognized ? rawTipo : null);
+
       const fetchIPs = async () => {
         let initialIps = [];
         try {
@@ -55,7 +79,7 @@ export function EditNodeModal({ node, onClose, updateNode }) {
         setFormData(prev => ({
           ...prev,
           hostname: props.hostname || '',
-          tipo: props.tipo || props.type || 'Server',
+          tipo: initialTipo,
           status: props.status || 'active',
           environment: props.environment || '',
           internet_exposed: Boolean(props.internet_exposed),
@@ -69,7 +93,7 @@ export function EditNodeModal({ node, onClose, updateNode }) {
 
       setFormData({
         hostname: props.hostname || '',
-        tipo: props.tipo || props.type || 'Server',
+        tipo: initialTipo,
         status: props.status || 'active',
         environment: props.environment || '',
         internet_exposed: Boolean(props.internet_exposed),
@@ -246,19 +270,13 @@ export function EditNodeModal({ node, onClose, updateNode }) {
                     value={formData.tipo || 'Server'}
                     onChange={(e) => updateField('tipo', e.target.value)}
                   >
-                    {!isKnownEndpointType(formData.tipo) && (
-                      <option value={formData.tipo} disabled>
-                        {formData.tipo ? `${formData.tipo} — tipo no reconocido` : 'Sin tipo asignado'}
-                      </option>
-                    )}
                     {ENDPOINT_TYPES.map(t => (
                       <option key={t.value} value={t.value}>{t.label}</option>
                     ))}
                   </select>
-                  {!isKnownEndpointType(formData.tipo) && (
-                    <p className="asset-field-warning">
-                      Este activo no tiene un tipo válido, así que queda fuera del SLA de parcheo.
-                      Elige si es un servidor o un puesto de trabajo para incorporarlo.
+                  {originalRawTipo && (
+                    <p className="asset-field-warning" style={{ color: '#60a5fa', background: 'rgba(59, 130, 246, 0.1)', padding: '8px 12px', borderRadius: '6px', marginTop: '6px' }}>
+                      ℹ️ El activo tenía asignado el tipo no estándar <strong>"{originalRawTipo}"</strong>. Se ha preseleccionado <strong>"{ENDPOINT_TYPES.find(t => t.value === formData.tipo)?.label || formData.tipo}"</strong> para incorporarlo al SLA de parcheo. Puedes ajustarlo si lo deseas.
                     </p>
                   )}
                 </div>

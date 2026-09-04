@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import { getGraphFacets } from '../../utils/graphFilterUtils';
 
 export function GraphFilterSidebar({
   graphData,
@@ -6,6 +7,9 @@ export function GraphFilterSidebar({
   setFilterType,
   searchQuery,
   setSearchQuery,
+  graphAdvancedFilters = {},
+  updateGraphAdvancedFilter,
+  clearGraphAdvancedFilters,
   categories = [],
   getNodeCountByType,
   fetchExploitationPaths,
@@ -19,8 +23,11 @@ export function GraphFilterSidebar({
 }) {
   const [openSections, setOpenSections] = useState({
     categories: true,
-    advanced: false
+    advanced: true
   });
+
+  // Facetas dinámicas y contadores calculados en tiempo real a partir del grafo
+  const facets = useMemo(() => getGraphFacets(graphData?.nodes || []), [graphData]);
 
   const toggleSection = (sectionKey) => {
     setOpenSections(prev => ({
@@ -29,15 +36,30 @@ export function GraphFilterSidebar({
     }));
   };
 
-  const activeFilterCount = (filterType !== 'ALL' ? 1 : 0) + (searchQuery.trim() !== '' ? 1 : 0);
+  // Calcular total de filtros activos
+  const activeAdvancedCount = [
+    graphAdvancedFilters.ipSearch?.trim(),
+    graphAdvancedFilters.vendorSearch?.trim(),
+    graphAdvancedFilters.networkSearch?.trim(),
+    graphAdvancedFilters.environment !== 'ALL' ? graphAdvancedFilters.environment : null,
+    graphAdvancedFilters.internetExposed !== 'ALL' ? graphAdvancedFilters.internetExposed : null,
+    graphAdvancedFilters.status !== 'ALL' ? graphAdvancedFilters.status : null,
+    graphAdvancedFilters.riskTier !== 'ALL' ? graphAdvancedFilters.riskTier : null,
+    graphAdvancedFilters.onlyVulnerable ? true : null
+  ].filter(Boolean).length;
+
+  const activeFilterCount = (filterType !== 'ALL' ? 1 : 0) + (searchQuery.trim() !== '' ? 1 : 0) + activeAdvancedCount;
 
   const handleResetFilters = () => {
     setFilterType('ALL');
     setSearchQuery('');
+    if (clearGraphAdvancedFilters) {
+      clearGraphAdvancedFilters();
+    }
   };
 
   const totalNodes = graphData?.nodes?.length || 0;
-  const totalEdges = graphData?.links?.length || graphData?.edges?.length || 0;
+  const totalEdges = graphData?.links?.length || graphData?.edges?.length || graphData?.relationships?.length || 0;
 
   return (
     <aside className="sidebar compact-sidebar">
@@ -64,7 +86,7 @@ export function GraphFilterSidebar({
         )}
       </div>
 
-      {/* BARRA DE BÚSQUEDA COMPACTA CON ICONO SVG BLANCO */}
+      {/* BARRA DE BÚSQUEDA COMPACTA CON ICONO SVG */}
       <div className="compact-search-wrapper">
         <svg className="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <circle cx="11" cy="11" r="8" />
@@ -186,6 +208,8 @@ export function GraphFilterSidebar({
 
       {/* CONTENEDOR DE SECCIONES CON SCROLL SLIM */}
       <div className="filter-scroll-container">
+        
+        {/* SECCIÓN 1: CATEGORÍAS */}
         <div className="filter-accordion">
           <button
             className="accordion-header"
@@ -239,6 +263,7 @@ export function GraphFilterSidebar({
           )}
         </div>
 
+        {/* SECCIÓN 2: FILTROS AVANZADOS INTERACTIVOS */}
         <div className="filter-accordion">
           <button
             className="accordion-header"
@@ -246,7 +271,11 @@ export function GraphFilterSidebar({
           >
             <div className="accordion-title-wrap">
               <span className="eyebrow-compact">Filtros Avanzados</span>
-              <span className="accordion-tag">Próximamente</span>
+              {activeAdvancedCount > 0 && (
+                <span className="filter-active-badge" style={{ fontSize: '10px', padding: '1px 5px' }}>
+                  {activeAdvancedCount}
+                </span>
+              )}
             </div>
             <svg
               className={`accordion-chevron ${openSections.advanced ? 'open' : ''}`}
@@ -260,20 +289,147 @@ export function GraphFilterSidebar({
           </button>
 
           {openSections.advanced && (
-            <div className="accordion-content">
-              <div className="future-filters-placeholder">
-                <div className="placeholder-item">
-                  <span>Severidad Vulnerabilidad</span>
-                  <span className="ph-badge">Alta / Crítica</span>
-                </div>
-                <div className="placeholder-item">
-                  <span>Estado de Activo</span>
-                  <span className="ph-badge">Activo / Inactivo</span>
-                </div>
-                <small className="placeholder-note">
-                  Modo preparado para integrar filtros por rangos, tags y atributos extendidos.
-                </small>
+            <div className="accordion-content" style={{ padding: '10px 4px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              
+              {/* Filtro: Solo Vulnerables */}
+              <label style={{ fontSize: '11px', color: 'var(--c200)', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={Boolean(graphAdvancedFilters.onlyVulnerable)}
+                  onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('onlyVulnerable', e.target.checked)}
+                  style={{ accentColor: '#ef4444', cursor: 'pointer' }}
+                />
+                <span>Solo vulnerables / hallazgos {facets.vulnerableCount > 0 && `(${facets.vulnerableCount})`}</span>
+              </label>
+
+              {/* A. EXPOSICIÓN A INTERNET */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
+                  Exposición a Internet:
+                </label>
+                <select
+                  className="sidebar-filter-control"
+                  value={graphAdvancedFilters.internetExposed || 'ALL'}
+                  onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('internetExposed', e.target.value)}
+                >
+                  <option value="ALL">Todos los activos ({totalNodes})</option>
+                  <option value="TRUE">Solo Expuestos ({facets.internetExposed.exposed})</option>
+                  <option value="FALSE">Solo Internos ({facets.internetExposed.internal})</option>
+                </select>
               </div>
+
+              {/* B. ENTORNO DINÁMICO */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
+                  Entorno de Despliegue:
+                </label>
+                <select
+                  className="sidebar-filter-control"
+                  value={graphAdvancedFilters.environment || 'ALL'}
+                  onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('environment', e.target.value)}
+                >
+                  <option value="ALL">Todos los entornos</option>
+                  {Object.entries(facets.environments).map(([envKey, count]) => (
+                    <option key={envKey} value={envKey}>
+                      {envKey} ({count})
+                    </option>
+                  ))}
+                  {Object.keys(facets.environments).length === 0 && (
+                    <>
+                      <option value="production">production</option>
+                      <option value="development">development</option>
+                      <option value="staging">staging</option>
+                    </>
+                  )}
+                </select>
+              </div>
+
+              {/* C. DIRECCIÓN IP / SUBRED / RED CON SUGERENCIAS DE DATALIST */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
+                  IP / Subred (CIDR):
+                </label>
+                <input
+                  type="text"
+                  list="network-ip-suggestions"
+                  className="sidebar-filter-control"
+                  placeholder="Ej. 192.168.1..., 10.0.1.0/24..."
+                  value={graphAdvancedFilters.ipSearch || ''}
+                  onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('ipSearch', e.target.value)}
+                />
+                <datalist id="network-ip-suggestions">
+                  {(facets.networks || []).map(net => (
+                    <option key={net.name || net.cidr} value={net.cidr || net.name}>
+                      {net.name}{net.cidr && net.name ? ` (${net.cidr})` : net.cidr}
+                    </option>
+                  ))}
+                </datalist>
+              </div>
+
+              {/* D. PROVEEDOR / VENDOR CON SUGERENCIAS DE DATALIST */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
+                  Proveedor / Vendor:
+                </label>
+                <input
+                  type="text"
+                  list="vendor-suggestions"
+                  className="sidebar-filter-control"
+                  placeholder="Ej. Apache, Cisco..."
+                  value={graphAdvancedFilters.vendorSearch || ''}
+                  onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('vendorSearch', e.target.value)}
+                />
+                <datalist id="vendor-suggestions">
+                  {facets.vendors.map(v => (
+                    <option key={v.name} value={v.name}>{v.name} ({v.count})</option>
+                  ))}
+                </datalist>
+              </div>
+
+              {/* E. ESTADO DINÁMICO */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
+                  Estado de Ejecución:
+                </label>
+                <select
+                  className="sidebar-filter-control"
+                  value={graphAdvancedFilters.status || 'ALL'}
+                  onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('status', e.target.value)}
+                >
+                  <option value="ALL">Todos los estados</option>
+                  {Object.entries(facets.statuses).map(([stKey, count]) => (
+                    <option key={stKey} value={stKey}>
+                      {stKey} ({count})
+                    </option>
+                  ))}
+                  {Object.keys(facets.statuses).length === 0 && (
+                    <>
+                      <option value="running">running</option>
+                      <option value="stopped">stopped</option>
+                      <option value="active">active</option>
+                    </>
+                  )}
+                </select>
+              </div>
+
+              {/* F. NIVEL DE RIESGO CON CONTADORES DINÁMICOS */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
+                  Nivel de Riesgo:
+                </label>
+                <select
+                  className="sidebar-filter-control"
+                  value={graphAdvancedFilters.riskTier || 'ALL'}
+                  onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('riskTier', e.target.value)}
+                >
+                  <option value="ALL">Todos los niveles</option>
+                  <option value="CRITICAL">CRITICAL ({facets.riskTiers.CRITICAL || 0})</option>
+                  <option value="HIGH">HIGH ({facets.riskTiers.HIGH || 0})</option>
+                  <option value="MEDIUM">MEDIUM ({facets.riskTiers.MEDIUM || 0})</option>
+                  <option value="LOW">LOW ({facets.riskTiers.LOW || 0})</option>
+                </select>
+              </div>
+
             </div>
           )}
         </div>

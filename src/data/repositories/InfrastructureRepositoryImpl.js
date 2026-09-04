@@ -10,8 +10,8 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     this.apiDataSource = apiDataSource;
   }
 
-  async getInfrastructure() {
-    const rawData = await this.apiDataSource.fetchInfrastructure();
+  async getInfrastructure(projectId) {
+    const rawData = await this.apiDataSource.fetchInfrastructure(projectId);
     const nodes = (rawData.nodes || []).map(n => new Node(n));
     const relationships = rawData.relationships || [];
     return { nodes, relationships };
@@ -85,12 +85,12 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     return await this.apiDataSource.deleteProject(projectId, justification);
   }
 
-  async scanInstallationVulnerabilities(installationId, softwareId, limit) {
-    return await this.apiDataSource.scanInstallationVulnerabilities(installationId, softwareId, limit);
+  async scanInstallationVulnerabilities(installationId, softwareId, options) {
+    return await this.apiDataSource.scanInstallationVulnerabilities(installationId, softwareId, options);
   }
 
-  async scanContainerImageVulnerabilities(imageId, imageName) {
-    return await this.apiDataSource.scanContainerImageVulnerabilities(imageId, imageName);
+  async scanContainerImageVulnerabilities(imageId, imageName, options) {
+    return await this.apiDataSource.scanContainerImageVulnerabilities(imageId, imageName, options);
   }
 
   async getFindingVulnerabilities(findingId) {
@@ -106,8 +106,8 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     return await this.apiDataSource.computeAllProjectRisks();
   }
 
-  async getPatchQueue(projectId, limit) {
-    return await this.apiDataSource.fetchPatchQueue(projectId, limit);
+  async getPatchQueue(paramsOrProjectId, page, limit) {
+    return await this.apiDataSource.fetchPatchQueue(paramsOrProjectId, page, limit);
   }
 
   async refreshPatchesForVulnerability(cveId) {
@@ -118,8 +118,16 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     return await this.apiDataSource.fetchPatchesForVulnerability(cveId);
   }
 
-  async declarePatchApplied(installationId, payload) {
-    return await this.apiDataSource.declarePatchApplied(installationId, payload);
+  async declarePatchApplied(assetId, payload) {
+    return await this.apiDataSource.declarePatchApplied(assetId, payload);
+  }
+
+  async refreshPatchesForProject(projectId, options) {
+    return await this.apiDataSource.refreshPatchesForProject(projectId, options);
+  }
+
+  async getAppliedPatchHistory(assetId, assetType) {
+    return await this.apiDataSource.fetchAppliedPatchHistory(assetId, assetType);
   }
 
   async updateEndpoint(id, payload) { return await this.apiDataSource.updateEndpoint(id, payload); }
@@ -137,4 +145,27 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
   async deleteNode(id, justification) { return await this.apiDataSource.deleteNode(id, justification); }
   async getEndpointIPs(id) { return await this.apiDataSource.getEndpointIPs(id); }
   async exportProject(id) { return await this.apiDataSource.exportProject(id); }
+
+  async getPaginatedInventory(params) {
+    const rawData = await this.apiDataSource.fetchPaginatedInventory(params);
+    if (!rawData) {
+      return {
+        items: [],
+        page: 1,
+        limit: 50,
+        totalItems: 0,
+        totalPages: 0,
+        categoryCounts: {}
+      };
+    }
+    const items = (rawData.items || []).map(n => new Node(n));
+    return {
+      items,
+      page: rawData.page || 1,
+      limit: rawData.limit || 50,
+      totalItems: rawData.total_items || 0,
+      totalPages: rawData.total_pages || 0,
+      categoryCounts: rawData.category_counts || {}
+    };
+  }
 }

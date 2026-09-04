@@ -1,5 +1,5 @@
 export class InfrastructureRepository {
-  async getInfrastructure() {
+  async getInfrastructure(projectId) {
     throw new Error('Method getInfrastructure not implemented');
   }
 
@@ -49,8 +49,12 @@ export class InfrastructureRepository {
     throw new Error('Method deleteProject not implemented');
   }
 
-  async scanInstallationVulnerabilities(installationId, softwareId, limit) {
+  async scanInstallationVulnerabilities(installationId, softwareId, options) {
     throw new Error('Method scanInstallationVulnerabilities not implemented');
+  }
+
+  async scanContainerImageVulnerabilities(imageId, imageName, options) {
+    throw new Error('Method scanContainerImageVulnerabilities not implemented');
   }
 
   async getFindingVulnerabilities(findingId) {
@@ -65,7 +69,7 @@ export class InfrastructureRepository {
     throw new Error('Method computeAllProjectRisks not implemented');
   }
 
-  async getPatchQueue(projectId, limit) {
+  async getPatchQueue(query = {}) {
     throw new Error('Method getPatchQueue not implemented');
   }
 
@@ -77,8 +81,16 @@ export class InfrastructureRepository {
     throw new Error('Method getPatchesForVulnerability not implemented');
   }
 
-  async declarePatchApplied(installationId, payload) {
+  async declarePatchApplied(assetId, payload) {
     throw new Error('Method declarePatchApplied not implemented');
+  }
+
+  async refreshPatchesForProject(projectId, options) {
+    throw new Error('Method refreshPatchesForProject not implemented');
+  }
+
+  async getAppliedPatchHistory(assetId, assetType) {
+    throw new Error('Method getAppliedPatchHistory not implemented');
   }
 
   async updateEndpoint(id, payload) { throw new Error('Not implemented'); }

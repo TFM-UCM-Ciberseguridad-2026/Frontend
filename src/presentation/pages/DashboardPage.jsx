@@ -22,6 +22,9 @@ export function DashboardPage({
   setSearchQuery,
   filterType,
   setFilterType,
+  graphAdvancedFilters,
+  updateGraphAdvancedFilter,
+  clearGraphAdvancedFilters,
   showToast,
   showAPTPanel,
   setShowAPTPanel,
@@ -75,6 +78,9 @@ export function DashboardPage({
   findingVulnsSourceNode,
   patchQueue,
   patchQueueCount,
+  patchQueuePage,
+  patchQueueTotal,
+  patchQueueTotalPages,
   patchQueueLoading,
   patchQueueError,
   fetchPatchQueue,
@@ -88,7 +94,16 @@ export function DashboardPage({
   patchDetailsLoading,
   patchDetailsError,
   fetchPatchesForCVE,
-  isAnalysisPending
+  isAnalysisPending,
+  refreshPatchesForProject,
+  patchProjectRefreshLoading,
+  patchProjectRefreshError,
+  patchProjectRefreshProgress,
+  appliedPatchHistory,
+  appliedPatchHistoryLoading,
+  appliedPatchHistoryError,
+  appliedPatchHistoryInstallationId,
+  fetchAppliedPatchHistory
 }) {
   const [activeNav, setActiveNav] = useState('grafo');
   const [showExportModal, setShowExportModal] = useState(false);
@@ -155,6 +170,9 @@ export function DashboardPage({
             setFilterType={setFilterType}
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
+            graphAdvancedFilters={graphAdvancedFilters}
+            updateGraphAdvancedFilter={updateGraphAdvancedFilter}
+            clearGraphAdvancedFilters={clearGraphAdvancedFilters}
             selectedNode={selectedNode}
             setSelectedNode={setSelectedNode}
             loading={loading}
@@ -192,7 +210,8 @@ export function DashboardPage({
         {activeNav === 'inventario' && (
           <InventoryPage
             graphData={graphData}
-            categories={categories}
+            categories={categories.filter(c => !['Finding', 'Remediation', 'Vulnerability', 'CWE', 'CVE'].includes(c.key))}
+            selectedProjectId={selectedProjectId}
           />
         )}
 
@@ -201,6 +220,9 @@ export function DashboardPage({
             selectedProjectId={selectedProjectId}
             patchQueue={patchQueue}
             patchQueueCount={patchQueueCount}
+            patchQueuePage={patchQueuePage}
+            patchQueueTotal={patchQueueTotal}
+            patchQueueTotalPages={patchQueueTotalPages}
             patchQueueLoading={patchQueueLoading}
             patchQueueError={patchQueueError}
             fetchPatchQueue={fetchPatchQueue}
@@ -214,6 +236,15 @@ export function DashboardPage({
             patchDetailsLoading={patchDetailsLoading}
             patchDetailsError={patchDetailsError}
             fetchPatchesForCVE={fetchPatchesForCVE}
+            refreshPatchesForProject={refreshPatchesForProject}
+            patchProjectRefreshLoading={patchProjectRefreshLoading}
+            patchProjectRefreshError={patchProjectRefreshError}
+            patchProjectRefreshProgress={patchProjectRefreshProgress}
+            appliedPatchHistory={appliedPatchHistory}
+            appliedPatchHistoryLoading={appliedPatchHistoryLoading}
+            appliedPatchHistoryError={appliedPatchHistoryError}
+            appliedPatchHistoryInstallationId={appliedPatchHistoryInstallationId}
+            fetchAppliedPatchHistory={fetchAppliedPatchHistory}
             setActiveNav={setActiveNav}
           />
         )}

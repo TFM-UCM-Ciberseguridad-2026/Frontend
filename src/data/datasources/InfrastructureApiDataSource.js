@@ -1,6 +1,7 @@
 export class InfrastructureApiDataSource {
-  async fetchInfrastructure() {
-    const res = await fetch('/api/infrastructure');
+  async fetchInfrastructure(projectId) {
+    const url = projectId ? `/api/infrastructure?project_id=${projectId}` : '/api/infrastructure';
+    const res = await fetch(url);
     return await this._handleResponse(res);
   }
 
@@ -139,11 +140,19 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
-  async scanInstallationVulnerabilities(installationId, softwareId, limit = 100) {
+  async scanInstallationVulnerabilities(installationId, softwareId, { limit, forceRefresh } = {}) {
     const params = new URLSearchParams({
-      software_id: String(softwareId),
-      limit: String(limit)
+      software_id: String(softwareId)
     });
+
+    if (Number.isInteger(limit) && limit > 0) {
+      params.set('limit', String(limit));
+    }
+
+    if (forceRefresh) {
+      params.set('force_refresh', 'true');
+    }
+
     const res = await fetch(`/api/installations/${installationId}/scan-vulns?${params.toString()}`, {
       method: 'POST'
     });
@@ -155,8 +164,16 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
-  async scanContainerImageVulnerabilities(imageId, imageName) {
-    const res = await fetch(`/api/containers/images/${encodeURIComponent(imageId)}/scan-vulns`, {
+  async scanContainerImageVulnerabilities(imageId, imageName, { forceRefresh } = {}) {
+    const params = new URLSearchParams();
+    if (forceRefresh) {
+      params.set('force_refresh', 'true');
+    }
+
+    const queryString = params.toString();
+    const url = `/api/containers/images/${encodeURIComponent(imageId)}/scan-vulns${queryString ? `?${queryString}` : ''}`;
+
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image_name: imageName })
@@ -336,10 +353,33 @@ export class InfrastructureApiDataSource {
     }
   }
 
-  async fetchPatchQueue(projectId, limit = 100) {
+  async fetchPatchQueue(paramsOrProjectId = {}, legacyPage = 1, legacyLimit = 20) {
+    let queryParams = {};
+    if (typeof paramsOrProjectId === 'object' && paramsOrProjectId !== null) {
+      queryParams = paramsOrProjectId;
+    } else {
+      queryParams = {
+        projectId: paramsOrProjectId,
+        page: legacyPage,
+        limit: legacyLimit
+      };
+    }
+
     const params = new URLSearchParams();
-    if (projectId) params.set('project_id', projectId);
-    if (limit) params.set('limit', String(limit));
+    if (queryParams.projectId) params.set('project_id', String(queryParams.projectId));
+    if (queryParams.page) params.set('page', String(queryParams.page));
+    if (queryParams.limit) params.set('limit', String(queryParams.limit));
+    if (queryParams.search) params.set('search', queryParams.search);
+    if (queryParams.vendorSearch) params.set('vendor_search', queryParams.vendorSearch);
+    if (queryParams.hostnameSearch) params.set('hostname_search', queryParams.hostnameSearch);
+    if (queryParams.environment && queryParams.environment !== 'ALL') params.set('environment', queryParams.environment);
+    if (queryParams.internetExposed && queryParams.internetExposed !== 'ALL') params.set('internet_exposed', queryParams.internetExposed);
+    if (queryParams.inContainer && queryParams.inContainer !== 'ALL') params.set('in_container', queryParams.inContainer);
+    if (queryParams.priorityTier && queryParams.priorityTier !== 'ALL') params.set('priority_tier', queryParams.priorityTier);
+    if (queryParams.patchAvailable && queryParams.patchAvailable !== 'ALL') params.set('patch_available', queryParams.patchAvailable);
+    if (queryParams.remediationKind && queryParams.remediationKind !== 'ALL') params.set('remediation_kind', queryParams.remediationKind);
+    if (queryParams.sortField) params.set('sort_field', queryParams.sortField);
+    if (queryParams.sortDirection) params.set('sort_direction', queryParams.sortDirection);
 
     const res = await fetch(`/api/patch-queue?${params.toString()}`);
     return await this._handleResponse(res);
@@ -357,12 +397,69 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
-  async declarePatchApplied(installationId, payload) {
-    const res = await fetch(`/api/installations/${encodeURIComponent(installationId)}/applied-patches`, {
+  async declarePatchApplied(assetId, payload) {
+    const isContainer = payload?.asset_type === 'CONTAINER';
+    const res = await fetch(`/${isContainer ? 'api/containers' : 'api/installations'}/${encodeURIComponent(assetId)}/applied-patches`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
+    return await this._handleResponse(res);
+  }
+
+  async fetchAppliedPatchHistory(assetId, assetType = 'SOFTWARE_INSTALLATION') {
+    const resource = assetType === 'CONTAINER' ? 'containers' : 'installations';
+    const res = await fetch(`/api/${resource}/${encodeURIComponent(assetId)}/applied-patches`);
+    return await this._handleResponse(res);
+  }
+
+
+  async refreshPatchesForProject(projectId, { limit = 20, offset = 0 } = {}) {
+    const params = new URLSearchParams();
+    params.set('limit', String(limit));
+    params.set('offset', String(offset));
+
+    const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/patches/refresh?${params.toString()}`, {
+      method: 'POST'
+    });
+    return await this._handleResponse(res);
+  }
+
+  async fetchPaginatedInventory({
+    projectId,
+    page = 1,
+    limit = 50,
+    category = 'ALL',
+    categories = [],
+    search = '',
+    ipSearch = '',
+    vendorSearch = '',
+    environment = '',
+    internetExposed = '',
+    status = '',
+    riskTier = '',
+    sortField = 'name',
+    sortDirection = 'asc'
+  } = {}) {
+    const params = new URLSearchParams();
+    if (projectId) params.set('project_id', String(projectId));
+    if (page) params.set('page', String(page));
+    if (limit) params.set('limit', String(limit));
+    if (category) params.set('category', category);
+    if (Array.isArray(categories) && categories.length > 0) {
+      params.set('categories', categories.join(','));
+    }
+    if (search) params.set('search', search);
+    if (ipSearch) params.set('ip_search', ipSearch);
+    if (vendorSearch) params.set('vendor_search', vendorSearch);
+    if (environment) params.set('environment', environment);
+    if (internetExposed) params.set('internet_exposed', internetExposed);
+    if (status) params.set('status', status);
+    if (riskTier) params.set('risk_tier', riskTier);
+    if (sortField) params.set('sort_by', sortField);
+    if (sortDirection) params.set('order', sortDirection);
+
+    const res = await fetch(`/api/inventory?${params.toString()}`);
     return await this._handleResponse(res);
   }
 }
