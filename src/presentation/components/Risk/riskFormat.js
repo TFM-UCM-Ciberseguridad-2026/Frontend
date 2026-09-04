@@ -10,6 +10,23 @@ export function toPercent(score) {
   return Math.round(normalized * 100);
 }
 
+// Mismos umbrales que ClassifyRiskTier en el backend. Sirve de respaldo para los nodos
+// calculados antes de que se persistiera el tier: el score está, la etiqueta no.
+export function tierFromScore(score) {
+  if (score === null || score === undefined || score === '') return null;
+  const normalized = normalizeScore(score);
+  if (normalized === null) return null;
+  if (normalized >= 0.9) return 'CRITICAL';
+  if (normalized >= 0.7) return 'HIGH';
+  if (normalized >= 0.4) return 'MEDIUM';
+  return 'LOW';
+}
+
+export function resolveTier(tier, score) {
+  if (tier) return String(tier).toUpperCase();
+  return tierFromScore(score);
+}
+
 export function tierColor(tier) {
   switch ((tier || '').toUpperCase()) {
     case 'CRITICAL': return '#ef4444';
@@ -20,6 +37,6 @@ export function tierColor(tier) {
   }
 }
 
-export function displayTier(tier) {
-  return tier || 'UNKNOWN';
+export function displayTier(tier, score) {
+  return resolveTier(tier, score) || 'UNKNOWN';
 }

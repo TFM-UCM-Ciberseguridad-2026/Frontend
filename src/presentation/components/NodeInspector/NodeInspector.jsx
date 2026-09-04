@@ -3,7 +3,7 @@ import { RiskSummary } from '../Risk/RiskSummary';
 import { EditNodeModal } from './EditNodeModal';
 import { DeleteNodeModal } from './DeleteNodeModal';
 import { RiskScoreGauge } from '../Risk/RiskScoreGauge';
-import { toPercent } from '../Risk/riskFormat';
+import { toPercent, displayTier } from '../Risk/riskFormat';
 import { RenameProjectModal, DeleteProjectModal } from '../HudHeader/ProjectActionModals';
 import './NodeInspector.css';
 
@@ -403,12 +403,12 @@ export function NodeInspector({
 
                         <div className="prop-row">
                           <div className="k">RISK TIER</div>
-                          <div className="v">{props.risk_tier || 'UNKNOWN'}</div>
+                          <div className="v">{displayTier(props.risk_tier, props.risk_score)}</div>
                         </div>
 
                         <div className="prop-row">
                           <div className="k">PRIORITY TIER</div>
-                          <div className="v">{props.priority_tier || 'UNKNOWN'}</div>
+                          <div className="v">{displayTier(props.priority_tier, props.priority_score)}</div>
                         </div>
 
                         <div className="prop-row">

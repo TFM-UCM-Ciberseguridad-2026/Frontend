@@ -1,5 +1,5 @@
 import React from 'react';
-import { normalizeScore, toPercent, tierColor, displayTier } from './riskFormat';
+import { normalizeScore, toPercent, tierColor, displayTier, resolveTier } from './riskFormat';
 
 export function RiskScoreGauge({ score, tier, label }) {
   const normalized = normalizeScore(score);
@@ -7,7 +7,7 @@ export function RiskScoreGauge({ score, tier, label }) {
 
   const radius = 36;
   const circumference = 2 * Math.PI * radius;
-  const color = tierColor(tier);
+  const color = tierColor(resolveTier(tier, score));
 
   return (
     <div className="risk-gauge">
@@ -27,7 +27,7 @@ export function RiskScoreGauge({ score, tier, label }) {
       <div className="risk-gauge-value">
         <b>{toPercent(score)}%</b>
         <span>{label}</span>
-        <small style={{ color }}>{displayTier(tier)}</small>
+        <small style={{ color }}>{displayTier(tier, score)}</small>
       </div>
     </div>
   );
