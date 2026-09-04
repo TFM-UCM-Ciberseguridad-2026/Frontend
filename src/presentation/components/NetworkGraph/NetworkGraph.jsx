@@ -2048,7 +2048,7 @@ export function NetworkGraph({
           }}
         >
           <div style={{ fontFamily: 'Share Tech Mono, monospace', fontSize: '11.5px', color: '#f87171', letterSpacing: '0.5px' }}>
-            RUTA DESTACADA: <strong>{selectedExploitationPath.initialEndpoint}</strong> &middot; RIESGO: <strong>{selectedExploitationPath.totalRiskScore.toFixed(1)}</strong>
+            RUTA DESTACADA: <strong>{selectedExploitationPath.initialEndpoint}</strong> &middot; RIESGO: <strong>{((selectedExploitationPath.pathRiskScore ?? selectedExploitationPath.totalRiskScore ?? 0) * 100).toFixed(1)}%</strong>
           </div>
           <button
             className="btn btn-secondary"

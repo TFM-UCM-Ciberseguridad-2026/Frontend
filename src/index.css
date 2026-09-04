@@ -2142,25 +2142,31 @@ aside {
 }
 
 .path-risk-badge {
+  min-width: 108px;
   text-align: right;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.25);
-  padding: 4px 12px;
+  background: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  padding: 6px 10px;
   border-radius: 6px;
 }
 
 .path-risk-score {
   font-family: 'Orbitron', sans-serif;
-  font-weight: 800;
-  font-size: 16px;
+  font-weight: 600;
+  font-size: 11px;
+  line-height: 1.35;
+  opacity: 0.85;
   color: #f87171;
 }
 
 .path-risk-tier {
   font-family: 'Share Tech Mono', monospace;
+  font-weight: 500;
   font-size: 9px;
+  line-height: 1.25;
+  letter-spacing: 0.8px;
+  opacity: 0.75;
   color: var(--muted);
-  letter-spacing: 1px;
 }
 
 .path-timeline {
