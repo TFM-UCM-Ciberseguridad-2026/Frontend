@@ -3,9 +3,9 @@ export class DeclarePatchAppliedUseCase {
     this.infrastructureRepository = infrastructureRepository;
   }
 
-  async execute(installationId, payload) {
-    if (!installationId) {
-      throw new Error('installation_id es obligatorio');
+  async execute(assetId, payload) {
+    if (!assetId) {
+      throw new Error('asset_id es obligatorio');
     }
 
     if (!payload?.cve_id) {
@@ -16,6 +16,10 @@ export class DeclarePatchAppliedUseCase {
       throw new Error('remediation_level es obligatorio');
     }
 
-    return await this.infrastructureRepository.declarePatchApplied(installationId, payload);
+    if (payload.asset_type === 'CONTAINER' && (!payload.finding_id || Number(payload.finding_id) <= 0)) {
+      throw new Error('finding_id es obligatorio para remediaciones contextuales de contenedor');
+    }
+
+    return await this.infrastructureRepository.declarePatchApplied(assetId, payload);
   }
 }

@@ -8,7 +8,7 @@ const PHYSICS = {
   springConstant: 0.015,
   damping: 0.09,
   centralGravity: 0.02,
-  avoidOverlapPadding: 38,
+  avoidOverlapPadding: 48,
   maxSpeed: 18
 };
 
@@ -247,7 +247,7 @@ function getNodeDepth(n) {
   if (cat === 'proyecto' || cat === 'project' || label === 'project' || labels.includes('project')) return 1;
   if (cat === 'endpoint' || label === 'endpoint' || labels.includes('endpoint')) return 2;
   // IMPORTANTE: ContainerImage debe evaluarse ANTES que Container
-  if (cat.includes('imagen') || cat.includes('image') || label.includes('containerimage') || labels.some(l => l.includes('containerimage'))) return 3.2;
+  if (cat.includes('imagen') || cat.includes('image') || label.includes('containerimage') || labels.some(l => l.includes('containerimage'))) return 3.6;
   if (cat === 'container' || cat === 'contenedor' || label === 'container' || (labels.includes('container') && !labels.some(l => l.includes('containerimage')))) return 3;
   if (cat === 'instalacion' || cat === 'installation' || cat === 'softwareinstallation' || label === 'installation' || label === 'softwareinstallation' || labels.includes('installation') || labels.includes('softwareinstallation')) return 3.5;
   if (cat === 'hardware' || label === 'hardware' || labels.includes('hardware') || cat === 'software' || label === 'software' || labels.includes('software')) return 4;
@@ -359,6 +359,11 @@ export function NetworkGraph({
   const dragSnapTargetRef = useRef(null);
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
+  const [canvasEl, setCanvasEl] = useState(null);
+  const canvasCallbackRef = useCallback((node) => {
+    canvasRef.current = node;
+    setCanvasEl(node);
+  }, []);
   const animationFrameRef = useRef(null);
   const hasInitialTreeFitRef = useRef(false);
 
@@ -557,14 +562,8 @@ export function NetworkGraph({
 
     return graphData.nodes.filter(n => {
       const idStr = String(n.id);
-      if (n.labels.includes('TTP') || n.labels.includes('ThreatActor')) {
+      if (n.labels.includes('TTP') || n.labels.includes('ThreatActor') || n.labels.includes('Vulnerability')) {
         return false;
-      }
-      if (n.labels.includes('Vulnerability')) {
-        const isFromContainerImage = rels.some(r =>
-          r.type === 'HAS_VULNERABILITY' && (r.source === n.id || r.target === n.id)
-        );
-        if (!isFromContainerImage) return false;
       }
       if (hiddenSubtreeNodeIds.has(idStr)) return false;
       if (isAncestorCollapsed(idStr)) return false;
@@ -1072,10 +1071,13 @@ export function NetworkGraph({
             const isFindingOrVuln = vItem.node.primaryLabel === 'Finding' || vItem.node.primaryLabel === 'Vulnerability' ||
               (vItem.node.labels || []).some(l => l === 'Finding' || l === 'Vulnerability');
 
-            // Solo marcar si coincide exactamente con el paso, o si es el único finding conectado
+            // Solo marcar si coincide exactamente con el paso (excluyendo el nodo Vulnerability puro)
             if (matchesId || matchesCve) {
-              connectorNodeIdSet.add(vItem.id);
-              edgeIdSet.add(vItem.relId);
+              const isVulnNode = vItem.node.primaryLabel === 'Vulnerability' || (vItem.node.labels || []).includes('Vulnerability');
+              if (!isVulnNode) {
+                connectorNodeIdSet.add(vItem.id);
+                edgeIdSet.add(vItem.relId);
+              }
               if (vItem.parentFindingId) {
                 connectorNodeIdSet.add(vItem.parentFindingId);
               }
@@ -1697,7 +1699,7 @@ export function NetworkGraph({
 
     frameId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(frameId);
-  }, [graphData, layoutMode, selectedNode, filterType, searchQuery, graphAdvancedFilters, selectedExploitationPath, pathEdgeIdSet, pathConnectorNodeIdSet, pathNodeStepMap, lineageMaps, collapsedNodeIds]);
+  }, [canvasEl, graphData, layoutMode, selectedNode, filterType, searchQuery, graphAdvancedFilters, selectedExploitationPath, pathEdgeIdSet, pathConnectorNodeIdSet, pathNodeStepMap, lineageMaps, collapsedNodeIds]);
 
   // Conversión de coordenadas de pantalla a coordenadas del mundo Canvas
   const screenToWorld = useCallback((clientX, clientY) => {
@@ -1978,11 +1980,10 @@ export function NetworkGraph({
 
   // Registrar el listener de rueda con passive:false para poder llamar preventDefault()
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    canvas.addEventListener('wheel', handleWheel, { passive: false });
-    return () => canvas.removeEventListener('wheel', handleWheel);
-  }, [handleWheel]);
+    if (!canvasEl) return;
+    canvasEl.addEventListener('wheel', handleWheel, { passive: false });
+    return () => canvasEl.removeEventListener('wheel', handleWheel);
+  }, [canvasEl, handleWheel]);
 
   const handleDoubleClick = (e) => {
     const { x: wx, y: wy } = screenToWorld(e.clientX, e.clientY);
@@ -2061,7 +2062,7 @@ export function NetworkGraph({
 
       {/* LIENZO CANVAS DE ALTO RENDIMIENTO */}
       <canvas
-        ref={canvasRef}
+        ref={canvasCallbackRef}
         style={{ width: '100%', height: '100%', display: 'block', cursor: 'grab' }}
         onMouseDown={handleMouseDown}
         onDoubleClick={handleDoubleClick}

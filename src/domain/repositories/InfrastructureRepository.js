@@ -81,7 +81,7 @@ export class InfrastructureRepository {
     throw new Error('Method getPatchesForVulnerability not implemented');
   }
 
-  async declarePatchApplied(installationId, payload) {
+  async declarePatchApplied(assetId, payload) {
     throw new Error('Method declarePatchApplied not implemented');
   }
 
@@ -89,7 +89,7 @@ export class InfrastructureRepository {
     throw new Error('Method refreshPatchesForProject not implemented');
   }
 
-  async getAppliedPatchHistory(installationId) {
+  async getAppliedPatchHistory(assetId, assetType) {
     throw new Error('Method getAppliedPatchHistory not implemented');
   }
 

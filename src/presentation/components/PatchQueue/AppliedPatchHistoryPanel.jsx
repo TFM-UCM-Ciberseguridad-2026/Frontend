@@ -26,7 +26,7 @@ export function AppliedPatchHistoryPanel({
         <p className="eyebrow">Patch History</p>
         <h3>Histórico</h3>
         <div className="applied-history-empty">
-          Selecciona una fila de Patch Queue para ver el histórico de remediaciones de esa instalación.
+          Selecciona una fila de Patch Queue para ver el histórico de remediaciones del activo.
         </div>
       </aside>
     );
@@ -37,7 +37,9 @@ export function AppliedPatchHistoryPanel({
       <p className="eyebrow">Patch History</p>
       <h3>{selectedItem.software_name || 'Software'}</h3>
       <p className="applied-history-subtitle">
-        {selectedItem.installation_id}
+        {selectedItem.asset_type === 'CONTAINER'
+          ? `Container · ${selectedItem.container_id || selectedItem.asset_id}`
+          : `SoftwareInstallation · ${selectedItem.installation_id}`}
       </p>
 
       {loading && <div className="applied-history-empty">Cargando histórico...</div>}
@@ -45,7 +47,7 @@ export function AppliedPatchHistoryPanel({
 
       {!loading && !error && history.length === 0 && (
         <div className="applied-history-empty">
-          No hay remediaciones aplicadas en esta instalación.
+          No hay remediaciones aplicadas en este activo.
         </div>
       )}
 
