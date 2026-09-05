@@ -31,6 +31,8 @@ import { GetPatchQueueUseCase } from '../../domain/usecases/GetPatchQueueUseCase
 import { RefreshPatchesForVulnerabilityUseCase } from '../../domain/usecases/RefreshPatchesForVulnerabilityUseCase';
 import { DeclarePatchAppliedUseCase } from '../../domain/usecases/DeclarePatchAppliedUseCase';
 import { GetPatchesForVulnerabilityUseCase } from '../../domain/usecases/GetPatchesForVulnerabilityUseCase';
+import { ExportWeeklyReportUseCase } from '../../domain/usecases/ExportWeeklyReportUseCase';
+import { ExportMonthlyReportUseCase } from '../../domain/usecases/ExportMonthlyReportUseCase';
 import { GetAppliedPatchHistoryUseCase } from '../../domain/usecases/GetAppliedPatchHistoryUseCase';
 
 const isSoftwareInstallationNode = node =>
@@ -52,7 +54,6 @@ function shouldForceVulnRefresh(installationNode) {
 
   return Date.now() - completedAtMs >= VULN_SCAN_CACHE_TTL_MS;
 }
-
 
 export function useInfrastructure() {
   const toast = useToast();
@@ -178,6 +179,8 @@ export function useInfrastructure() {
   const exportProjectUseCase = useMemo(() => new ExportProjectUseCase(repository), [repository]);
   const exportMitreNavigatorUseCase = useMemo(() => new ExportMitreNavigatorUseCase(), []);
   const exportInventoryUseCase = useMemo(() => new ExportInventoryUseCase(repository), [repository]);
+  const exportWeeklyReportUseCase = useMemo(() => new ExportWeeklyReportUseCase(repository), [repository]);
+  const exportMonthlyReportUseCase = useMemo(() => new ExportMonthlyReportUseCase(repository), [repository]);
   const importInfrastructureUseCase = useMemo(() => new ImportInfrastructureUseCase(repository), [repository]);
 
   const scanInstallationVulnerabilitiesUseCase = useMemo(() => new ScanInstallationVulnerabilitiesUseCase(repository), [repository]);
@@ -732,6 +735,41 @@ export function useInfrastructure() {
     } catch (err) {
       console.error(err);
       showToast(`Error al exportar inventario: ${err.message}`, 'error');
+    }
+  };
+
+  /** Resuelve el nombre del proyecto desde el grafo ya cargado, sin ir al backend. */
+  const nombreDeProyecto = (projId) => {
+    const nodo = graphData?.nodes?.find(
+      n => (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
+           String(n.properties?.id ?? n.id) === String(projId)
+    );
+    return nodo?.properties?.nombre || nodo?.properties?.name || 'Proyecto';
+  };
+
+  // Informe SEMANAL: operativo, para el equipo. Qué hay que cerrar esta semana.
+  const exportWeeklyReport = async (targetProjectId) => {
+    try {
+      showToast('Generando informe semanal en PPTX...', 'info');
+      const projId = targetProjectId || selectedProjectId;
+      await exportWeeklyReportUseCase.execute(projId, nombreDeProyecto(projId));
+      showToast('¡Informe semanal exportado con éxito!');
+    } catch (err) {
+      console.error(err);
+      showToast(`Error al generar el informe semanal: ${err.message}`, 'error');
+    }
+  };
+
+  // Informe MENSUAL: de gobierno, para el Comité. Marco, política y trazabilidad.
+  const exportMonthlyReport = async (targetProjectId) => {
+    try {
+      showToast('Generando informe mensual en PPTX...', 'info');
+      const projId = targetProjectId || selectedProjectId;
+      await exportMonthlyReportUseCase.execute(projId, nombreDeProyecto(projId));
+      showToast('¡Informe mensual exportado con éxito!');
+    } catch (err) {
+      console.error(err);
+      showToast(`Error al generar el informe mensual: ${err.message}`, 'error');
     }
   };
 
@@ -1610,6 +1648,8 @@ export function useInfrastructure() {
     exportProject,
     exportMitreNavigator,
     exportInventory,
+    exportWeeklyReport,
+    exportMonthlyReport,
     importProject,
     vulnScanLoading,
     riskComputeLoading,

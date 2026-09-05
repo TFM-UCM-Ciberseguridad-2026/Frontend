@@ -10,7 +10,7 @@ import { TtpsPage } from './TtpsPage';
 import { ExportModal } from '../components/Archive/ExportModal';
 import { ImportModal } from '../components/Archive/ImportModal';
 import { PatchQueuePage } from './PatchQueuePage';
-
+import { GovernancePage } from './GovernancePage';
 export function DashboardPage({
   setShowDashboard,
   graphData,
@@ -61,6 +61,8 @@ export function DashboardPage({
   exportProject,
   exportMitreNavigator,
   exportInventory,
+  exportWeeklyReport,
+  exportMonthlyReport,
   importProject,
   vulnScanLoading,
   riskComputeLoading,
@@ -262,6 +264,10 @@ export function DashboardPage({
             graphData={graphData}
           />
         )}
+
+        {activeNav === 'gobierno' && (
+          <GovernancePage selectedProjectId={selectedProjectId} />
+        )}
       </div>
 
       {/* MODAL TOP APTs */}
@@ -316,6 +322,8 @@ export function DashboardPage({
         onExportProject={(targetProjectId) => exportProject(targetProjectId)}
         onExportMitre={(targetProjectId) => exportMitreNavigator(targetProjectId)}
         onExportInventory={(targetProjectId) => exportInventory(targetProjectId)}
+        onExportWeeklyReport={(targetProjectId) => exportWeeklyReport(targetProjectId)}
+        onExportMonthlyReport={(targetProjectId) => exportMonthlyReport(targetProjectId)}
       />
 
       {/* MODAL IMPORTAR ARCHIVE */}
