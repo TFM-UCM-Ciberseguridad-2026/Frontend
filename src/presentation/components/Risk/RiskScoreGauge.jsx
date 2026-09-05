@@ -1,5 +1,5 @@
 import React from 'react';
-import { normalizeScore, toPercent, tierColor, displayTier, resolveTier } from './riskFormat';
+import { normalizeScore, tierColor, displayTier, resolveTier, formatPercent } from './riskFormat';
 
 export function RiskScoreGauge({ score, tier, label }) {
   const normalized = normalizeScore(score);
@@ -25,7 +25,7 @@ export function RiskScoreGauge({ score, tier, label }) {
         />
       </svg>
       <div className="risk-gauge-value">
-        <b>{toPercent(score)}%</b>
+        <b>{formatPercent(score)}</b>
         <span>{label}</span>
         <small style={{ color }}>{displayTier(tier, score)}</small>
       </div>

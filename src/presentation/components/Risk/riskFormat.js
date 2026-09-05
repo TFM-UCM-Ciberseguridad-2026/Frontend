@@ -40,3 +40,13 @@ export function tierColor(tier) {
 export function displayTier(tier, score) {
   return resolveTier(tier, score) || 'UNKNOWN';
 }
+
+
+export function formatPercent(score) {
+  const normalized = normalizeScore(score);
+
+  if (normalized === null) return 'N/A';
+  if (normalized > 0 && normalized < 0.005) return '<0%';
+
+  return `${Math.round(normalized * 100)}%`;
+}

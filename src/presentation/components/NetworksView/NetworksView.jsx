@@ -1,4 +1,6 @@
 import React from 'react';
+import { formatPercent } from '../Risk/riskFormat';
+
 
 export function NetworksView({ graphData, setSelectedNode }) {
   const networks = (graphData?.nodes || []).filter(n => n.primaryLabel === 'Network');
@@ -44,7 +46,7 @@ export function NetworksView({ graphData, setSelectedNode }) {
                   <span>{ep.name}</span>
                   <span style={{ color: ep.properties?.priority_tier === 'CRITICAL' ? '#74050e' : 'var(--muted)' }}>
                     P: {ep.properties?.priority_tier || 'N/A'}
-                    {ep.properties?.priority_score !== undefined ? ` · ${Math.round(Number(ep.properties.priority_score) * 100)}%` : ''}
+                    {ep.properties?.priority_score !== undefined ? ` · ${formatPercent(ep.properties.priority_score)}` : ''}
                   </span>
                 </div>
               ))}

@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { RenameProjectModal, DeleteProjectModal } from './ProjectActionModals';
+import { formatPercent } from '../Risk/riskFormat';
+
 
 export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploitationPaths, setShowDashboard, projects, selectedProjectId, setSelectedProjectId, selectedProjectNode, onOpenExport, onOpenImport, renameProject, deleteProject }) {
   const [archiveOpen, setArchiveOpen] = useState(false);
@@ -59,7 +61,7 @@ export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploita
 
         {selectedProjectNode?.properties?.risk_tier && (
           <div className="status-pill">
-            Risk {selectedProjectNode.properties.risk_tier} · {Math.round(Number(selectedProjectNode.properties.risk_score || 0) * 100)}%
+            Risk {selectedProjectNode.properties.risk_tier} · {formatPercent(selectedProjectNode.properties.risk_score)}
           </div>
         )}
 

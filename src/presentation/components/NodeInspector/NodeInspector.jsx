@@ -3,7 +3,7 @@ import { RiskSummary } from '../Risk/RiskSummary';
 import { EditNodeModal } from './EditNodeModal';
 import { DeleteNodeModal } from './DeleteNodeModal';
 import { RiskScoreGauge } from '../Risk/RiskScoreGauge';
-import { toPercent, displayTier } from '../Risk/riskFormat';
+import { toPercent, displayTier, formatPercent } from '../Risk/riskFormat';
 import { RenameProjectModal, DeleteProjectModal } from '../HudHeader/ProjectActionModals';
 import './NodeInspector.css';
 
@@ -341,7 +341,7 @@ export function NodeInspector({
                 cveId
               );
 
-              const riskPct = toPercent(props.risk_score) ?? 0;
+              const riskPct = formatPercent(props.risk_score) ?? 0;
               const badgeClass = getRiskBadgeClass(props.risk_score, props.risk_tier);
               const findingPatchState = getFindingPatchState(props);
 
@@ -375,7 +375,7 @@ export function NodeInspector({
 
                     <div className="finding-accordion-meta">
                       <span className={`risk-badge ${badgeClass}`}>
-                        {`Risk: ${riskPct}%`}
+                        {`Risk: ${riskPct}`}
                       </span>
                       <span className={`finding-accordion-chevron ${isExpanded ? 'is-expanded' : ''}`}>
                         ▼

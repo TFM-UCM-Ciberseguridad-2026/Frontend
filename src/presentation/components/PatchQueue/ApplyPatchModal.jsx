@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
+import { formatPercent } from '../Risk/riskFormat';
 import './ApplyPatchModal.css';
 
-const percent = (value) => `${Math.round(Number(value || 0) * 100)}%`;
+const percent = formatPercent;
 
 const cvePattern = /CVE-\d{4}-\d{4,}/gi;
 
