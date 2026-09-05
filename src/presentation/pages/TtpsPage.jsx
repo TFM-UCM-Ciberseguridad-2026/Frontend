@@ -1,76 +1,11 @@
 import React, { useState, useRef } from 'react';
 import { useTTPSocket } from '../hooks/useTTPSocket';
+import { TACTICS, normalizeTacticKey, normalizeTacticKeys } from '../../domain/mitre/tactics';
 import './TtpsPage.css';
 import TTPDashboard from '../components/TTPDashboard/TTPDashboard.jsx';
 
-export const TACTICS = [
-  { key: 'reco', id: 'TA0043', label: 'Reconnaissance' },
-  { key: 'resdev', id: 'TA0042', label: 'Resource Development' },
-  { key: 'ia', id: 'TA0001', label: 'Initial Access' },
-  { key: 'exec', id: 'TA0002', label: 'Execution' },
-  { key: 'pers', id: 'TA0003', label: 'Persistence' },
-  { key: 'pe', id: 'TA0004', label: 'Privilege Escalation' },
-  { key: 'de', id: 'TA0005', label: 'Defense Evasion' },
-  { key: 'ca', id: 'TA0006', label: 'Credential Access' },
-  { key: 'disc', id: 'TA0007', label: 'Discovery' },
-  { key: 'lm', id: 'TA0008', label: 'Lateral Movement' },
-  { key: 'coll', id: 'TA0009', label: 'Collection' },
-  { key: 'c2', id: 'TA0011', label: 'Command & Control' },
-  { key: 'exfil', id: 'TA0010', label: 'Exfiltration' },
-  { key: 'impact', id: 'TA0040', label: 'Impact' },
-];
-
-export const normalizeTacticKey = (tacticStr = '') => {
-  if (!tacticStr) return 'de';
-  const str = String(tacticStr).toLowerCase();
-  
-  if (['reco', 'resdev', 'ia', 'exec', 'pers', 'pe', 'de', 'ca', 'disc', 'lm', 'coll', 'c2', 'exfil', 'impact'].includes(str)) {
-    return str;
-  }
-  
-  if (str.includes('recon') || str === 'ta0043') return 'reco';
-  if (str.includes('resource') || str === 'ta0042') return 'resdev';
-  if (str.includes('initial') || (str.includes('access') && !str.includes('cred')) || str === 'ta0001') return 'ia';
-  if (str.includes('execution') || str === 'exec' || str === 'ta0002') return 'exec';
-  if (str.includes('persist') || str === 'ta0003') return 'pers';
-  if (str.includes('privilege') || str.includes('escalat') || str === 'ta0004') return 'pe';
-  if (str.includes('defense') || str.includes('evasion') || str.includes('stealth') || str === 'ta0005') return 'de';
-  if (str.includes('credential') || str === 'ta0006') return 'ca';
-  if (str.includes('discovery') || str === 'ta0007') return 'disc';
-  if (str.includes('lateral') || str.includes('movement') || str === 'ta0008') return 'lm';
-  if (str.includes('collection') || str === 'ta0009') return 'coll';
-  if (str.includes('command') || str.includes('control') || str === 'c2' || str === 'ta0011') return 'c2';
-  if (str.includes('exfil') || str === 'ta0010') return 'exfil';
-  if (str.includes('impact') || str === 'ta0040') return 'impact';
-
-  return 'de';
-};
-
-const INFERRED_TTP_INFO = {
-  'T1499': { name: 'Endpoint Denial of Service', tactic: 'impact' },
-  'T1499.001': { name: 'OS Exhaustion Flood', tactic: 'impact' },
-  'T1499.002': { name: 'Service Exhaustion Flood', tactic: 'impact' },
-  'T1499.003': { name: 'Application Exhaustion Flood', tactic: 'impact' },
-  'T1499.004': { name: 'Application Fault', tactic: 'impact' },
-  'T1564': { name: 'Hide Artifacts', tactic: 'de' },
-  'T1564.009': { name: 'Resource Fork', tactic: 'de' },
-  'T1027': { name: 'Obfuscated Files or Information', tactic: 'de' },
-  'T1027.006': { name: 'HTML Smuggling', tactic: 'de' },
-  'T1027.009': { name: 'Embedded Payloads', tactic: 'de' },
-  'T1574': { name: 'Hijack Execution Flow', tactic: 'pe' },
-  'T1574.005': { name: 'Executable Installer File Permissions Weakness', tactic: 'pe' },
-  'T1574.006': { name: 'Dynamic Link Library Search Order Hijacking', tactic: 'pe' },
-  'T1574.007': { name: 'Path Interception by PATH Environment Variable', tactic: 'pe' },
-  'T1574.010': { name: 'Services File Permissions Weakness', tactic: 'pe' },
-  'T1547': { name: 'Boot or Logon Autostart Execution', tactic: 'pers' },
-  'T1547.009': { name: 'Shortcut Modification', tactic: 'pers' },
-  'T1562.003': { name: 'Impair Defenses: Impair Command History Logging', tactic: 'de' },
-  'T1553.002': { name: 'Subvert Trust Controls: Code Signing', tactic: 'de' },
-  'T1036.001': { name: 'Masquerading: Invalid Code Signature', tactic: 'de' },
-  'T1539': { name: 'Steal Web Session Cookie', tactic: 'ca' },
-  'T1543': { name: 'Create or Modify System Process', tactic: 'pers' },
-  'T1553.004': { name: 'Install Root Certificate', tactic: 'de' }
-};
+// Reexportados por compatibilidad con quien ya los importaba desde esta página.
+export { TACTICS, normalizeTacticKey };
 
 export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchInfrastructure, graphData }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -163,7 +98,10 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
               name: ttp.name || ttp.Name || '',
               desc: ttp.desc || ttp.Desc || '',
               cves: ttp.cves || ttp.CVEs || [],
-              tactic: normalizeTacticKey(rawTactic),
+              // Una técnica pertenece a TODAS sus tácticas, no solo a la primera
+              // que casaba: T1078 es Defense Evasion, Persistence, Privilege
+              // Escalation e Initial Access a la vez, y así se pinta en la matriz.
+              tactics: normalizeTacticKeys(rawTactic),
               remed: ['Implementar filtrado y monitorización de seguridad.']
             };
           }).filter(t => t.id !== '');
@@ -192,9 +130,14 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
       if (ttp) setModalTtp(ttp);
     } else {
       setSelectedTtpId(id);
-      // Scroll automático suave hacia la celda en la matriz
-      if (cellRefs.current[id]) {
-        cellRefs.current[id].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      // Scroll automático suave hacia la primera celda de la técnica en la matriz.
+      // Las referencias se indexan por táctica porque una misma técnica ocupa
+      // ahora una celda en cada una de sus columnas.
+      const ttp = finalTtps.find(t => t.id === id);
+      const primeraTactica = ttp?.tactics?.[0];
+      const celda = primeraTactica ? cellRefs.current[`${primeraTactica}:${id}`] : null;
+      if (celda) {
+        celda.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
       }
     }
   };
@@ -382,7 +325,7 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
 
             <div className="ttp-list">
               {filteredTtps.map((ttp) => {
-                const tacticObj = TACTICS.find(t => t.key === ttp.tactic);
+                const etiquetas = TACTICS.filter(t => ttp.tactics.includes(t.key));
                 const isSelected = selectedTtpId === ttp.id;
                 
                 return (
@@ -394,7 +337,7 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
                   >
                     <div className="row1">
                       <span className="tid">{ttp.id}</span>
-                      <span className="tactic-tag">{tacticObj ? tacticObj.label : ttp.tactic}</span>
+                      <span className="tactic-tag">{etiquetas.map(t => t.label).join(' · ')}</span>
                     </div>
                     <div className="tname">{ttp.name}</div>
                     <div className="hint">Clic de nuevo para abrir detalle ➔</div>
@@ -425,7 +368,7 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
               <div className="matrix-scroll">
                 <div className="matrix">
                   {TACTICS.map((tac) => {
-                    const ttpsInTactic = finalTtps.filter((t) => t.tactic === tac.key);
+                    const ttpsInTactic = finalTtps.filter((t) => t.tactics.includes(tac.key));
                     return (
                       <div key={tac.key} className="tactic-col">
                         <div className="tactic-head">
@@ -438,7 +381,7 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
                           return (
                             <div
                               key={ttp.id}
-                              ref={(el) => (cellRefs.current[ttp.id] = el)}
+                              ref={(el) => (cellRefs.current[`${tac.key}:${ttp.id}`] = el)}
                               className={`cell ${isSelected ? 'selected' : ''}`}
                               onClick={() => handleSelectTtp(ttp.id)}
                             >
@@ -510,10 +453,14 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
               </button>
             </div>
 
-            <span className="tactic-badge">
-              <i></i>{' '}
-              {TACTICS.find((t) => t.key === modalTtp.tactic)?.label || modalTtp.tactic}
-            </span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              {TACTICS.filter((t) => modalTtp.tactics.includes(t.key)).map((t) => (
+                <span className="tactic-badge" key={t.key}>
+                  <i></i>{' '}
+                  {t.label}
+                </span>
+              ))}
+            </div>
 
             <div className="sec">
               <p className="sec-label">

@@ -3,7 +3,7 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell,
     PieChart, Pie, Legend
 } from 'recharts';
-import { TACTICS } from '../../pages/TtpsPage';
+import { TACTICS } from '../../../domain/mitre/tactics';
 import './TTPDashboard.css';
 
 const TTPDashboard = ({ projectId, finalTtps }) => {
@@ -50,13 +50,16 @@ const TTPDashboard = ({ projectId, finalTtps }) => {
         ? Math.round((stats.mapped_cves / stats.total_cves) * 100) 
         : 0;
 
-    const totalRelations = stats.capec_static + stats.llm_enriched;
-    const capecPercent = totalRelations > 0 
-        ? Math.round((stats.capec_static / totalRelations) * 100) 
+    // Ojo con la unidad: el backend cuenta MAPEOS (pares CVE→técnica), no técnicas
+    // distintas. Las etiquetas de abajo lo dicen explícitamente.
+    const totalMapeos = stats.capec_static + stats.llm_enriched;
+    const capecPercent = totalMapeos > 0 
+        ? Math.round((stats.capec_static / totalMapeos) * 100) 
         : 0;
-    const llmPercent = totalRelations > 0 
-        ? Math.round((stats.llm_enriched / totalRelations) * 100) 
+    const llmPercent = totalMapeos > 0 
+        ? Math.round((stats.llm_enriched / totalMapeos) * 100) 
         : 0;
+    const capecPendientes = stats.capec_pending_cves || 0;
 
     // Datos para el Donut de Confianza
     const confidenceData = [
@@ -87,12 +90,17 @@ const TTPDashboard = ({ projectId, finalTtps }) => {
                 <div className="ttp-kpi-card">
                     <span className="ttp-kpi-title">Total CVEs Analizados</span>
                     <div className="ttp-kpi-value">{stats.total_cves}</div>
-                    <span className="ttp-kpi-subtext">{stats.mapped_cves} CVEs ({mappedPercent}%) cuentan con al menos un TTP</span>
+                    <span className="ttp-kpi-subtext">
+                        {stats.mapped_cves} CVEs ({mappedPercent}%) cuentan con al menos un TTP
+                        {capecPendientes > 0 && (
+                            <> · <span style={{color: '#00ffff'}}>{capecPendientes} resolubles por catálogo CAPEC, aún sin procesar</span></>
+                        )}
+                    </span>
                 </div>
                 
                 <div className="ttp-kpi-card">
                     <span className="ttp-kpi-title">Distribución TTPs Mapeados por Fuente</span>
-                    <div className="ttp-kpi-value">{totalRelations} <span style={{fontSize: '1rem', fontWeight: 'normal'}}>TTPs únicos</span></div>
+                    <div className="ttp-kpi-value">{totalMapeos} <span style={{fontSize: '1rem', fontWeight: 'normal'}}>mapeos CVE → técnica</span></div>
                     <span className="ttp-kpi-subtext">
                         <span style={{color: '#00ffff'}}>{capecPercent}% CAPEC</span> vs <span style={{color: '#ff00ff'}}>{llmPercent}% LLM</span>
                     </span>
@@ -101,14 +109,14 @@ const TTPDashboard = ({ projectId, finalTtps }) => {
                 <div className="ttp-kpi-card">
                     <span className="ttp-kpi-title">Nivel de Confianza (Mapeo)</span>
                     <div className="ttp-kpi-value">
-                        {totalRelations > 0 ? Math.round((stats.high_confidence/totalRelations)*100) : 0}% <span style={{fontSize: '1rem', fontWeight: 'normal'}}>Alta</span>
+                        {totalMapeos > 0 ? Math.round((stats.high_confidence/totalMapeos)*100) : 0}% <span style={{fontSize: '1rem', fontWeight: 'normal'}}>Alta</span>
                     </div>
                     <span className="ttp-kpi-subtext">
                         {stats.high_confidence === 0 
-                            ? `Los ${stats.medium_confidence} TTPs son de confianza Media` 
+                            ? `Los ${stats.medium_confidence} mapeos son de confianza Media` 
                             : stats.medium_confidence === 0 
-                                ? `Todos los TTPs (${stats.high_confidence}) son de Alta confianza`
-                                : `El resto de TTPs (${stats.medium_confidence}) son de confianza Media`}
+                                ? `Todos los mapeos (${stats.high_confidence}) son de Alta confianza`
+                                : `El resto de mapeos (${stats.medium_confidence}) son de confianza Media`}
                     </span>
                 </div>
 
@@ -144,7 +152,7 @@ const TTPDashboard = ({ projectId, finalTtps }) => {
                 </div>
 
                 <div className="ttp-chart-card">
-                    <h3 className="ttp-chart-title">Distribución por Nivel de Confianza</h3>
+                    <h3 className="ttp-chart-title">Distribución por Nivel de Confianza (mapeos CVE → técnica)</h3>
                     <div className="ttp-chart-container">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
@@ -160,7 +168,7 @@ const TTPDashboard = ({ projectId, finalTtps }) => {
                                 >
                                 </Pie>
                                 <RechartsTooltip 
-                                    formatter={(value, name) => [`${value} TTPs`, name]}
+                                    formatter={(value, name) => [`${value} mapeos`, name]}
                                     contentStyle={{backgroundColor: 'rgba(13, 17, 23, 0.95)', borderColor: '#30363d', color: '#fff'}}
                                     itemStyle={{color: '#00ffff'}}
                                 />
@@ -186,7 +194,7 @@ const TTPDashboard = ({ projectId, finalTtps }) => {
                 <div className="ttp-heatmap-scroll">
                     <div className="ttp-heatmap-grid">
                         {TACTICS.map(tac => {
-                            const tacticTtps = finalTtps.filter(t => t.tactic === tac.key).sort((a,b) => {
+                            const tacticTtps = finalTtps.filter(t => (t.tactics || []).includes(tac.key)).sort((a,b) => {
                                 const aCves = new Set((a.cves || []).map(c => c.id)).size;
                                 const bCves = new Set((b.cves || []).map(c => c.id)).size;
                                 return bCves - aCves;

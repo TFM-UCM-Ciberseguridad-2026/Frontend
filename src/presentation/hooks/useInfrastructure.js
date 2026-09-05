@@ -177,7 +177,7 @@ export function useInfrastructure() {
   const deleteNodeUseCase = useMemo(() => new DeleteNodeUseCase(repository), [repository]);
 
   const exportProjectUseCase = useMemo(() => new ExportProjectUseCase(repository), [repository]);
-  const exportMitreNavigatorUseCase = useMemo(() => new ExportMitreNavigatorUseCase(), []);
+  const exportMitreNavigatorUseCase = useMemo(() => new ExportMitreNavigatorUseCase(repository), [repository]);
   const exportInventoryUseCase = useMemo(() => new ExportInventoryUseCase(repository), [repository]);
   const exportWeeklyReportUseCase = useMemo(() => new ExportWeeklyReportUseCase(repository), [repository]);
   const exportMonthlyReportUseCase = useMemo(() => new ExportMonthlyReportUseCase(repository), [repository]);
@@ -195,9 +195,14 @@ export function useInfrastructure() {
   const getPatchesForVulnerabilityUseCase = useMemo(() => new GetPatchesForVulnerabilityUseCase(repository), [repository]);
   const getAppliedPatchHistoryUseCase = useMemo(() => new GetAppliedPatchHistoryUseCase(repository), [repository]);
 
-  const showToast = (msg, type = 'info', title = null) => {
-    toast.showToast(msg, type, title);
-  };
+  // Memoizado sobre la función estable del contexto (no sobre el objeto `toast`,
+  // que se recrea en cada render). showToast viaja como prop a páginas que lo
+  // usan en dependencias de efectos, y una identidad nueva por render provocaba
+  // recargas completas de datos pesados (matriz TTP) en cada repintado del padre.
+  const showToastFn = toast.showToast;
+  const showToast = useCallback((msg, type = 'info', title = null) => {
+    showToastFn(msg, type, title);
+  }, [showToastFn]);
 
   const fetchProjects = useCallback(async () => {
     try {
@@ -300,9 +305,10 @@ export function useInfrastructure() {
     }
   };
 
-  const fetchTTPMatrix = async (projectId) => {
+  // Memoizado: TtpsPage lo usa como dependencia del efecto que carga la matriz.
+  const fetchTTPMatrix = useCallback(async (projectId) => {
     return await getTTPMatrixUseCase.execute(projectId);
-  };
+  }, [getTTPMatrixUseCase]);
 
   const fetchTopAPTs = async () => {
     setShowAPTPanel(true);
@@ -689,7 +695,7 @@ export function useInfrastructure() {
         n => (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
             String(n.properties?.id ?? n.id) === String(projId)
       );
-      const projectName = projectNode?.properties?.nombre || projectNode?.properties?.name || 'Proyecto';
+      const projectName = projectNode?.properties?.name || projectNode?.properties?.nombre || 'Proyecto';
 
       const { filename, content } = await exportProjectUseCase.execute(projId, projectName);
       _triggerDownload(filename, content);
@@ -700,14 +706,24 @@ export function useInfrastructure() {
     }
   };
 
-  const exportMitreNavigator = (targetProjectId) => {
+  const exportMitreNavigator = async (targetProjectId) => {
     try {
-      const { filename, content } = exportMitreNavigatorUseCase.execute(filteredGraphData, aptData, targetProjectId || selectedProjectId);
+      // La capa se genera desde la matriz TTP del backend (fuente autorizada),
+      // no desde el grafo filtrado en pantalla: el resultado no puede depender
+      // del filtro visual activo ni contener técnicas de demostración.
+      const projId = targetProjectId || selectedProjectId;
+      const projectNode = graphData?.nodes?.find(
+        n => (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
+            String(n.properties?.id ?? n.id) === String(projId)
+      );
+      const projectName = projectNode?.properties?.name || projectNode?.properties?.nombre || 'Proyecto';
+
+      const { filename, content } = await exportMitreNavigatorUseCase.execute(projId, projectName);
       _triggerDownload(filename, content);
       showToast('¡Capa de MITRE ATT&CK Navigator exportada!');
     } catch (err) {
       console.error(err);
-      showToast(`Error al exportar capa MITRE: ${err.message}`);
+      showToast(`Error al exportar capa MITRE: ${err.message}`, 'error');
     }
   };
 
@@ -719,7 +735,7 @@ export function useInfrastructure() {
         n => (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
             String(n.properties?.id ?? n.id) === String(projId)
       );
-      const projectName = projectNode?.properties?.nombre || projectNode?.properties?.name || 'Proyecto';
+      const projectName = projectNode?.properties?.name || projectNode?.properties?.nombre || 'Proyecto';
 
       const { filename, blob } = await exportInventoryUseCase.execute(projId, projectName);
       const url = URL.createObjectURL(blob);
@@ -744,7 +760,7 @@ export function useInfrastructure() {
       n => (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
            String(n.properties?.id ?? n.id) === String(projId)
     );
-    return nodo?.properties?.nombre || nodo?.properties?.name || 'Proyecto';
+    return nodo?.properties?.name || nodo?.properties?.nombre || 'Proyecto';
   };
 
   // Informe SEMANAL: operativo, para el equipo. Qué hay que cerrar esta semana.
