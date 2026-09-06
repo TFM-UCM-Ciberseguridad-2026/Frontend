@@ -1,22 +1,25 @@
 import React, { useState } from 'react';
 import { RenameProjectModal, DeleteProjectModal } from './ProjectActionModals';
-import { formatPercent } from '../Risk/riskFormat';
 
-
-export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploitationPaths, setShowDashboard, projects, selectedProjectId, setSelectedProjectId, selectedProjectNode, onOpenExport, onOpenImport, renameProject, deleteProject }) {
+export function HudHeader({ 
+  activeNav, 
+  setActiveNav, 
+  fetchTopAPTs, 
+  fetchExploitationPaths, 
+  projects, 
+  selectedProjectId, 
+  setSelectedProjectId, 
+  onOpenExport, 
+  onOpenImport, 
+  renameProject, 
+  deleteProject 
+}) {
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   return (
     <header className="hud-header">
-      <div className="brand" style={{ cursor: 'pointer' }} onClick={() => setShowDashboard(false)}>
-        <div>
-          <h1 className="hud-title">Orquestador de Infraestructura</h1>
-          <small>GRAFO DE ACTIVOS · VISTA HUD</small>
-        </div>
-      </div>
-
       <nav className="hud-nav">
         {projects && projects.length > 0 && (
           <div className="project-selector" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -56,12 +59,6 @@ export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploita
                 <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
               </svg>
             </button>
-          </div>
-        )}
-
-        {selectedProjectNode?.properties?.risk_tier && (
-          <div className="status-pill">
-            Risk {selectedProjectNode.properties.risk_tier} · {formatPercent(selectedProjectNode.properties.risk_score)}
           </div>
         )}
 
@@ -206,8 +203,8 @@ export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploita
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="7 10 12 15 17 10" />
-                  <line x1="12" y1="15" x2="12" y2="3" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
                 </svg>
                 Exportar
               </button>
@@ -215,6 +212,7 @@ export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploita
           )}
         </div>
       </nav>
+
       {/* MODALES DE GESTIÓN DE PROYECTO */}
       <RenameProjectModal
         isOpen={showRenameModal}
