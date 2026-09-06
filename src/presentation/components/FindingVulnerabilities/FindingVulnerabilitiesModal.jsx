@@ -93,7 +93,9 @@ export function FindingVulnerabilitiesModal({
               <div className="path-card-header">
                 <div className="path-title-group">
                   <span className="cve-chip"><span className="cve-id">{vuln.cveId}</span></span>
-                  {vuln.cwe && <span className="software-chip">{vuln.cwe}</span>}
+                  {vuln.cwes.map(cwe => (
+                    <span className="software-chip" key={cwe}>{cwe}</span>
+                  ))}
                 </div>
                 <div className="path-risk-badge">
                   <div className="path-risk-score">{vuln.baseScore.toFixed(1)}</div>

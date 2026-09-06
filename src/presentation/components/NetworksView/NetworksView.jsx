@@ -1,4 +1,6 @@
 import React from 'react';
+import { formatPercent } from '../Risk/riskFormat';
+
 
 export function NetworksView({ graphData, setSelectedNode }) {
   const networks = (graphData?.nodes || []).filter(

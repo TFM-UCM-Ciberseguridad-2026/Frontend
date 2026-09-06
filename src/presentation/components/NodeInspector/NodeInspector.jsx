@@ -3,7 +3,7 @@ import { RiskSummary } from '../Risk/RiskSummary';
 import { EditNodeModal } from './EditNodeModal';
 import { DeleteNodeModal } from './DeleteNodeModal';
 import { RiskScoreGauge } from '../Risk/RiskScoreGauge';
-import { toPercent } from '../Risk/riskFormat';
+import { toPercent, displayTier, formatPercent } from '../Risk/riskFormat';
 import { RenameProjectModal, DeleteProjectModal } from '../HudHeader/ProjectActionModals';
 import './NodeInspector.css';
 
@@ -528,7 +528,7 @@ export function NodeInspector({
                 cveId
               );
 
-              const riskPct = toPercent(props.risk_score) ?? 0;
+              const riskPct = formatPercent(props.risk_score) ?? 0;
               const badgeClass = getRiskBadgeClass(props.risk_score, props.risk_tier);
               const findingPatchState = getFindingPatchState(props);
 
@@ -565,7 +565,7 @@ export function NodeInspector({
 
                     <div className="finding-accordion-meta">
                       <span className={`risk-badge ${badgeClass}`}>
-                        {`Risk: ${riskPct}%`}
+                        {`Risk: ${riskPct}`}
                       </span>
                       <span className={`finding-accordion-chevron ${isExpanded ? 'is-expanded' : ''}`}>
                         ▼
@@ -591,22 +591,22 @@ export function NodeInspector({
                             <div className="v">{findingPatchState.label}</div>
                           </div>
 
+                          <div className="prop-row">
+                            <div className="k">RISK TIER</div>
+                            <div className="v">{displayTier(props.risk_tier, props.risk_score)}</div>
+                          </div>
+
+                          <div className="prop-row">
+                            <div className="k">PRIORITY TIER</div>
+                            <div className="v">{displayTier(props.priority_tier, props.priority_score)}</div>
+                          </div>
+
                           {props.first_seen && (
                             <div className="prop-row">
                               <div className="k">DETECTADO EL</div>
                               <div className="v">{new Date(props.first_seen).toLocaleDateString()}</div>
                             </div>
                           )}
-
-                          <div className="prop-row">
-                            <div className="k">RISK TIER</div>
-                            <div className="v">{props.risk_tier || 'UNKNOWN'}</div>
-                          </div>
-
-                          <div className="prop-row">
-                            <div className="k">PRIORITY TIER</div>
-                            <div className="v">{props.priority_tier || 'UNKNOWN'}</div>
-                          </div>
 
                           <div className="prop-row">
                             <div className="k">IMPACT</div>

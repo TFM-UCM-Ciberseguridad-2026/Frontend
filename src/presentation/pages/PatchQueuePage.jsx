@@ -5,8 +5,9 @@ import { PatchQueueFilters } from '../components/PatchQueue/PatchQueueFilters';
 import { ActivePatchQueueFilterChips } from '../components/PatchQueue/ActivePatchQueueFilterChips';
 import { usePatchQueue } from '../hooks/usePatchQueue';
 import './PatchQueuePage.css';
+import { formatPercent } from '../components/Risk/riskFormat';
 
-const percent = (value) => `${Math.round(Number(value || 0) * 100)}%`;
+const percent = formatPercent;
 
 function tierClass(tier) {
   return `patch-tier patch-tier-${String(tier || 'low').toLowerCase()}`;
