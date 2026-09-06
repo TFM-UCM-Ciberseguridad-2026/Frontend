@@ -31,6 +31,8 @@ import { GetPatchQueueUseCase } from '../../domain/usecases/GetPatchQueueUseCase
 import { RefreshPatchesForVulnerabilityUseCase } from '../../domain/usecases/RefreshPatchesForVulnerabilityUseCase';
 import { DeclarePatchAppliedUseCase } from '../../domain/usecases/DeclarePatchAppliedUseCase';
 import { GetPatchesForVulnerabilityUseCase } from '../../domain/usecases/GetPatchesForVulnerabilityUseCase';
+import { ExportWeeklyReportUseCase } from '../../domain/usecases/ExportWeeklyReportUseCase';
+import { ExportMonthlyReportUseCase } from '../../domain/usecases/ExportMonthlyReportUseCase';
 import { GetAppliedPatchHistoryUseCase } from '../../domain/usecases/GetAppliedPatchHistoryUseCase';
 
 const isSoftwareInstallationNode = node =>
@@ -52,7 +54,6 @@ function shouldForceVulnRefresh(installationNode) {
 
   return Date.now() - completedAtMs >= VULN_SCAN_CACHE_TTL_MS;
 }
-
 
 export function useInfrastructure() {
   const toast = useToast();
@@ -120,6 +121,7 @@ export function useInfrastructure() {
   const [vulnScanLoading, setVulnScanLoading] = useState(false);
   const [riskComputeLoading, setRiskComputeLoading] = useState(false);
   const [riskActionError, setRiskActionError] = useState(null);
+
   // Estado de enriquecimiento NVD en background (para polling)
   const [isAnalysisPending, setIsAnalysisPending] = useState(false);
   const pendingPollRef = useRef(null);
@@ -153,7 +155,6 @@ export function useInfrastructure() {
   const [appliedPatchHistoryError, setAppliedPatchHistoryError] = useState(null);
   const [appliedPatchHistoryInstallationId, setAppliedPatchHistoryInstallationId] = useState(null);
 
-
   // Inyección de dependencias (Clean Architecture)
   const apiDataSource = useMemo(() => new InfrastructureApiDataSource(), []);
   const repository = useMemo(() => new InfrastructureRepositoryImpl(apiDataSource), [apiDataSource]);
@@ -178,6 +179,8 @@ export function useInfrastructure() {
   const exportProjectUseCase = useMemo(() => new ExportProjectUseCase(repository), [repository]);
   const exportMitreNavigatorUseCase = useMemo(() => new ExportMitreNavigatorUseCase(), []);
   const exportInventoryUseCase = useMemo(() => new ExportInventoryUseCase(repository), [repository]);
+  const exportWeeklyReportUseCase = useMemo(() => new ExportWeeklyReportUseCase(repository), [repository]);
+  const exportMonthlyReportUseCase = useMemo(() => new ExportMonthlyReportUseCase(repository), [repository]);
   const importInfrastructureUseCase = useMemo(() => new ImportInfrastructureUseCase(repository), [repository]);
 
   const scanInstallationVulnerabilitiesUseCase = useMemo(() => new ScanInstallationVulnerabilitiesUseCase(repository), [repository]);
@@ -238,7 +241,6 @@ export function useInfrastructure() {
    * y muestra una notificación al usuario.
    */
   const startPendingPolling = useCallback((projectId) => {
-    // Limpiar intervalo anterior si existía
     if (pendingPollRef.current) {
       clearInterval(pendingPollRef.current);
       pendingPollRef.current = null;
@@ -254,7 +256,6 @@ export function useInfrastructure() {
         if (!res.ok) return;
         const data = await res.json();
         if (!data.pending) {
-          // Enriquecimiento terminado: limpiar polling y recargar
           clearInterval(pendingPollRef.current);
           pendingPollRef.current = null;
           setIsAnalysisPending(false);
@@ -271,7 +272,6 @@ export function useInfrastructure() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Limpiar polling al desmontar el componente
   useEffect(() => {
     return () => {
       if (pendingPollRef.current) {
@@ -279,7 +279,6 @@ export function useInfrastructure() {
       }
     };
   }, []);
-
 
   const handleReset = async () => {
     setLoading(true);
@@ -594,7 +593,6 @@ export function useInfrastructure() {
     }
   };
 
-
   const declarePatchApplied = async (installationId, payload, applyingKey = null) => {
     setPatchApplyingKey(applyingKey);
     setPatchApplyError(null);
@@ -641,7 +639,6 @@ export function useInfrastructure() {
     return null;
   };
 
-
   const fetchAppliedPatchHistory = async (assetId, assetType = 'SOFTWARE_INSTALLATION') => {
     if (!assetId) {
       setAppliedPatchHistory([]);
@@ -663,6 +660,16 @@ export function useInfrastructure() {
       throw err;
     } finally {
       setAppliedPatchHistoryLoading(false);
+    }
+  };
+
+  const fetchEndpointPatchHistory = async (endpointId) => {
+    if (!endpointId) return null;
+    try {
+      return await repository.getEndpointPatchHistory(endpointId);
+    } catch (err) {
+      console.error('Error cargando histórico de parches del endpoint:', err);
+      return null;
     }
   };
 
@@ -732,6 +739,41 @@ export function useInfrastructure() {
     } catch (err) {
       console.error(err);
       showToast(`Error al exportar inventario: ${err.message}`, 'error');
+    }
+  };
+
+  /** Resuelve el nombre del proyecto desde el grafo ya cargado, sin ir al backend. */
+  const nombreDeProyecto = (projId) => {
+    const nodo = graphData?.nodes?.find(
+      n => (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
+           String(n.properties?.id ?? n.id) === String(projId)
+    );
+    return nodo?.properties?.nombre || nodo?.properties?.name || 'Proyecto';
+  };
+
+  // Informe SEMANAL: operativo, para el equipo. Qué hay que cerrar esta semana.
+  const exportWeeklyReport = async (targetProjectId) => {
+    try {
+      showToast('Generando informe semanal en PPTX...', 'info');
+      const projId = targetProjectId || selectedProjectId;
+      await exportWeeklyReportUseCase.execute(projId, nombreDeProyecto(projId));
+      showToast('¡Informe semanal exportado con éxito!');
+    } catch (err) {
+      console.error(err);
+      showToast(`Error al generar el informe semanal: ${err.message}`, 'error');
+    }
+  };
+
+  // Informe MENSUAL: de gobierno, para el Comité. Marco, política y trazabilidad.
+  const exportMonthlyReport = async (targetProjectId) => {
+    try {
+      showToast('Generando informe mensual en PPTX...', 'info');
+      const projId = targetProjectId || selectedProjectId;
+      await exportMonthlyReportUseCase.execute(projId, nombreDeProyecto(projId));
+      showToast('¡Informe mensual exportado con éxito!');
+    } catch (err) {
+      console.error(err);
+      showToast(`Error al generar el informe mensual: ${err.message}`, 'error');
     }
   };
 
@@ -1240,6 +1282,73 @@ export function useInfrastructure() {
   // Grafo visible en Canvas tras aplicar el filtrado por proyecto (los filtros de búsqueda, categoría y avanzados atenúan visualmente en lugar de eliminar nodos)
   const displayGraphData = useMemo(() => {
     const { nodes = [], relationships = [] } = filteredGraphData || {};
+    const visibleNodes = nodes.filter(n => {
+      const props = n.properties || {};
+      const primaryLabel = n.primaryLabel || n.labels?.[0] || '';
+      const name = n.name || props.name || props.nombre || props.hostname || props.title || n.id || '';
+
+      if (primaryLabel === 'Project' || n.labels?.includes('Project')) {
+        return true;
+      }
+
+      if (searchQuery.trim() !== '') {
+        const q = searchQuery.toLowerCase();
+        const matchesName = String(name).toLowerCase().includes(q);
+        const matchesProps = Object.values(props).some(v => String(v).toLowerCase().includes(q));
+        if (!matchesName && !matchesProps) return false;
+      }
+
+      if (filterType !== 'ALL') {
+        const hasLabel = n.labels?.includes(filterType) || primaryLabel === filterType;
+        if (!hasLabel) return false;
+      }
+
+      if (graphAdvancedFilters.ipSearch.trim() !== '') {
+        const ipQ = graphAdvancedFilters.ipSearch.toLowerCase();
+        const ips = Array.isArray(props.ips) ? props.ips : (props.ip ? [props.ip] : []);
+        const cidr = props.cidr || props.rango || '';
+        const matchesIP = ips.some(ip => String(ip).toLowerCase().includes(ipQ)) || String(cidr).toLowerCase().includes(ipQ);
+        if (!matchesIP) return false;
+      }
+
+      if (graphAdvancedFilters.vendorSearch.trim() !== '') {
+        const vQ = graphAdvancedFilters.vendorSearch.toLowerCase();
+        const vendor = props.vendor || props.software_vendor || props.manufacturer || props.fabricante || '';
+        if (!String(vendor).toLowerCase().includes(vQ)) return false;
+      }
+
+      if (graphAdvancedFilters.environment !== 'ALL') {
+        const env = (props.environment || props.entorno || '').toLowerCase();
+        if (env !== graphAdvancedFilters.environment.toLowerCase()) return false;
+      }
+
+      if (graphAdvancedFilters.internetExposed !== 'ALL') {
+        const isExp = props.internet_exposed === true || props.internet_exposed === 'true';
+        if (graphAdvancedFilters.internetExposed === 'TRUE' && !isExp) return false;
+        if (graphAdvancedFilters.internetExposed === 'FALSE' && isExp) return false;
+      }
+
+      if (graphAdvancedFilters.status !== 'ALL') {
+        const st = (props.status || props.estado || '').toLowerCase();
+        if (st !== graphAdvancedFilters.status.toLowerCase()) return false;
+      }
+
+      if (graphAdvancedFilters.riskTier !== 'ALL') {
+        const risk = (props.risk_tier || props.severity || '').toUpperCase();
+        if (risk !== graphAdvancedFilters.riskTier.toUpperCase()) return false;
+      }
+
+      return true;
+    });
+
+    const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
+
+    const visibleRelationships = relationships.filter(r => {
+      const sourceId = typeof r.source === 'object' ? r.source.id : r.source;
+      const targetId = typeof r.target === 'object' ? r.target.id : r.target;
+      return visibleNodeIds.has(sourceId) && visibleNodeIds.has(targetId);
+    });
+
     return {
       nodes,
       relationships,
@@ -1414,8 +1523,6 @@ export function useInfrastructure() {
         toast.error(errorMsg, 'Falló el Análisis');
       }
 
-      // Si hay imágenes de contenedor escaneadas, iniciar polling para detectar
-      // cuándo el enriquecimiento NVD de background finaliza y recargar el grafo.
       if (successCount > 0 && containerImages.length > 0) {
         startPendingPolling(selectedProjectId);
       }
@@ -1474,7 +1581,6 @@ export function useInfrastructure() {
       String(n.properties?.id ?? n.id) === selectedProjectId
     ) || null;
   }, [graphData, selectedProjectId]);
-
 
   const refreshPatchesForProject = async (queueItems = patchQueue) => {
     if (!selectedProjectId) {
@@ -1610,6 +1716,8 @@ export function useInfrastructure() {
     exportProject,
     exportMitreNavigator,
     exportInventory,
+    exportWeeklyReport,
+    exportMonthlyReport,
     importProject,
     vulnScanLoading,
     riskComputeLoading,
@@ -1650,10 +1758,11 @@ export function useInfrastructure() {
     patchProjectRefreshLoading,
     patchProjectRefreshError,
     patchProjectRefreshProgress,
-  appliedPatchHistory,
-  appliedPatchHistoryLoading,
-  appliedPatchHistoryError,
-  appliedPatchHistoryInstallationId,
-  fetchAppliedPatchHistory
+    appliedPatchHistory,
+    appliedPatchHistoryLoading,
+    appliedPatchHistoryError,
+    appliedPatchHistoryInstallationId,
+    fetchAppliedPatchHistory,
+    fetchEndpointPatchHistory
   };
 }

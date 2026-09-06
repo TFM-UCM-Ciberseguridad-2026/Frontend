@@ -13,14 +13,13 @@ export function ImportModal({
   const [isDragging, setIsDragging] = useState(false);
   const [importing, setImporting] = useState(false);
 
-  // Estado para gestión de conflictos de proyectos existentes
+  // Gestión de conflictos de proyectos existentes
   const [conflictState, setConflictState] = useState(null);
   const [renamingMode, setRenamingMode] = useState(false);
   const [newNameInput, setNewNameInput] = useState('');
 
   const fileInputRef = useRef(null);
 
-  // Limpiar estado al abrir o cerrar el modal
   useEffect(() => {
     if (!isOpen) {
       setSelectedFile(null);
@@ -57,10 +56,6 @@ export function ImportModal({
           parsed?.nodes?.find(n => n.labels?.includes('Project') || n.primaryLabel === 'Project')?.properties?.nombre ||
           parsed?.nodes?.find(n => n.labels?.includes('Project') || n.primaryLabel === 'Project')?.properties?.name;
 
-        const projId = parsed?.project?.id ||
-          parsed?.nodes?.find(n => n.labels?.includes('Project') || n.primaryLabel === 'Project')?.properties?.id;
-
-        // Solo mostrar modal de conflicto si el nombre coincide exactamente
         const existingByName = (projects || []).find(p => projName && p.name?.toLowerCase().trim() === projName.toLowerCase().trim());
 
         setFileContent(text);
@@ -97,7 +92,6 @@ export function ImportModal({
     try {
       let finalOptions = { ...options };
       
-      // Auto-resolver conflictos de ID silenciosos (cuando el nombre es distinto pero el ID choca)
       if (!conflictState && !finalOptions.renameTo && !finalOptions.overwrite) {
         const parsed = JSON.parse(fileContent);
         const projName = parsed?.project?.name || parsed?.nodes?.find(n => n.labels?.includes('Project') || n.primaryLabel === 'Project')?.properties?.nombre || parsed?.nodes?.find(n => n.labels?.includes('Project') || n.primaryLabel === 'Project')?.properties?.name || 'Proyecto Importado';
@@ -138,163 +132,168 @@ export function ImportModal({
   };
 
   return (
-    <div className="archive-modal-overlay" onClick={onClose}>
-      <div className="archive-modal-container" onClick={e => e.stopPropagation()}>
-        <div className="archive-modal-header">
-          <h2>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-            Importar Proyecto de Infraestructura
-          </h2>
-          <button className="archive-close-btn" onClick={onClose}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
-
-        <input
-          type="file"
-          accept=".json"
-          ref={fileInputRef}
-          style={{ display: 'none' }}
-          onChange={e => e.target.files && handleFileSelect(e.target.files[0])}
-        />
-
-        <div
-          className={`archive-dropzone ${isDragging ? 'dragging' : ''}`}
-          onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
-          onDragLeave={() => setIsDragging(false)}
-          onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <polyline points="14 2 14 8 20 8" />
-            <line x1="12" y1="12" x2="12" y2="18" />
-            <line x1="9" y1="15" x2="15" y2="15" />
-          </svg>
-          <p>Arrastra y suelta tu archivo <strong>JSON de exportación</strong> aquí</p>
-          <p style={{ fontSize: '0.8rem', opacity: 0.7 }}>o haz clic para explorar en tu equipo</p>
-
-          {selectedFile && (
-            <div className="archive-file-badge">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-                <polyline points="13 2 13 9 20 9" />
-              </svg>
-              {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
+    <div className="asset-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget && !importing) onClose(); }}>
+      <div className="asset-modal" style={{ maxWidth: '560px' }} onClick={e => e.stopPropagation()}>
+        <div className="asset-modal-header">
+          <div>
+            <h2>IMPORTAR PROYECTO</h2>
+            <div className="asset-modal-subtitle">
+              Carga una declaración de infraestructura completa en formato JSON
             </div>
-          )}
-        </div>
-
-        {/* ALERTA DE CONFLICTO DE PROYECTO EXISTENTE */}
-        {conflictState && !renamingMode && (
-          <div style={{
-            background: 'rgba(239, 68, 68, 0.12)',
-            border: '1px solid rgba(239, 68, 68, 0.5)',
-            borderRadius: '8px',
-            padding: '14px 16px',
-            marginBottom: '16px',
-            color: '#f87171'
-          }}>
-            <div style={{ fontWeight: '600', fontSize: '0.95rem', marginBottom: '6px', display: 'flex', opacity: 0.9, alignItems: 'center', gap: '8px' }}>
-              <span>⚠️</span> Proyecto Ya Existente
-            </div>
-            <p style={{ fontSize: '0.85rem', color: '#cbd5e1', margin: 0, lineHeight: 1.4 }}>
-              Ya existe un proyecto registrado con el nombre <strong>"{conflictState.originalName}"</strong>. ¿Qué deseas hacer?
-            </p>
           </div>
-        )}
+          <button className="asset-modal-close" onClick={onClose} disabled={importing}>✕</button>
+        </div>
 
-        {/* INPUT PARA RENOMBRAR PROYECTO */}
-        {renamingMode && (
-          <div style={{
-            background: 'rgba(59, 130, 246, 0.12)',
-            border: '1px solid rgba(59, 130, 246, 0.5)',
-            borderRadius: '8px',
-            padding: '14px 16px',
-            marginBottom: '16px'
-          }}>
-            <label style={{ display: 'block', fontSize: '0.85rem', color: '#93c5fd', fontWeight: '600', marginBottom: '8px' }}>
-              Nuevo nombre para el proyecto a importar:
-            </label>
+        <div className="asset-modal-body">
+          <div className="asset-form">
             <input
-              type="text"
-              value={newNameInput}
-              onChange={e => setNewNameInput(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                background: 'rgba(15, 23, 42, 0.8)',
-                border: '1px solid #3b82f6',
-                borderRadius: '6px',
-                color: '#ffffff',
-                fontSize: '0.9rem',
-                outline: 'none'
-              }}
-              placeholder="Ej. Proyecto Auditoría Copia"
-              autoFocus
+              type="file"
+              accept=".json"
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+              onChange={e => e.target.files && handleFileSelect(e.target.files[0])}
             />
-          </div>
-        )}
 
-        {errorMsg && (
-          <div style={{ color: '#ff4a4a', fontSize: '0.85rem', marginBottom: '16px', fontWeight: '500' }}>
-            ⚠️ {errorMsg}
-          </div>
-        )}
-
-        <div className="archive-modal-actions">
-          <button className="archive-btn archive-btn-secondary" onClick={onClose} disabled={importing}>
-            Cancelar
-          </button>
-
-          {conflictState && !renamingMode ? (
-            <>
-              <button
-                className="archive-btn"
-                onClick={() => setRenamingMode(true)}
-                disabled={importing}
-                style={{ background: '#3b82f6', color: '#ffffff', borderColor: '#2563eb' }}
-              >
-                ✏️ Renombrar
-              </button>
-              <button
-                className="archive-btn"
-                onClick={handleOverwrite}
-                disabled={importing}
-                style={{ background: '#ef4444', color: '#ffffff', borderColor: '#dc2626' }}
-              >
-                ⚠️ {importing ? 'Sobrescribiendo...' : 'Sobrescribir'}
-              </button>
-            </>
-          ) : renamingMode ? (
-            <button
-              className="archive-btn archive-btn-primary"
-              onClick={handleRenameConfirm}
-              disabled={!newNameInput.trim() || importing}
+            {/* DROPZONE HUD */}
+            <div
+              className={`archive-dropzone ${isDragging ? 'dragging' : ''}`}
+              onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
             >
-              {importing ? 'Importando...' : 'Confirmar e Importar'}
-            </button>
-          ) : (
-            <button
-              className="archive-btn archive-btn-primary"
-              onClick={() => handleExecuteImport({})}
-              disabled={!fileContent || importing}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="17 8 12 3 7 8" />
-                <line x1="12" y1="3" x2="12" y2="15" />
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="12" y1="12" x2="12" y2="18" />
+                <line x1="9" y1="15" x2="15" y2="15" />
               </svg>
-              {importing ? 'Importando...' : 'Cargar Proyecto'}
-            </button>
-          )}
+              <p>Arrastra y suelta tu archivo <strong>JSON de infraestructura</strong> aquí</p>
+              <span style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>o haz clic para examinar tu equipo</span>
+
+              {selectedFile && (
+                <div className="archive-file-badge">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+                    <polyline points="13 2 13 9 20 9" />
+                  </svg>
+                  {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
+                </div>
+              )}
+            </div>
+
+            {/* ALERTA DE CONFLICTO DE PROYECTO EXISTENTE */}
+            {conflictState && !renamingMode && (
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: '1px dashed rgba(239, 68, 68, 0.4)',
+                borderRadius: '8px',
+                padding: '12px 14px',
+                color: '#fca5a5',
+                fontSize: '13.5px',
+                fontFamily: 'Rajdhani, sans-serif'
+              }}>
+                <div style={{ fontWeight: '700', fontSize: '0.95rem', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span>⚠️</span> Proyecto Ya Existente
+                </div>
+                <p style={{ margin: 0, lineHeight: 1.4 }}>
+                  Ya existe un proyecto registrado con el nombre <strong>"{conflictState.originalName}"</strong>. Elige si prefieres renombrarlo o sobrescribir su contenido.
+                </p>
+              </div>
+            )}
+
+            {/* CAMPO PARA RENOMBRAR */}
+            {renamingMode && (
+              <div>
+                <div className="asset-field-label" style={{ color: 'var(--c300)' }}>
+                  Nuevo nombre para el proyecto importado:
+                </div>
+                <input
+                  type="text"
+                  className="asset-input"
+                  value={newNameInput}
+                  onChange={e => setNewNameInput(e.target.value)}
+                  placeholder="Ej. Proyecto Auditoría Copia"
+                  autoFocus
+                />
+              </div>
+            )}
+
+            {errorMsg && (
+              <p className="asset-error-text">⚠️ {errorMsg}</p>
+            )}
+
+            {/* ACCIONES */}
+            <div className="asset-form-actions">
+              <button type="button" className="btn btn-secondary" onClick={onClose} disabled={importing}>
+                Cancelar
+              </button>
+
+              {conflictState && !renamingMode ? (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setRenamingMode(true)}
+                    disabled={importing}
+                    style={{ color: 'var(--c300)', borderColor: 'var(--c500)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                    </svg>
+                    Renombrar
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={handleOverwrite}
+                    disabled={importing}
+                    style={{
+                      background: 'linear-gradient(135deg, #ef4444, #991b1b)',
+                      color: '#ffffff',
+                      border: 'none',
+                      fontFamily: 'Orbitron, sans-serif',
+                      fontSize: '11px',
+                      letterSpacing: '1px',
+                      boxShadow: '0 4px 15px rgba(239, 68, 68, 0.4)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    </svg>
+                    {importing ? 'Sobrescribiendo...' : 'Sobrescribir'}
+                  </button>
+                </>
+              ) : renamingMode ? (
+                <button
+                  type="button"
+                  className="btn btn-accent asset-submit-btn"
+                  onClick={handleRenameConfirm}
+                  disabled={!newNameInput.trim() || importing}
+                >
+                  {importing ? 'Importando...' : 'Confirmar e Importar'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-accent asset-submit-btn"
+                  onClick={() => handleExecuteImport({})}
+                  disabled={!fileContent || importing}
+                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="17 8 12 3 7 8" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
+                  </svg>
+                  {importing ? 'Importando...' : 'Cargar Proyecto'}
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

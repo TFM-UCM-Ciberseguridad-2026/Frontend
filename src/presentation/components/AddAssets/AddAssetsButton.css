@@ -445,3 +445,11 @@
   color: #93c5fd;
   text-decoration: underline;
 }
+/* Aviso a pie de campo: usado cuando el valor almacenado no es válido y hay que corregirlo
+   antes de poder guardar (p. ej. un tipo de endpoint anterior a la validación). */
+.asset-field-warning {
+  margin: 0.35rem 0 0;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: #fed7aa;
+}

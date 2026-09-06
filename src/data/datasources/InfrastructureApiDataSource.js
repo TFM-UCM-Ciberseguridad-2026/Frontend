@@ -102,8 +102,6 @@ export class InfrastructureApiDataSource {
   }
 
   async createNetwork(payload) {
-    // Ya no cuelga de un endpoint: se crea a nivel de infraestructura y el
-    // backend enlaza los endpoints compatibles por CIDR + VLAN.
     const res = await fetch('/api/networks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -329,30 +327,6 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
-  async _handleResponse(res) {
-    if (!res.ok) {
-      let backendMessage = res.statusText || 'Error en la petición';
-      try {
-        const text = await res.text();
-        if (text) {
-          try {
-            const errBody = JSON.parse(text);
-            backendMessage = errBody.error || errBody.message || JSON.stringify(errBody);
-          } catch {
-            backendMessage = text.trim();
-          }
-        }
-      } catch {}
-      throw new Error(backendMessage);
-    }
-    try {
-      const text = await res.text();
-      return text ? JSON.parse(text) : null;
-    } catch {
-      return null;
-    }
-  }
-
   async fetchPatchQueue(paramsOrProjectId = {}, legacyPage = 1, legacyLimit = 20) {
     let queryParams = {};
     if (typeof paramsOrProjectId === 'object' && paramsOrProjectId !== null) {
@@ -413,6 +387,10 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
+  async fetchEndpointPatchHistory(endpointId) {
+    const res = await fetch(`/api/endpoints/${encodeURIComponent(endpointId)}/patch-history`);
+    return await this._handleResponse(res);
+  }
 
   async refreshPatchesForProject(projectId, { limit = 20, offset = 0 } = {}) {
     const params = new URLSearchParams();
@@ -461,5 +439,29 @@ export class InfrastructureApiDataSource {
 
     const res = await fetch(`/api/inventory?${params.toString()}`);
     return await this._handleResponse(res);
+  }
+
+  async _handleResponse(res) {
+    if (!res.ok) {
+      let backendMessage = res.statusText || 'Error en la petición';
+      try {
+        const text = await res.text();
+        if (text) {
+          try {
+            const errBody = JSON.parse(text);
+            backendMessage = errBody.error || errBody.message || JSON.stringify(errBody);
+          } catch {
+            backendMessage = text.trim();
+          }
+        }
+      } catch {}
+      throw new Error(backendMessage);
+    }
+    try {
+      const text = await res.text();
+      return text ? JSON.parse(text) : null;
+    } catch {
+      return null;
+    }
   }
 }
