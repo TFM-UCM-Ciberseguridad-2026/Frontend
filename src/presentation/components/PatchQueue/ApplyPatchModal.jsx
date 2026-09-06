@@ -79,48 +79,37 @@ function descriptionMatchesCurrentCVE(description, cveId) {
 
 function getPatchActionType(fixedVersion, selectedPatch) {
   if (fixedVersion) return 'Actualización de versión';
-  if (selectedPatch?.url) return 'Referencia oficial / advisory';
+  if (selectedPatch?.official === true) return 'Referencia oficial / advisory';
+  if (selectedPatch?.reference_type === 'FIXED_VERSION') {
+    return 'Evidencia de versión corregida (OSV)';
+  }
+  if (selectedPatch?.url) return 'Referencia de remediación';
   return 'Sin acción concreta disponible';
 }
 
 function inferRemediationLevelFromPatch(patch) {
-  const text = `${patch?.description || ''} ${patch?.url || ''}`.toLowerCase();
+  if (patch?.official === true) return 'OFFICIAL_FIX';
+  if (patch?.reference_type === 'FIXED_VERSION') return 'WORKAROUND';
+  if (patch?.reference_type === 'TEMPORARY_FIX') return 'TEMPORARY_FIX';
+  return 'WORKAROUND';
+}
 
-  if (
-    text.includes('fixed-version://') ||
-    text.includes('mitigación por actualización') ||
-    text.includes('mitigacion por actualizacion')
-  ) {
-    return 'WORKAROUND';
+function getPatchLinkLabel(patch) {
+  if (!patch?.url || !/^https?:\/\//i.test(patch.url)) {
+    return '';
   }
 
-  if (
-    text.includes('workaround') ||
-    text.includes('mitigation') ||
-    text.includes('mitigación') ||
-    text.includes('configuration') ||
-    text.includes('configuración')
-  ) {
-    return 'WORKAROUND';
+  return patch.official === true
+    ? 'Abrir referencia oficial'
+    : 'Ver evidencia en OSV';
+}
+
+function getPatchSourceLabel(patch) {
+  if (patch?.official === true) {
+    return 'Fabricante / upstream';
   }
 
-  if (
-    text.includes('temporary') ||
-    text.includes('temporal') ||
-    text.includes('hotfix')
-  ) {
-    return 'TEMPORARY_FIX';
-  }
-
-  if (
-    text.includes('unavailable') ||
-    text.includes('no patch') ||
-    text.includes('sin parche')
-  ) {
-    return 'UNAVAILABLE';
-  }
-
-  return 'OFFICIAL_FIX';
+  return patch?.source || 'OSV';
 }
 
 function Field({ label, value }) {
@@ -205,7 +194,11 @@ export function ApplyPatchModal({
     }
 
     if (selectedPatch?.url) {
-      return `Revisar la referencia oficial y aplicar la corrección indicada por el proveedor para ${item.cve_id}. No hay fixed_version normalizada en el backend.`;
+      const evidenceLabel = selectedPatch.official === true
+        ? 'la referencia oficial'
+        : 'la evidencia publicada en OSV';
+      return `Revisar ${evidenceLabel} y aplicar la corrección indicada para ${item.cve_id}.
+        No hay fixed_version normalizada en el backend.`;
     }
 
     return 'No hay recomendación accionable suficiente. Refresca patches o revisa el CVE manualmente antes de declarar el parche.';
@@ -331,9 +324,12 @@ export function ApplyPatchModal({
                 {patches.map((patchItem) => {
                   const isSelected = String(patchItem.patch_id) === String(patchId);
                   const remediationLevel = inferRemediationLevelFromPatch(patchItem);
+                  const patchLinkLabel = getPatchLinkLabel(patchItem);
                   const patchDesc = descriptionMatchesCurrentCVE(patchItem.description, item.cve_id)
                     ? patchItem.description
-                    : 'Referencia oficial / aviso de seguridad';
+                    : patchItem.official === true
+                      ? 'Referencia oficial / aviso de seguridad'
+                      : 'Actualización recomendada según OSV';
 
                   return (
                     <div
@@ -359,25 +355,33 @@ export function ApplyPatchModal({
                       </div>
 
                       <strong>
-                        {remediationLevel === 'WORKAROUND' && recommendedFixedVersion
-                          ? `Mitigación: actualizar ${item.software_name || 'software'} a una versión corregida`
-                          : recommendedFixedVersion
+                        {remediationLevel === 'OFFICIAL_FIX' && recommendedFixedVersion
                             ? `Actualizar ${item.software_name || 'software'} a versión ${recommendedFixedVersion}`
-                            : `Referencia oficial para ${item.cve_id}`}
+                            : remediationLevel === 'WORKAROUND' && recommendedFixedVersion
+                              ? `Mitigación: actualizar ${item.software_name || 'software'} a ${recommendedFixedVersion} según OSV`
+                              : remediationLevel === 'TEMPORARY_FIX'
+                                ? `Aplicar corrección temporal para ${item.cve_id}`
+                                : remediationLevel === 'UNAVAILABLE'
+                                  ? `Sin remediación disponible para ${item.cve_id}`
+                                  : patchItem.official === true
+                                    ? `Corrección oficial para ${item.cve_id}`
+                                    : `Evidencia de corrección para ${item.cve_id}`}
                       </strong>
 
                       {patchDesc && (
                         <small>{patchDesc}</small>
                       )}
 
-                      {patchItem.url && (
+                      <small>Fuente: {getPatchSourceLabel(patchItem)}</small>
+
+                      {patchLinkLabel && (
                         <a
                           href={patchItem.url}
                           target="_blank"
                           rel="noreferrer"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          Abrir referencia oficial ({patchItem.url})
+                          {patchLinkLabel} ({patchItem.url})
                         </a>
                       )}
                     </div>
@@ -413,10 +417,14 @@ export function ApplyPatchModal({
                 {patches.map(patch => {
                   const remediationLevel = inferRemediationLevelFromPatch(patch);
                   const patchDesc = descriptionMatchesCurrentCVE(patch.description, item.cve_id)
-                    ? patch.description || 'Referencia oficial'
-                    : 'Referencia oficial / advisory';
+                    ? patch.description || (patch.official === true
+                      ? 'Referencia oficial'
+                      : 'Actualización recomendada según OSV')
+                    : patch.official === true
+                      ? 'Referencia oficial / advisory'
+                      : 'Actualización recomendada según OSV';
 
-                  const urlText = patch.url ? ` — ${patch.url}` : '';
+                  const urlText = getPatchLinkLabel(patch) ? ` — ${patch.url}` : '';
 
                   return (
                     <option key={patch.patch_id} value={patch.patch_id}>
