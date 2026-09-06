@@ -103,7 +103,8 @@ export function DashboardPage({
   appliedPatchHistoryLoading,
   appliedPatchHistoryError,
   appliedPatchHistoryInstallationId,
-  fetchAppliedPatchHistory
+  fetchAppliedPatchHistory,
+  fetchEndpointPatchHistory
 }) {
   const [activeNav, setActiveNav] = useState('grafo');
   const [showExportModal, setShowExportModal] = useState(false);
@@ -204,6 +205,7 @@ export function DashboardPage({
             computeSelectedProjectRisk={computeSelectedProjectRisk}
             fetchFindingVulnerabilities={fetchFindingVulnerabilities}
             isAnalysisPending={isAnalysisPending}
+            fetchEndpointPatchHistory={fetchEndpointPatchHistory}
           />
         )}
 
