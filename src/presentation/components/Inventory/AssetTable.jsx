@@ -49,14 +49,15 @@ export function AssetTable({
     switch (cat) {
       case 'Endpoint': {
         const ips = Array.isArray(props.ips) ? props.ips : (props.ip ? [props.ip] : []);
-        const env = props.environment || props.entorno;
-        const type = props.type || props.tipo;
 
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-              {ips.length > 0 ? (
-                ips.map((ip, idx) => (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+            {ips.length > 0 ? (
+              ips.map((ipEntry, idx) => {
+                const ipStr = typeof ipEntry === 'object' && ipEntry !== null ? ipEntry.ip : String(ipEntry);
+                const vlanId = typeof ipEntry === 'object' && ipEntry !== null ? ipEntry.vlan_id : (props.vlan_id || null);
+
+                return (
                   <span
                     key={idx}
                     style={{
@@ -69,18 +70,13 @@ export function AssetTable({
                       borderRadius: '3px'
                     }}
                   >
-                    {ip}
+                    {ipStr || 'Sin IP'}{vlanId ? ` (VLAN #${vlanId})` : ''}
                   </span>
-                ))
-              ) : (
-                <span style={{ color: 'var(--muted)', fontSize: '11px' }}>Sin IP asignada</span>
-              )}
-            </div>
-
-            <div style={{ fontSize: '11px', color: 'var(--muted)', display: 'flex', gap: '8px' }}>
-              {type && <span>Tipo: <strong style={{ color: 'var(--c200)' }}>{type}</strong></span>}
-              {env && <span>Entorno: <strong style={{ color: 'var(--c200)' }}>{env}</strong></span>}
-            </div>
+                );
+              })
+            ) : (
+              <span style={{ color: 'var(--muted)', fontSize: '11px' }}>Sin IP asignada</span>
+            )}
           </div>
         );
       }
@@ -90,38 +86,22 @@ export function AssetTable({
         const vendor = props.vendor || props.software_vendor;
         const version = props.version || props.software_version;
         const swName = props.software_name || props.name;
-        const cpe = props.cpe;
 
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              {vendor && <span style={{ color: 'var(--c100)', fontWeight: 'bold' }}>{vendor}</span>}
-              {swName && swName !== node.name && <span style={{ color: 'var(--c300)' }}>({swName})</span>}
-              {version && (
-                <span style={{
-                  background: 'rgba(79, 58, 255, 0.15)',
-                  border: '1px solid rgba(79, 58, 255, 0.3)',
-                  color: '#a5b4fc',
-                  padding: '0 5px',
-                  borderRadius: '3px',
-                  fontFamily: 'Share Tech Mono, monospace',
-                  fontSize: '11px'
-                }}>
-                  v{version}
-                </span>
-              )}
-            </div>
-            {cpe && (
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+            {vendor && <span style={{ color: 'var(--c100)', fontWeight: 'bold' }}>{vendor}</span>}
+            {swName && swName !== node.name && <span style={{ color: 'var(--c300)' }}>({swName})</span>}
+            {version && (
               <span style={{
+                background: 'rgba(79, 58, 255, 0.15)',
+                border: '1px solid rgba(79, 58, 255, 0.3)',
+                color: '#a5b4fc',
+                padding: '0 5px',
+                borderRadius: '3px',
                 fontFamily: 'Share Tech Mono, monospace',
-                fontSize: '10px',
-                color: 'var(--muted)',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                maxWidth: '320px'
+                fontSize: '11px'
               }}>
-                cpe: {cpe}
+                v{version}
               </span>
             )}
           </div>
@@ -156,16 +136,16 @@ export function AssetTable({
         const netType = props.type || props.tipo;
 
         return (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
             {cidr && (
               <span style={{
                 fontFamily: 'Share Tech Mono, monospace',
-                background: 'rgba(56, 189, 248, 0.12)',
-                border: '1px solid rgba(56, 189, 248, 0.3)',
-                color: '#38bdf8',
-                padding: '2px 7px',
-                borderRadius: '4px',
-                fontWeight: 'bold'
+                background: 'rgba(122, 115, 255, 0.12)',
+                border: '1px solid rgba(122, 115, 255, 0.25)',
+                color: 'var(--c100)',
+                fontSize: '11px',
+                padding: '1px 6px',
+                borderRadius: '3px'
               }}>
                 {cidr}
               </span>
@@ -233,12 +213,11 @@ export function AssetTable({
     }
   };
 
-  // Renderizado de Badges de Estado y Riesgo
+  // Renderizado de Badges de Estado y Riesgo (sin mostrar el entorno)
   const renderAssetStatus = (node) => {
     const props = node.properties || {};
     const isExposed = props.internet_exposed === true || props.internet_exposed === 'true';
     const status = props.status || props.estado;
-    const environment = props.environment || props.entorno;
     const riskTier = props.risk_tier || props.severity;
 
     return (
@@ -258,21 +237,6 @@ export function AssetTable({
             whiteSpace: 'nowrap'
           }}>
             ☁ INTERNET EXPOSED
-          </span>
-        )}
-
-        {environment && (
-          <span style={{
-            background: environment.toLowerCase().includes('prod') ? 'rgba(168, 85, 247, 0.15)' : 'rgba(59, 130, 246, 0.15)',
-            border: `1px solid ${environment.toLowerCase().includes('prod') ? '#a855f7' : '#3b82f6'}`,
-            color: environment.toLowerCase().includes('prod') ? '#c084fc' : '#60a5fa',
-            fontSize: '10px',
-            fontWeight: 'bold',
-            padding: '2px 6px',
-            borderRadius: '4px',
-            textTransform: 'uppercase'
-          }}>
-            {environment}
           </span>
         )}
 
@@ -320,7 +284,19 @@ export function AssetTable({
         onClearAll={clearAllFilters}
       />
 
-      <div style={{ flex: 1, overflowY: 'auto', position: 'relative' }} ref={popoverRef}>
+      {/* CONTENEDOR DE TABLA ESTILIZADO ACORDE A GOVERNANCE */}
+      <div 
+        style={{ 
+          flex: 1, 
+          overflowY: 'auto', 
+          position: 'relative',
+          background: 'rgba(255, 255, 255, 0.02)',
+          borderRadius: '8px',
+          border: '1px solid var(--line)',
+          overflowX: 'auto'
+        }} 
+        ref={popoverRef}
+      >
         {loading && (
           <div style={{
             position: 'absolute',
@@ -342,12 +318,12 @@ export function AssetTable({
           </div>
         )}
 
-        <table style={{ width: '100%', borderCollapse: 'collapse', color: 'var(--c100)', fontSize: '13px' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', color: 'var(--c100)', fontSize: '13px', textAlign: 'left' }}>
           <thead>
-            <tr style={{ borderBottom: '1px solid var(--line)', textAlign: 'left' }}>
+            <tr style={{ borderBottom: '1px solid var(--line)', background: 'rgba(0,0,0,0.2)' }}>
               
               {/* 1. CABECERA ACTIVO */}
-              <th style={{ padding: '10px 12px', color: 'var(--c400)', userSelect: 'none', width: '25%', position: 'relative' }}>
+              <th style={{ padding: '12px 16px', color: 'var(--c300)', fontWeight: 'normal', fontFamily: 'Orbitron, sans-serif', userSelect: 'none', width: '25%', position: 'relative' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span onClick={() => handleSort('name')} style={{ cursor: 'pointer' }}>
                     ACTIVO {sortField === 'name' ? (sortDirection === 'asc' ? ' ⏶' : ' ⏷') : ''}
@@ -405,7 +381,7 @@ export function AssetTable({
               </th>
 
               {/* 2. CABECERA CATEGORÍA */}
-              <th style={{ padding: '10px 12px', color: 'var(--c400)', userSelect: 'none', width: '20%', position: 'relative' }}>
+              <th style={{ padding: '12px 16px', color: 'var(--c300)', fontWeight: 'normal', fontFamily: 'Orbitron, sans-serif', userSelect: 'none', width: '20%', position: 'relative' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span onClick={() => handleSort('category')} style={{ cursor: 'pointer' }}>
                     CATEGORÍA {sortField === 'category' ? (sortDirection === 'asc' ? ' ⏶' : ' ⏷') : ''}
@@ -427,7 +403,7 @@ export function AssetTable({
                   </button>
                 </div>
 
-                {/* Popover Filtro Categorías (Multi-select) */}
+                {/* Popover Filtro Categorías */}
                 {activePopover === 'category' && (
                   <div style={{
                     position: 'absolute',
@@ -469,7 +445,7 @@ export function AssetTable({
               </th>
 
               {/* 3. CABECERA ATRIBUTOS CLAVE */}
-              <th style={{ padding: '10px 12px', color: 'var(--c400)', userSelect: 'none', width: '35%', position: 'relative' }}>
+              <th style={{ padding: '12px 16px', color: 'var(--c300)', fontWeight: 'normal', fontFamily: 'Orbitron, sans-serif', userSelect: 'none', width: '35%', position: 'relative' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span onClick={() => handleSort('properties')} style={{ cursor: 'pointer' }}>
                     ATRIBUTOS CLAVE {sortField === 'properties' ? (sortDirection === 'asc' ? ' ⏶' : ' ⏷') : ''}
@@ -491,7 +467,7 @@ export function AssetTable({
                   </button>
                 </div>
 
-                {/* Popover Filtro Atributos (IP/Subred & Vendor) */}
+                {/* Popover Filtro Atributos */}
                 {activePopover === 'attributes' && (
                   <div style={{
                     position: 'absolute',
@@ -548,21 +524,21 @@ export function AssetTable({
               </th>
 
               {/* 4. CABECERA ESTADO / RIESGO */}
-              <th style={{ padding: '10px 12px', color: 'var(--c400)', userSelect: 'none', width: '20%', position: 'relative' }}>
+              <th style={{ padding: '12px 16px', color: 'var(--c300)', fontWeight: 'normal', fontFamily: 'Orbitron, sans-serif', userSelect: 'none', width: '20%', position: 'relative' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span>ESTADO / RIESGO</span>
                   <button
                     onClick={() => togglePopover('status')}
                     style={{
-                      background: (filters.internetExposed !== 'ALL' || filters.environment !== 'ALL' || filters.riskTier !== 'ALL') ? 'rgba(79, 58, 255, 0.3)' : 'transparent',
+                      background: (filters.internetExposed !== 'ALL' || filters.riskTier !== 'ALL') ? 'rgba(79, 58, 255, 0.3)' : 'transparent',
                       border: 'none',
-                      color: (filters.internetExposed !== 'ALL' || filters.environment !== 'ALL' || filters.riskTier !== 'ALL') ? 'var(--c100)' : 'var(--muted)',
+                      color: (filters.internetExposed !== 'ALL' || filters.riskTier !== 'ALL') ? 'var(--c100)' : 'var(--muted)',
                       cursor: 'pointer',
                       fontSize: '12px',
                       padding: '2px 4px',
                       borderRadius: '3px'
                     }}
-                    title="Filtrar por exposición, entorno o riesgo"
+                    title="Filtrar por exposición o riesgo"
                   >
                     ⚙
                   </button>
@@ -603,28 +579,6 @@ export function AssetTable({
                       </select>
                     </div>
 
-                    <div style={{ marginBottom: '10px' }}>
-                      <label style={{ fontSize: '11px', color: 'var(--c400)', display: 'block', marginBottom: '4px' }}>Entorno:</label>
-                      <select
-                        value={filters.environment || 'ALL'}
-                        onChange={(e) => updateFilter('environment', e.target.value)}
-                        style={{
-                          width: '100%',
-                          background: '#0a0a14',
-                          border: '1px solid var(--line)',
-                          color: 'var(--c100)',
-                          padding: '6px',
-                          borderRadius: '4px',
-                          fontSize: '12px'
-                        }}
-                      >
-                        <option value="ALL">Todos los entornos</option>
-                        <option value="production">Production</option>
-                        <option value="development">Development</option>
-                        <option value="staging">Staging</option>
-                      </select>
-                    </div>
-
                     <div>
                       <label style={{ fontSize: '11px', color: 'var(--c400)', display: 'block', marginBottom: '4px' }}>Nivel de Riesgo:</label>
                       <select
@@ -653,54 +607,60 @@ export function AssetTable({
             </tr>
           </thead>
           <tbody>
-            {processedNodes.map(node => (
-              <tr
-                key={node.id}
-                onClick={() => setSelectedNode(node)}
-                style={{
-                  borderBottom: '1px solid rgba(122, 115, 255, 0.08)',
-                  cursor: 'pointer',
-                  background: selectedNode && selectedNode.id === node.id ? 'rgba(79, 58, 255, 0.12)' : 'transparent'
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(122, 115, 255, 0.05)' }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = selectedNode && selectedNode.id === node.id ? 'rgba(79, 58, 255, 0.12)' : 'transparent' }}
-              >
-                {/* 1. NOMBRE / ACTIVO */}
-                <td style={{ padding: '12px', fontWeight: 'bold', fontSize: '13px', color: 'var(--c100)' }}>
-                  {node.name}
-                </td>
+            {processedNodes.map(node => {
+              const catColor = getNodeColor(node);
+              return (
+                <tr
+                  key={node.id}
+                  onClick={() => setSelectedNode(node)}
+                  style={{
+                    borderBottom: '1px solid rgba(255,255,255,0.05)',
+                    cursor: 'pointer',
+                    background: selectedNode && selectedNode.id === node.id ? 'rgba(79, 58, 255, 0.12)' : 'transparent'
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(122, 115, 255, 0.05)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = selectedNode && selectedNode.id === node.id ? 'rgba(79, 58, 255, 0.12)' : 'transparent' }}
+                >
+                  {/* 1. NOMBRE / ACTIVO */}
+                  <td style={{ padding: '12px 16px', fontWeight: 'bold', fontSize: '13px', color: 'var(--c100)' }}>
+                    {node.name}
+                  </td>
 
-                {/* 2. CATEGORÍA */}
-                <td style={{ padding: '12px' }}>
-                  <span className="badge" style={{
-                    background: 'transparent',
-                    borderColor: getNodeColor(node),
-                    color: getNodeColor(node),
-                    fontSize: '10px',
-                    padding: '2px 7px',
-                    margin: 0,
-                    fontWeight: 'bold'
-                  }}>
-                     {(node.primaryLabel || 'UNKNOWN').toUpperCase()}
-                  </span>
-                </td>
+                  {/* 2. CATEGORÍA (ESTILO PILL REDONDEADO) */}
+                  <td style={{ padding: '12px 16px' }}>
+                    <span style={{
+                      display: 'inline-block',
+                      padding: '3px 10px',
+                      borderRadius: '999px',
+                      fontSize: '11.5px',
+                      fontWeight: 'bold',
+                      border: `1px solid ${catColor}`,
+                      color: catColor,
+                      background: 'rgba(255,255,255,0.03)',
+                      whiteSpace: 'nowrap',
+                      textTransform: 'uppercase'
+                    }}>
+                       {node.primaryLabel}
+                    </span>
+                  </td>
 
-                {/* 3. ATRIBUTOS CLAVE */}
-                <td style={{ padding: '12px' }}>
-                  {renderAssetAttributes(node)}
-                </td>
+                  {/* 3. ATRIBUTOS CLAVE */}
+                  <td style={{ padding: '12px 16px' }}>
+                    {renderAssetAttributes(node)}
+                  </td>
 
-                {/* 4. ESTADO / RIESGO */}
-                <td style={{ padding: '12px' }}>
-                  {renderAssetStatus(node)}
-                </td>
-              </tr>
-            ))}
+                  {/* 4. ESTADO / RIESGO */}
+                  <td style={{ padding: '12px 16px' }}>
+                    {renderAssetStatus(node)}
+                  </td>
+                </tr>
+              );
+            })}
 
             {processedNodes.length === 0 && !loading && (
               <tr>
-                <td colSpan="4" style={{ padding: '35px', textAlign: 'center', color: 'var(--c900)', fontFamily: 'Share Tech Mono, monospace' }}>
-                  NO SE ENCONTRARON ACTIVOS CON LOS FILTROS ACTUALES
+                <td colSpan="4" style={{ padding: '35px', textAlign: 'center', color: 'var(--c300)', fontStyle: 'italic' }}>
+                  No se encontraron activos con los filtros actuales
                 </td>
               </tr>
             )}
@@ -716,7 +676,7 @@ export function AssetTable({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        color: 'var(--c400)',
+        color: 'var(--c300)',
         fontSize: '12px',
         fontFamily: 'Share Tech Mono, monospace'
       }}>
