@@ -220,6 +220,7 @@ export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploita
         isOpen={showRenameModal}
         onClose={() => setShowRenameModal(false)}
         project={projects?.find(p => String(p.id) === String(selectedProjectId))}
+        projects={projects}
         onRename={renameProject}
       />
       <DeleteProjectModal

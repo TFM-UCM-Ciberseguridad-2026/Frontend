@@ -28,6 +28,7 @@ export function GraphPage({
   projects,
   endpoints,
   containers,
+  networks,
   showToast,
   createEndpoint,
   createContainer,
@@ -77,6 +78,7 @@ export function GraphPage({
           projects={projects}
           endpoints={endpoints}
           containers={containers}
+          networks={networks}
           onCreated={() => fetchInfrastructure(true)}
           showToast={showToast}
           createEndpoint={createEndpoint}
@@ -113,6 +115,7 @@ export function GraphPage({
         renameProject={renameProject}
         deleteProject={deleteProject}
         fetchEndpointPatchHistory={fetchEndpointPatchHistory}
+        nodes={graphData?.nodes || []}
       />
     </>
   );

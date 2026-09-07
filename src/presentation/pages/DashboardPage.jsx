@@ -143,6 +143,14 @@ export function DashboardPage({
       name: n.properties?.name || n.properties?.hostname || String(n.properties?.id ?? n.id)
     }));
 
+  const networks = (graphData?.nodes || [])
+    .filter(n => n.labels?.includes('Network') || n.primaryLabel === 'Network')
+    .map(n => ({
+      id: String(n.properties?.id ?? n.id),
+      nombre: n.properties?.nombre || n.properties?.name || '',
+      vlan_id: n.properties?.vlan_id ?? n.vlan_id ?? 0
+    }));
+
   return (
     <div style={{ height: '100vh', width: '100vw', overflow: 'hidden', position: 'relative' }}>
       <div className="grid-overlay"></div>
@@ -188,6 +196,7 @@ export function DashboardPage({
             projects={projects}
             endpoints={endpoints}
             containers={containers}
+            networks={networks}
             showToast={showToast}
             createEndpoint={createEndpoint}
             createContainer={createContainer}

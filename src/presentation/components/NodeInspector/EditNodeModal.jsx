@@ -35,16 +35,16 @@ const normalizeLegacyEndpointType = (rawTipo) => {
   return 'Server';
 };
 
-export function EditNodeModal({ node, onClose, updateNode }) {
+export function EditNodeModal({ node, onClose, updateNode, allNodes = [] }) {
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState(null);
   const [formData, setFormData] = useState({ justification: '' });
   const [originalRawTipo, setOriginalRawTipo] = useState(null);
+  const label = node.primaryLabel || node.labels?.[0];
 
   useEffect(() => {
     if (!node || !node.properties) return;
     const props = { ...node.properties };
-    const label = node.primaryLabel;
 
     if (label === 'Endpoint') {
       const rawTipo = props.tipo || props.type;
@@ -148,6 +148,7 @@ export function EditNodeModal({ node, onClose, updateNode }) {
         status: props.status || 'active',
         detected_by: props.detected_by || '',
         package_manager: props.package_manager || '',
+        criticality_level: props.criticality_level || 'STANDARD',
         justification: ''
       });
     } else if (label === 'Software') {
@@ -163,10 +164,9 @@ export function EditNodeModal({ node, onClose, updateNode }) {
     } else {
       setFormData({ ...props, justification: '' });
     }
-  }, [node]);
+  }, [node, label]);
 
   if (!node) return null;
-  const label = node.primaryLabel;
 
   const updateField = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -193,6 +193,73 @@ export function EditNodeModal({ node, onClose, updateNode }) {
     if (!formData.justification || formData.justification.trim() === '') {
       setFormError('El motivo/justificación técnica es obligatorio para registrar la modificación.');
       return;
+    }
+
+    const currentIdStr = String(node.properties?.id || node.domainId || node.id || '');
+
+    if (label === 'Endpoint') {
+      const newName = (formData.hostname || '').toLowerCase().trim();
+      if (newName) {
+        const isDuplicate = (allNodes || []).some(n => {
+          const nIdStr = String(n.properties?.id || n.domainId || n.id || '');
+          if (nIdStr === currentIdStr) return false;
+          const nCat = n.primaryLabel || n.labels?.[0];
+          if (nCat !== 'Endpoint' && nCat !== 'Container' && !(n.labels || []).some(l => l === 'Endpoint' || l === 'Container')) return false;
+          const nName = (n.properties?.hostname || n.properties?.name || n.name || '').toLowerCase().trim();
+          return nName === newName;
+        });
+        if (isDuplicate) {
+          setFormError('Ya existe un activo con este nombre. Por favor, elige un nombre único.');
+          return;
+        }
+      }
+    } else if (label === 'Container') {
+      const newName = (formData.name || '').toLowerCase().trim();
+      if (newName) {
+        const isDuplicate = (allNodes || []).some(n => {
+          const nIdStr = String(n.properties?.id || n.domainId || n.id || '');
+          if (nIdStr === currentIdStr) return false;
+          const nCat = n.primaryLabel || n.labels?.[0];
+          if (nCat !== 'Endpoint' && nCat !== 'Container' && !(n.labels || []).some(l => l === 'Endpoint' || l === 'Container')) return false;
+          const nName = (n.properties?.hostname || n.properties?.name || n.name || '').toLowerCase().trim();
+          return nName === newName;
+        });
+        if (isDuplicate) {
+          setFormError('Ya existe un activo con este nombre. Por favor, elige un nombre único.');
+          return;
+        }
+      }
+    } else if (label === 'Network') {
+      const newName = (formData.nombre || '').toLowerCase().trim();
+      if (newName) {
+        const isNameDuplicate = (allNodes || []).some(n => {
+          const nIdStr = String(n.properties?.id || n.domainId || n.id || '');
+          if (nIdStr === currentIdStr) return false;
+          const nCat = n.primaryLabel || n.labels?.[0];
+          if (nCat !== 'Network' && !(n.labels || []).some(l => l === 'Network')) return false;
+          const nName = (n.properties?.nombre || n.properties?.name || n.name || '').toLowerCase().trim();
+          return nName === newName;
+        });
+        if (isNameDuplicate) {
+          setFormError('Ya existe una red con este nombre. Por favor, elige un nombre único.');
+          return;
+        }
+      }
+      const newVlan = parseInt(formData.vlan_id, 10);
+      if (!isNaN(newVlan) && newVlan > 0) {
+        const isVlanDuplicate = (allNodes || []).some(n => {
+          const nIdStr = String(n.properties?.id || n.domainId || n.id || '');
+          if (nIdStr === currentIdStr) return false;
+          const nCat = n.primaryLabel || n.labels?.[0];
+          if (nCat !== 'Network' && !(n.labels || []).some(l => l === 'Network')) return false;
+          const nVlan = parseInt(n.properties?.vlan_id ?? n.vlan_id ?? 0, 10);
+          return !isNaN(nVlan) && nVlan === newVlan;
+        });
+        if (isVlanDuplicate) {
+          setFormError('El VLAN ID ya está asignado a otra red. Por favor, elige un VLAN ID único.');
+          return;
+        }
+      }
     }
 
     setLoading(true);

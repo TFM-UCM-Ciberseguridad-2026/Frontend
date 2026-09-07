@@ -696,22 +696,42 @@ export function NetworkGraph({
       currentRootLeft += rWidth;
     });
 
-    // Posicionar Nodos de Red (Depth 0) en Nivel 0 (y = -320) centrados sobre sus Endpoints
+    // Posicionar Nodos de Red (Depth 0) en Nivel 0 (y = -320)
     const networkNodes = visibleNodes.filter(n => depths[n.id] === 0);
+    const connectedNets = [];
+    const unconnectedNets = [];
+
     networkNodes.forEach(netNode => {
       const netIdStr = String(netNode.id);
-      const connectedEndpoints = visibleNodes.filter(n => depths[n.id] === 2 && endpointNetworkMap.get(String(n.id)) === netIdStr);
+      const connectedEndpoints = visibleNodes.filter(n => (depths[n.id] === 2 || depths[n.id] === 3) && endpointNetworkMap.get(String(n.id)) === netIdStr);
 
-      let netX = WORLD_CENTER_X;
       if (connectedEndpoints.length > 0) {
         const sumX = connectedEndpoints.reduce((acc, ep) => {
           const pos = treeTargetMap.get(String(ep.id));
           return acc + (pos ? pos.x : WORLD_CENTER_X);
         }, 0);
-        netX = sumX / connectedEndpoints.length;
+        const netX = sumX / connectedEndpoints.length;
+        treeTargetMap.set(netIdStr, { x: netX, y: -320 });
+        connectedNets.push({ id: netIdStr, x: netX });
+      } else {
+        unconnectedNets.push(netNode);
       }
-      treeTargetMap.set(netIdStr, { x: netX, y: -320 });
     });
+
+    if (unconnectedNets.length > 0) {
+      const SPACING = 220;
+      const totalWidth = (unconnectedNets.length - 1) * SPACING;
+      let startX = WORLD_CENTER_X - (totalWidth / 2);
+
+      unconnectedNets.forEach((netNode, idx) => {
+        const netIdStr = String(netNode.id);
+        let candX = startX + idx * SPACING;
+        while (connectedNets.some(cn => Math.abs(cn.x - candX) < 120)) {
+          candX += 160;
+        }
+        treeTargetMap.set(netIdStr, { x: candX, y: -320 });
+      });
+    }
 
     // Fallback para nodos huérfanos no posicionados
     let orphanCount = 0;
@@ -1612,7 +1632,7 @@ export function NetworkGraph({
         }
 
         // Etiqueta Nombre del Nodo
-        const rawName = node.entity.name || '';
+        const rawName = node.entity.name || node.entity.properties?.nombre || node.entity.properties?.name || node.entity.properties?.hostname || String(node.entity.id);
         const shouldTruncate = layoutMode === 'tree' && !isSelected && rawName.length > 17;
         const displayName = shouldTruncate ? rawName.substring(0, 15) + '…' : rawName;
 

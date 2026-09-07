@@ -69,6 +69,7 @@ export function AddAssetButton({
   projects = [],
   endpoints = [],
   containers = [],
+  networks = [],
   onCreated,
   createEndpoint,
   createContainer,
@@ -184,6 +185,16 @@ export function AddAssetButton({
       switch (typeKey) {
         case 'endpoint': {
           const { project_id, ...rest } = data;
+          const newName = (rest.hostname || '').toLowerCase().trim();
+          if (newName) {
+            const existsInEndpoints = (endpoints || []).some(e => (e.hostname || e.name || '').toLowerCase().trim() === newName);
+            const existsInContainers = (containers || []).some(c => (c.name || c.hostname || '').toLowerCase().trim() === newName);
+            if (existsInEndpoints || existsInContainers) {
+              setFormError('Ya existe un activo con este nombre. Por favor, elige un nombre único.');
+              setLoading(false);
+              return;
+            }
+          }
           if (createEndpoint) {
             await createEndpoint(project_id, rest);
           }
@@ -191,6 +202,16 @@ export function AddAssetButton({
         }
         case 'container': {
           const { host_id, ...rest } = data;
+          const newName = (rest.name || '').toLowerCase().trim();
+          if (newName) {
+            const existsInEndpoints = (endpoints || []).some(e => (e.hostname || e.name || '').toLowerCase().trim() === newName);
+            const existsInContainers = (containers || []).some(c => (c.name || c.hostname || '').toLowerCase().trim() === newName);
+            if (existsInEndpoints || existsInContainers) {
+              setFormError('Ya existe un activo con este nombre. Por favor, elige un nombre único.');
+              setLoading(false);
+              return;
+            }
+          }
           if (createContainer) {
             await createContainer(host_id, rest);
           }
@@ -219,9 +240,27 @@ export function AddAssetButton({
           break;
         }
         case 'network': {
-          // Ya no depende de un endpoint concreto: se crea la red con su
-          // propio CIDR/gateway/VLAN y el backend enlaza automáticamente
-          // los endpoints cuya IP caiga bajo esa máscara y compartan VLAN.
+          const newName = (data.nombre || '').toLowerCase().trim();
+          if (newName) {
+            const isNameDuplicate = (networks || []).some(n => (n.nombre || n.name || '').toLowerCase().trim() === newName);
+            if (isNameDuplicate) {
+              setFormError('Ya existe una red con este nombre. Por favor, elige un nombre único.');
+              setLoading(false);
+              return;
+            }
+          }
+          const newVlan = parseInt(data.vlan_id, 10);
+          if (!isNaN(newVlan) && newVlan > 0) {
+            const isVlanDuplicate = (networks || []).some(n => {
+              const nVlan = parseInt(n.vlan_id ?? n.vlan ?? 0, 10);
+              return !isNaN(nVlan) && nVlan === newVlan;
+            });
+            if (isVlanDuplicate) {
+              setFormError('El VLAN ID ya está asignado a otra red. Por favor, elige un VLAN ID único.');
+              setLoading(false);
+              return;
+            }
+          }
           if (createNetwork) {
             await createNetwork(data);
           }

@@ -25,8 +25,6 @@ export function LandingPage({
 
   // Formulario crear proyecto
   const [cName, setCName] = useState('');
-  const [cType, setCType] = useState('Infraestructura');
-  const [cDesc, setCDesc] = useState('');
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState(null);
 
@@ -58,18 +56,24 @@ export function LandingPage({
 
   const handleCreateSubmit = async (e) => {
     e.preventDefault();
-    if (!cName.trim()) return;
+    const trimmedName = cName.trim();
+    if (!trimmedName) return;
+
+    const isDuplicate = (projects || []).some(p => (p.name || p.nombre || '').toLowerCase().trim() === trimmedName.toLowerCase());
+    if (isDuplicate) {
+      setCreateError('Ya existe un proyecto con este nombre. Por favor, elige un nombre único.');
+      return;
+    }
+
     bumpInteraction();
     setCreateLoading(true);
     setCreateError(null);
 
     try {
       if (createProject) {
-        await createProject({ nombre: cName.trim(), description: cDesc.trim(), type: cType });
+        await createProject({ nombre: trimmedName });
       }
       setCName('');
-      setCDesc('');
-      setCType('Infraestructura');
       setActiveModal(null);
       await fetchInfrastructure?.(true);
       setShowDashboard(true);
@@ -133,7 +137,7 @@ export function LandingPage({
               </svg>
             </div>
             <h3>Crear proyecto</h3>
-            <p>Define un nombre, un tipo y una descripción para arrancar un proyecto nuevo desde cero.</p>
+            <p>Define un nombre para arrancar un proyecto nuevo desde cero.</p>
             <button className="hud-btn hud-btn-primary" onClick={() => { bumpInteraction(); setActiveModal('create'); }}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M12 5v14M5 12h14" />
@@ -272,22 +276,6 @@ export function LandingPage({
                 autoFocus
               />
 
-              <label className="hud-field-label">Tipo</label>
-              <select className="hud-select" value={cType} onChange={e => setCType(e.target.value)}>
-                <option value="Infraestructura">Infraestructura</option>
-                <option value="Red">Red</option>
-                <option value="Auditoría de seguridad">Auditoría de seguridad</option>
-                <option value="Threat Intelligence">Threat Intelligence</option>
-              </select>
-
-              <label className="hud-field-label">Descripción (opcional)</label>
-              <textarea
-                className="hud-textarea"
-                placeholder="Breve resumen del objetivo del proyecto..."
-                value={cDesc}
-                onChange={e => setCDesc(e.target.value)}
-              />
-
               {createError && (
                 <div style={{ color: '#ff4a4a', fontSize: '0.85rem', marginTop: '10px' }}>
                   ⚠️ {createError}
@@ -327,11 +315,10 @@ export function LandingPage({
         isOpen={showRenameModal}
         onClose={() => setShowRenameModal(false)}
         project={actionProject}
+        projects={projects}
         onRename={async (id, newName) => {
           if (renameProject) {
             await renameProject(id, newName);
-            // Optionally close the projects modal or keep it open so they see the change
-            // setActiveModal(null); 
           }
         }}
       />
