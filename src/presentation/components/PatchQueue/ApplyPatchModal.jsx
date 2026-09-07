@@ -87,11 +87,12 @@ function getPatchActionType(fixedVersion, selectedPatch) {
   return 'Sin acción concreta disponible';
 }
 
-function inferRemediationLevelFromPatch(patch) {
-  if (patch?.official === true) return 'OFFICIAL_FIX';
-  if (patch?.reference_type === 'FIXED_VERSION') return 'WORKAROUND';
-  if (patch?.reference_type === 'TEMPORARY_FIX') return 'TEMPORARY_FIX';
-  return 'WORKAROUND';
+function inferRemediationLevelFromPatch(patch, item) {
+  if (patch?.reference_type === 'MITIGATION') return 'WORKAROUND';
+  if (patch?.fixed_version || item?.fixed_version) return 'OFFICIAL_FIX';
+  if (patch?.official === true) return 'TEMPORARY_FIX';
+  if (patch?.reference_type === 'FIXED_VERSION') return 'OFFICIAL_FIX';
+  return 'UNAVAILABLE';
 }
 
 function getPatchLinkLabel(patch) {
@@ -168,7 +169,6 @@ export function ApplyPatchModal({
   const hasPatchAvailable = Boolean(item.patch_available);
   const displayError = localError || error;
   const selectedPatch = patches.find(p => String(p.patch_id) === String(patchId)) || patches[0] || null;
-  const selectedRemediationLevel = inferRemediationLevelFromPatch(selectedPatch);
   const fixedVersion = item.fixed_version || '';
   const fixedVersionCandidates = getFixedVersionCandidates(
     fixedVersion,
@@ -181,6 +181,7 @@ export function ApplyPatchModal({
 
   const recommendedFixedVersion = selectedCandidate?.raw || '';
   const hasMultipleFixedVersionCandidates = fixedVersionCandidates.length > 1;
+  const selectedRemediationLevel = inferRemediationLevelFromPatch(selectedPatch, item);
   const patchActionType = getPatchActionType(recommendedFixedVersion, selectedPatch);
 
   const patchRecommendation = (() => {
@@ -197,8 +198,11 @@ export function ApplyPatchModal({
       const evidenceLabel = selectedPatch.official === true
         ? 'la referencia oficial'
         : 'la evidencia publicada en OSV';
-      return `Revisar ${evidenceLabel} y aplicar la corrección indicada para ${item.cve_id}.
-        No hay fixed_version normalizada en el backend.`;
+      const temporaryOfficialNotice = selectedRemediationLevel === 'TEMPORARY_FIX' && selectedPatch.official === true
+        ? ' La referencia es oficial, pero no incluye una versión normalizada; se aplicará como corrección temporal.'
+        : '';
+      return `${selectedRemediationLevel === 'WORKAROUND' ? 'Revisar' : 'Aplicar'} ${evidenceLabel} y aplicar la ${selectedRemediationLevel === 'WORKAROUND' ? 'mitigación' : 'corrección'} indicada para ${item.cve_id}.
+        No hay fixed_version normalizada en el backend.${temporaryOfficialNotice}`;
     }
 
     return 'No hay recomendación accionable suficiente. Refresca patches o revisa el CVE manualmente antes de declarar el parche.';
@@ -323,7 +327,7 @@ export function ApplyPatchModal({
               <div className="apply-patch-proposals-list">
                 {patches.map((patchItem) => {
                   const isSelected = String(patchItem.patch_id) === String(patchId);
-                  const remediationLevel = inferRemediationLevelFromPatch(patchItem);
+                  const remediationLevel = inferRemediationLevelFromPatch(patchItem, item);
                   const patchLinkLabel = getPatchLinkLabel(patchItem);
                   const patchDesc = descriptionMatchesCurrentCVE(patchItem.description, item.cve_id)
                     ? patchItem.description
@@ -415,7 +419,7 @@ export function ApplyPatchModal({
               >
                 <option value="">Resolver automáticamente si hay una única referencia disponible</option>
                 {patches.map(patch => {
-                  const remediationLevel = inferRemediationLevelFromPatch(patch);
+                  const remediationLevel = inferRemediationLevelFromPatch(patch, item);
                   const patchDesc = descriptionMatchesCurrentCVE(patch.description, item.cve_id)
                     ? patch.description || (patch.official === true
                       ? 'Referencia oficial'
