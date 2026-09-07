@@ -4,7 +4,7 @@ import { recopilarDatos } from './reporting/reportData.js';
 import {
   situacionDelPeriodo, inventarioYGrupos, coberturaYCalidad, panoramaVulnerabilidades,
   cumplimientoSLA, colaRemediacion, envejecimiento, inteligenciaAmenazas,
-  matrizAttack, actoresAmenaza, vencimientosProximos,
+  matrizAttack, actoresAmenaza, vencimientosProximos, ritmoDeRemediacion, parches,
 } from './reporting/reportSlides.js';
 
 /**
@@ -25,9 +25,11 @@ import {
  *   7 Vencimientos en los próximos 7 días
  *   8 Cola de remediación priorizada
  *   9 Envejecimiento del backlog
- *  10 Inteligencia de amenazas
- *  11 Matriz MITRE ATT&CK
- *  12 Actores de amenaza correlacionados
+ *  10 Parches: disponibilidad y aplicación
+ *  11 Ritmo de remediación (MTTR)
+ *  12 Inteligencia de amenazas
+ *  13 Matriz MITRE ATT&CK
+ *  14 Actores de amenaza correlacionados
  */
 export class ExportWeeklyReportUseCase {
   constructor(infrastructureRepository) {
@@ -74,6 +76,8 @@ export class ExportWeeklyReportUseCase {
     vencimientosProximos(ctx, D);
     colaRemediacion(ctx, D);
     envejecimiento(ctx, D);
+    parches(ctx, D, { etiquetaPeriodo: 'la semana' });
+    ritmoDeRemediacion(ctx, D, { etiquetaPeriodo: 'la semana' });
     inteligenciaAmenazas(ctx, D);
     matrizAttack(ctx, D);
     actoresAmenaza(ctx, D);

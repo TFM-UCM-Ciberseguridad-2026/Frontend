@@ -61,6 +61,11 @@ const TTPDashboard = ({ projectId, finalTtps }) => {
         : 0;
     const capecPendientes = stats.capec_pending_cves || 0;
 
+    // Base de la confianza por vulnerabilidad: solo las CVE que llegaron a
+    // mapearse. Las no mapeadas no tienen confianza que medir, y meterlas en el
+    // denominador diluiría el porcentaje sin significar nada.
+    const cvesConConfianza = (stats.high_confidence_cves || 0) + (stats.medium_confidence_cves || 0);
+
     // Datos para el Donut de Confianza
     const confidenceData = [
         { name: 'Alta Confianza', value: stats.high_confidence, fill: '#00ffff' }, // cyan neon
@@ -107,16 +112,24 @@ const TTPDashboard = ({ projectId, finalTtps }) => {
                 </div>
 
                 <div className="ttp-kpi-card">
-                    <span className="ttp-kpi-title">Nivel de Confianza (Mapeo)</span>
+                    <span className="ttp-kpi-title">Nivel de Confianza</span>
+                    {/*
+                      Se publican las DOS lecturas porque divergen mucho y miden cosas
+                      distintas. El porcentaje por mapeo sale alto porque la vía CAPEC
+                      es unas tres veces más densa (aporta muchas más técnicas por CVE),
+                      así que una minoría de vulnerabilidades genera la mayoría de las
+                      aristas. Enseñar solo esa cifra sugiere una fiabilidad que el
+                      sistema no tiene sobre la unidad con la que se trabaja de verdad,
+                      que es la vulnerabilidad.
+                    */}
                     <div className="ttp-kpi-value">
-                        {totalMapeos > 0 ? Math.round((stats.high_confidence/totalMapeos)*100) : 0}% <span style={{fontSize: '1rem', fontWeight: 'normal'}}>Alta</span>
+                        {cvesConConfianza > 0 ? Math.round((stats.high_confidence_cves/cvesConConfianza)*100) : 0}% <span style={{fontSize: '1rem', fontWeight: 'normal'}}>de CVEs con técnica de Alta</span>
                     </div>
                     <span className="ttp-kpi-subtext">
-                        {stats.high_confidence === 0 
-                            ? `Los ${stats.medium_confidence} mapeos son de confianza Media` 
-                            : stats.medium_confidence === 0 
-                                ? `Todos los mapeos (${stats.high_confidence}) son de Alta confianza`
-                                : `El resto de mapeos (${stats.medium_confidence}) son de confianza Media`}
+                        {stats.medium_confidence_cves > 0
+                            ? <><span style={{color: '#ff00ff'}}>{stats.medium_confidence_cves} CVEs ({cvesConConfianza > 0 ? Math.round((stats.medium_confidence_cves/cvesConConfianza)*100) : 0}%) solo tienen técnicas de confianza Media</span> · </>
+                            : 'Todas las CVEs mapeadas tienen alguna técnica de Alta confianza · '}
+                        Por mapeo: {totalMapeos > 0 ? Math.round((stats.high_confidence/totalMapeos)*100) : 0}% Alta ({totalMapeos} aristas)
                     </span>
                 </div>
 

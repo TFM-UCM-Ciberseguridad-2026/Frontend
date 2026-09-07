@@ -305,52 +305,7 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
 
       {viewMode === 'matrix' && (
       <section className="workspace">
-        {/* LISTADO DE TTPs (IZQUIERDA) */}
-        <div className="list-panel">
-            <h3>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M4 6h16M4 12h16M4 18h10" />
-              </svg>
-              Listado de TTPs
-            </h3>
-            <div className="search-wrap">
-              <input
-                type="text"
-                id="ttpSearch"
-                placeholder="Buscar por ID o nombre..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-
-            <div className="ttp-list">
-              {filteredTtps.map((ttp) => {
-                const etiquetas = TACTICS.filter(t => ttp.tactics.includes(t.key));
-                const isSelected = selectedTtpId === ttp.id;
-                
-                return (
-                  <div 
-                    key={ttp.id} 
-                    className={`ttp-item ${isSelected ? 'selected' : ''}`}
-                    onClick={() => handleSelectTtp(ttp.id)}
-                    onDoubleClick={() => handleOpenModalForTtp(ttp)}
-                  >
-                    <div className="row1">
-                      <span className="tid">{ttp.id}</span>
-                      <span className="tactic-tag">{etiquetas.map(t => t.label).join(' · ')}</span>
-                    </div>
-                    <div className="tname">{ttp.name}</div>
-                    <div className="hint">Clic de nuevo para abrir detalle ➔</div>
-                  </div>
-                );
-              })}
-              {filteredTtps.length === 0 && (
-                <div className="empty-list">No se encontraron TTPs.</div>
-              )}
-            </div>
-          </div>
-
-          {/* COLUMNA DERECHA (MATRIZ + FOOTER) */}
+        {/* MATRIZ + FOOTER (ARRIBA) */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0 }}>
             {/* MATRIZ MITRE ATT&CK */}
             <div className="matrix-panel">
@@ -434,6 +389,51 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
                     Calcular TTPs (IA)
                  </button>
                )}
+            </div>
+          </div>
+
+        {/* LISTADO DE TTPs (DEBAJO DE LA MATRIZ) */}
+        <div className="list-panel">
+            <h3>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M4 6h16M4 12h16M4 18h10" />
+              </svg>
+              Listado de TTPs
+            </h3>
+            <div className="search-wrap">
+              <input
+                type="text"
+                id="ttpSearch"
+                placeholder="Buscar por ID o nombre..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+
+            <div className="ttp-list">
+              {filteredTtps.map((ttp) => {
+                const etiquetas = TACTICS.filter(t => ttp.tactics.includes(t.key));
+                const isSelected = selectedTtpId === ttp.id;
+                
+                return (
+                  <div 
+                    key={ttp.id} 
+                    className={`ttp-item ${isSelected ? 'selected' : ''}`}
+                    onClick={() => handleSelectTtp(ttp.id)}
+                    onDoubleClick={() => handleOpenModalForTtp(ttp)}
+                  >
+                    <div className="row1">
+                      <span className="tid">{ttp.id}</span>
+                      <span className="tactic-tag">{etiquetas.map(t => t.label).join(' · ')}</span>
+                    </div>
+                    <div className="tname">{ttp.name}</div>
+                    <div className="hint">Clic de nuevo para abrir detalle ➔</div>
+                  </div>
+                );
+              })}
+              {filteredTtps.length === 0 && (
+                <div className="empty-list">No se encontraron TTPs.</div>
+              )}
             </div>
           </div>
         </section>

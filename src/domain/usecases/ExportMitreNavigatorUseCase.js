@@ -19,6 +19,36 @@ export class ExportMitreNavigatorUseCase {
    * @param {string} projectName - Nombre del proyecto (para el título de la capa)
    * @returns {Promise<Object>} { filename, content }
    */
+  /**
+   * Versión de ATT&CK que se declara si el backend no sabe decir cuál tiene
+   * cargada (grafo poblado antes de que la versión se registrara). Es la mínima
+   * que reconoce las tácticas actuales, incluida TA0112.
+   */
+  static VERSION_ATTACK_POR_DEFECTO = '19';
+
+  /**
+   * Lee del backend la versión del catálogo realmente cargado y devuelve su
+   * componente mayor, que es lo que espera versions.attack.
+   *
+   * Estaba fijada a mano en '14' mientras el catálogo iba por la 19.2, así que el
+   * Navigator interpretaba las técnicas con un mapa de cinco versiones de
+   * antigüedad. Consultarla evita que se vuelva a desfasar en silencio.
+   */
+  async _versionATTACK() {
+    try {
+      const info = await this.repository.getMitreCatalogInfo();
+      const version = String(info?.attack_version || '').trim();
+      if (version) {
+        const mayor = version.split('.')[0];
+        if (mayor) return mayor;
+      }
+    } catch {
+      // La versión es un dato accesorio: si no se puede consultar, la capa se
+      // exporta igual con el valor por defecto en lugar de fallar la descarga.
+    }
+    return ExportMitreNavigatorUseCase.VERSION_ATTACK_POR_DEFECTO;
+  }
+
   async execute(projectId, projectName = 'Proyecto') {
     const raw = await this.repository.getTTPMatrix(projectId);
     const matriz = Array.isArray(raw) ? raw : (raw?.data || raw?.ttps || []);
@@ -47,12 +77,13 @@ export class ExportMitreNavigatorUseCase {
     }
 
     const maxScore = techniques.reduce((max, t) => (t.score > max ? t.score : max), 0);
+    const versionATTACK = await this._versionATTACK();
 
     // Construir la capa oficial de MITRE ATT&CK Navigator (v4.5 / Navigator 4.9.1)
     const layer = {
       name: `Capa MITRE ATT&CK - ${projectName}`,
       versions: {
-        attack: '14',
+        attack: versionATTACK,
         navigator: '4.9.1',
         layer: '4.5'
       },

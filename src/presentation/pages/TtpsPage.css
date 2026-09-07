@@ -147,9 +147,11 @@ main.ttps {
   color: var(--c50);
 }
 
+/* La matriz va arriba y el listado debajo: con las dos columnas en paralelo las 15
+   tácticas no caben a lo ancho y la matriz quedaba cortada por la derecha. */
 .ttps .workspace {
   display: grid;
-  grid-template-columns: 330px 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 20px;
   margin-top: 22px;
   align-items: start;
@@ -162,9 +164,7 @@ main.ttps {
   border-radius: 14px;
   background: linear-gradient(180deg, rgba(122, 115, 255, 0.06), rgba(5, 6, 30, 0.4));
   padding: 18px 16px 16px;
-  position: sticky;
-  top: 0;
-  max-height: calc(100vh - 220px);
+  max-height: 520px;
   display: flex;
   flex-direction: column;
 }
@@ -197,6 +197,8 @@ main.ttps {
   flex-direction: column;
   gap: 8px;
   margin-bottom: 12px;
+  /* El panel ocupa todo el ancho, pero el buscador no gana nada estirándose. */
+  max-width: 360px;
 }
 
 .ttps .search-input-box,
@@ -243,10 +245,13 @@ main.ttps {
   box-shadow: 0 0 0 3px rgba(122, 115, 255, 0.15);
 }
 
+/* En horizontal el listado dispone de todo el ancho: en una sola columna serían
+   cientos de filas, así que las tarjetas se reparten en tantas columnas como quepan. */
 .ttps .ttp-list {
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  align-content: start;
   gap: 6px;
   padding-right: 2px;
 }
@@ -400,9 +405,13 @@ main.ttps {
   width: 100%;
 }
 
+/* Una columna por táctica, sin fijar cuántas son: con el número escrito a mano la
+   última táctica se salía de la rejilla al añadir una nueva. Por debajo de 100px por
+   columna la matriz deja de encoger y `.matrix-scroll` la desplaza en horizontal. */
 .ttps .matrix {
   display: grid;
-  grid-template-columns: repeat(14, minmax(0, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(100px, 1fr);
   gap: 5px;
   width: 100%;
   box-sizing: border-box;
@@ -838,12 +847,7 @@ main.ttps {
 }
 
 @media (max-width: 980px) {
-  .ttps .workspace {
-    grid-template-columns: 1fr;
-  }
   .ttps .list-panel {
-    position: relative;
-    top: 0;
     max-height: 420px;
   }
 }

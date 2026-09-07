@@ -990,3 +990,299 @@ export function vencimientosProximos(ctx, D) {
 
   ctx.footer(s);
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// RITMO DE REMEDIACIÓN (MTTR)
+// ════════════════════════════════════════════════════════════════════════════
+
+/** Formatea días con un decimal, o un guion cuando no hay muestra que medir. */
+const dias = (n) => (Number.isFinite(n) ? `${Number(n).toFixed(1)} d` : '—');
+
+export function ritmoDeRemediacion(ctx, D, { etiquetaPeriodo }) {
+  const s = ctx.slide();
+  ctx.head(s, {
+    fase: 'Fase 4 · Verificación',
+    titulo: 'Ritmo de remediación',
+    subtitulo: 'Cuánto se tarda en cerrar un hallazgo desde que se detecta, medido contra el plazo acordado',
+    control: 'SP 800-53r4 · SI-2 · CA-7',
+  });
+
+  const R = D.remediacion;
+  const M = R.mttr;
+
+  // Sin hallazgos cerrados no hay MTTR que publicar. La edad del backlog sí se puede
+  // leer ya, y deja la lámina con contenido en un proyecto recién inventariado.
+  if (M.n === 0) {
+    ctx.vacio(s, 'Todavía no hay hallazgos cerrados con fecha de detección y de cierre: sin ellos no se puede medir el tiempo de remediación.');
+    ctx.callout(s, {
+      x: PAGE.M, y: 4.6, w: CW, h: 1.0, titulo: 'Lo que sí se puede leer hoy',
+      runs: [
+        { text: `${R.backlog.n} hallazgos abiertos`, options: { bold: true, color: C.TEXT } },
+        { text: ` acumulan una edad media de ${dias(R.backlog.media)} y una mediana de ${dias(R.backlog.mediana)}. `, options: { color: C.TEXT_2 } },
+        { text: R.backlog.masViejo
+            ? `El más antiguo lleva ${dias(R.backlog.masViejo.edadDias)} sin cerrarse: ${R.backlog.masViejo.cve || 'sin CVE resuelta'} en ${R.backlog.masViejo.endpoint || 'activo sin resolver'}.`
+            : 'Ninguno tiene fecha de detección registrada.',
+          options: { color: C.TEXT_2 } },
+      ],
+    });
+    ctx.footer(s);
+    return;
+  }
+
+  const cump = M.cumplimiento;
+  const kw = (CW - 0.18 * 4) / 5;
+  const kpis = [
+    {
+      label: 'MTTR medio', value: dias(M.media),
+      sub: `${M.n} ${M.n === 1 ? 'hallazgo cerrado' : 'hallazgos cerrados'} con reloj completo`,
+      color: C.TEXT, accent: C.ACCENT,
+    },
+    {
+      label: 'Mediana', value: dias(M.mediana),
+      sub: 'La mitad se cierra por debajo de este tiempo',
+      color: C.TEXT, accent: C.ACCENT,
+    },
+    {
+      label: 'P90', value: dias(M.p90),
+      sub: `El decil más lento supera este tiempo · máximo ${dias(M.max)}`,
+      color: Number.isFinite(M.p90) && Number.isFinite(M.mediana) && M.p90 > M.mediana * 3 ? C.WARN : C.TEXT,
+      accent: C.NIST,
+    },
+    {
+      label: 'Cierres en plazo', value: cump.pct === null ? '—' : `${cump.pct}%`,
+      sub: cump.medidos > 0
+        ? `${cump.enPlazo} de ${cump.medidos} dentro del SLA de su grupo`
+        : 'Ningún cierre tiene plazo acordado que medir',
+      color: cump.pct === null ? C.MUTE : cump.pct >= 95 ? C.OK : cump.pct >= 80 ? C.WARN : C.BAD,
+      accent: C.OK,
+    },
+    {
+      label: `Cerrados en ${etiquetaPeriodo}`, value: M.enPeriodo.n,
+      sub: M.enPeriodo.n > 0 ? `MTTR del periodo ${dias(M.enPeriodo.media)}` : 'Sin cierres dentro de la ventana',
+      color: M.enPeriodo.n > 0 ? C.OK : C.MUTE,
+      accent: M.enPeriodo.n > 0 ? C.OK : C.MUTE,
+    },
+  ];
+  kpis.forEach((k, i) => ctx.kpi(s, { ...k, x: PAGE.M + i * (kw + 0.18), y: 1.68, w: kw, h: 1.36 }));
+
+  // ── Tiempo de cierre por severidad, contra el plazo acordado ──────────
+  s.addText('TIEMPO MEDIO DE CIERRE POR SEVERIDAD, FRENTE AL PLAZO ACORDADO', {
+    x: PAGE.M, y: 3.24, w: 8, h: 0.24, fontSize: 8, fontFace: F.MONO, color: C.MUTE, charSpacing: 1.2,
+  });
+
+  // La escala la fija el mayor entre lo tardado y lo acordado: escalando solo por lo
+  // tardado, un plazo holgado se saldría del gráfico justo cuando se cumple de sobra.
+  const escala = Math.max(
+    1,
+    ...SEV_ORDER.map(sev => M.porSeveridad[sev].media || 0),
+    ...SEV_ORDER.map(sev => M.porSeveridad[sev].slaDias || 0),
+  );
+
+  SEV_ORDER.forEach((sev, i) => {
+    const b = M.porSeveridad[sev];
+    const y = 3.56 + i * 0.62;
+    const excede = b.n > 0 && Number.isFinite(b.slaDias) && b.media > b.slaDias;
+
+    s.addText(SEV_ES[sev], {
+      x: PAGE.M, y, w: 1.5, h: 0.44, fontSize: 11, fontFace: F.SANS, bold: true,
+      color: SEV_COLOR[sev], valign: 'middle',
+    });
+
+    const bx = PAGE.M + 1.6;
+    const bw = 6.6;
+    ctx.bar(s, { x: bx, y: y + 0.13, w: bw, h: 0.2, value: b.media || 0, max: escala, color: SEV_COLOR[sev] });
+
+    // Marca del plazo: la referencia contra la que se lee la barra.
+    if (Number.isFinite(b.slaDias) && b.slaDias > 0) {
+      const mx = bx + (bw * Math.min(b.slaDias, escala)) / escala;
+      s.addShape(ctx.pres.ShapeType.rect, { x: mx, y: y + 0.05, w: 0.018, h: 0.36, fill: { color: C.TEXT } });
+      s.addText(`SLA ${b.slaDias} d`, {
+        x: mx - 0.55, y: y - 0.13, w: 1.1, h: 0.2, fontSize: 7, fontFace: F.MONO, color: C.MUTE, align: 'center',
+      });
+    }
+
+    s.addText(b.n > 0 ? dias(b.media) : '—', {
+      x: PAGE.M + 8.35, y, w: 1.0, h: 0.44, fontSize: 12, fontFace: F.MONO, bold: true,
+      color: b.n === 0 ? C.MUTE : excede ? C.BAD : C.OK,
+      align: 'right', valign: 'middle',
+    });
+    s.addText(b.n > 0 ? `${b.n} ${b.n === 1 ? 'cierre' : 'cierres'} · mediana ${dias(b.mediana)}` : 'sin cierres medidos', {
+      x: PAGE.M + 9.5, y, w: 2.7, h: 0.44, fontSize: 8.5, fontFace: F.SANS, color: C.MUTE, valign: 'middle',
+    });
+  });
+
+  // ── Lectura ───────────────────────────────────────────────────────────
+  const excedidas = SEV_ORDER.filter(sev => {
+    const b = M.porSeveridad[sev];
+    return b.n > 0 && Number.isFinite(b.slaDias) && b.media > b.slaDias;
+  });
+
+  const runs = [];
+  if (excedidas.length > 0) {
+    runs.push({ text: `El tiempo medio de cierre supera el plazo acordado en ${excedidas.map(x => SEV_ES[x].toLowerCase()).join(', ')}`, options: { bold: true, color: C.BAD } });
+    runs.push({ text: '. No es un incumplimiento suelto sino el ritmo habitual: mientras la media esté por encima del plazo, cada nueva tanda de hallazgos de esa severidad nace condenada a vencer. ', options: { color: C.TEXT_2 } });
+  } else {
+    runs.push({ text: 'El ritmo de cierre cabe dentro de los plazos acordados en todas las severidades medidas', options: { bold: true, color: C.OK } });
+    runs.push({ text: '. ', options: { color: C.TEXT_2 } });
+  }
+  runs.push({ text: `El backlog abierto acumula ${dias(R.backlog.media)} de edad media`, options: { color: C.TEXT_2 } });
+  if (R.backlog.vencidos > 0) {
+    runs.push({ text: `, y ${R.backlog.vencidos} de esos hallazgos ya han pasado de su plazo sin cerrarse`, options: { bold: true, color: C.WARN } });
+  }
+  runs.push({ text: '.', options: { color: C.TEXT_2 } });
+
+  ctx.callout(s, { x: PAGE.M, y: 6.14, w: CW, h: 0.72, titulo: null, runs });
+
+  const notas = [
+    M.sinFechas > 0 ? `${M.sinFechas} hallazgos cerrados no tienen las dos marcas de tiempo y quedan fuera del cálculo.` : '',
+    M.supersedidos > 0 ? `${M.supersedidos} hallazgos figuran como reemplazados al cambiar la imagen de su contenedor: ese cierre no lo produce un trabajo de remediación, así que no entra en el MTTR.` : '',
+  ].filter(Boolean);
+  if (notas.length > 0) ctx.nota(s, { x: PAGE.M, y: 6.92, w: CW, text: notas.join(' ') });
+
+  ctx.footer(s);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// PARCHES: DISPONIBILIDAD Y APLICACIÓN
+// ════════════════════════════════════════════════════════════════════════════
+export function parches(ctx, D, { etiquetaPeriodo }) {
+  const s = ctx.slide();
+  ctx.head(s, {
+    fase: 'Fase 3 · Ejecución',
+    titulo: 'Parches: disponibilidad y aplicación',
+    subtitulo: 'Qué parte del backlog es parcheable hoy y qué se ha declarado aplicado sobre el parque',
+    control: 'SP 800-53r4 · SI-2 · CM-3',
+  });
+
+  const P = D.remediacion.disponibilidad;
+  const A = D.remediacion.aplicados;
+
+  const kw = (CW - 0.18 * 4) / 5;
+  const kpis = [
+    {
+      label: 'Parches identificados', value: P.parches,
+      sub: `Cubren ${P.cvesConParche} de ${P.cvesTotales} CVE del alcance`,
+      color: C.TEXT, accent: C.ACCENT,
+    },
+    {
+      label: 'Backlog accionable', value: P.accionablePct === null ? '—' : `${P.accionablePct}%`,
+      sub: `${P.abiertosConParche} de ${P.abiertos} hallazgos abiertos tienen parche publicado`,
+      color: P.accionablePct === null ? C.MUTE : P.accionablePct >= 60 ? C.OK : C.WARN,
+      accent: C.OK,
+    },
+    {
+      label: 'Sin parche disponible', value: P.abiertosSinParche,
+      sub: P.abiertosSinParche > 0 ? 'Solo admiten mitigación o aceptación' : 'Todo el backlog es parcheable',
+      color: P.abiertosSinParche > 0 ? C.WARN : C.OK,
+      accent: P.abiertosSinParche > 0 ? C.WARN : C.OK,
+    },
+    {
+      label: 'Parches declarados', value: A.total,
+      sub: A.total > 0
+        ? `${A.oficiales} ${A.oficiales === 1 ? 'oficial' : 'oficiales'} · ${A.mitigaciones} ${A.mitigaciones === 1 ? 'mitigación' : 'mitigaciones'}`
+        : 'Ninguna declaración registrada',
+      color: A.total > 0 ? C.TEXT : C.MUTE,
+      accent: A.total > 0 ? C.OK : C.MUTE,
+    },
+    {
+      label: `Aplicados en ${etiquetaPeriodo}`, value: A.enPeriodo,
+      sub: A.total > 0
+        ? `${A.cves} ${A.cves === 1 ? 'CVE' : 'CVE distintas'} sobre ${A.activos} ${A.activos === 1 ? 'activo' : 'activos'}`
+        : 'Sin actividad de parcheo registrada',
+      color: A.enPeriodo > 0 ? C.OK : C.MUTE,
+      accent: A.enPeriodo > 0 ? C.OK : C.MUTE,
+    },
+  ];
+  kpis.forEach((k, i) => ctx.kpi(s, { ...k, x: PAGE.M + i * (kw + 0.18), y: 1.68, w: kw, h: 1.36 }));
+
+  // Sin declaraciones la tabla sobra, pero el hueco es en sí mismo el hallazgo: hay
+  // parche publicado para parte del backlog y no consta que se haya aplicado.
+  if (A.total === 0) {
+    ctx.callout(s, {
+      x: PAGE.M, y: 3.36, w: CW, h: 1.5, titulo: 'Sin declaraciones de parche',
+      color: C.WARN, borde: C.WARN,
+      runs: [
+        { text: 'No consta ningún parche declarado como aplicado sobre el parque. ', options: { bold: true, color: C.WARN } },
+        { text: `Hay ${P.abiertosConParche} hallazgos abiertos cuyo arreglo ya está publicado, así que lo que falta no es el parche sino el registro de su aplicación. Sin esa declaración el hallazgo sigue contando como abierto, el riesgo del activo no baja, el reloj del SLA sigue corriendo y el trabajo hecho en la ventana de mantenimiento no queda acreditado como evidencia de SI-2.`, options: { color: C.TEXT_2 } },
+      ],
+    });
+    ctx.nota(s, {
+      x: PAGE.M, y: 5.05, w: CW,
+      text: 'La declaración se registra desde la cola de parcheo, indicando el nivel de remediación aplicado (parche oficial, corrección temporal o solución alternativa).',
+    });
+    ctx.footer(s);
+    return;
+  }
+
+  // ── Últimas declaraciones ─────────────────────────────────────────────
+  s.addText('ÚLTIMAS DECLARACIONES DE PARCHE', {
+    x: PAGE.M, y: 3.24, w: 8, h: 0.24, fontSize: 8, fontFace: F.MONO, color: C.MUTE, charSpacing: 1.2,
+  });
+
+  const filas = A.ultimas.slice(0, 7);
+  const header = [
+    ctx.th('CVE'), ctx.th('NIVEL'), ctx.th('ACTIVO'), ctx.th('SOFTWARE'),
+    ctx.th('APLICADO', { align: 'center' }), ctx.th('POR'), ctx.th('VERIFICACIÓN', { align: 'center' }),
+  ];
+  const rows = filas.map((r, i) => {
+    const bg = i % 2 === 0 ? C.PANEL : C.PANEL_2;
+    const colorNivel = r.oficial ? C.OK : r.nivel === 'UNAVAILABLE' ? C.MUTE : C.WARN;
+    const verif = r.verificado ? 'Verificado' : r.verificacionConcluyente ? 'No coincide' : 'No concluyente';
+    return [
+      ctx.td(r.cve || '—', { color: C.TEXT, bold: true, mono: true, fill: bg }),
+      ctx.td(r.nivelES || '—', { color: colorNivel, bold: true, fill: bg }),
+      ctx.td(r.endpoint || r.contenedor || r.activoID || '—', { color: C.TEXT_2, mono: true, fill: bg }),
+      ctx.td(r.software || '—', { color: C.TEXT_2, fill: bg }),
+      ctx.td(r.aplicadoEn ? fechaCorta(r.aplicadoEn) : '—', { align: 'center', color: C.MUTE, mono: true, fill: bg }),
+      ctx.td(r.aplicadoPor || '—', { color: C.TEXT_2, fill: bg }),
+      ctx.td(verif, {
+        align: 'center', bold: true, fill: bg,
+        color: r.verificado ? C.OK : r.verificacionConcluyente ? C.BAD : C.WARN,
+      }),
+    ];
+  });
+
+  s.addTable([header, ...rows], {
+    x: PAGE.M, y: 3.54, w: CW,
+    colW: [1.9, 1.85, 2.3, 1.9, 1.3, 1.35, 1.63].map(v => v * (CW / 12.23)),
+    rowH: 0.33,
+    border: { type: 'solid', pt: 0.4, color: C.RULE },
+    autoPage: false,
+  });
+
+  const y = Math.min(3.54 + (filas.length + 1) * 0.33 + 0.24, 6.02);
+  const runs = [];
+  const una = A.total === 1;
+  if (A.mitigaciones > 0) {
+    runs.push({
+      text: una
+        ? 'La única declaración registrada es una mitigación'
+        : `${A.mitigaciones} de las ${A.total} declaraciones son mitigaciones`,
+      options: { bold: true, color: C.WARN },
+    });
+    runs.push({ text: ', no parches oficiales: rebajan el riesgo pero dejan instalado el software vulnerable, así que el hallazgo sigue abierto y su plazo sigue corriendo. ', options: { color: C.TEXT_2 } });
+  } else {
+    runs.push({
+      text: una
+        ? 'La única declaración registrada es un parche oficial'
+        : `Las ${A.total} declaraciones son parches oficiales`,
+      options: { bold: true, color: C.OK },
+    });
+    runs.push({ text: ', que cierra el hallazgo y lo saca del cómputo de SLA. ', options: { color: C.TEXT_2 } });
+  }
+  if (A.noConcluyentes > 0) {
+    runs.push({
+      text: A.noConcluyentes === 1 && una
+        ? 'La verificación automática no ha sido concluyente'
+        : `La verificación automática no ha sido concluyente en ${A.noConcluyentes} de ellas`,
+      options: { bold: true, color: C.TEXT },
+    });
+    runs.push({ text: ': se contrasta la versión instalada con la que corrige el fallo, y cuando esa versión corregida no está publicada no hay contra qué comparar. Queda como declaración del operador, no como evidencia verificada.', options: { color: C.TEXT_2 } });
+  } else {
+    runs.push({ text: 'Todas las declaraciones se han podido verificar contra la versión instalada del componente.', options: { color: C.TEXT_2 } });
+  }
+
+  ctx.callout(s, { x: PAGE.M, y, w: CW, h: 0.86, titulo: null, runs });
+
+  ctx.footer(s);
+}

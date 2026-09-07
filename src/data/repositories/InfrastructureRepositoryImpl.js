@@ -30,6 +30,10 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     return await this.apiDataSource.fetchTTPMatrix(projectId);
   }
 
+  async getMitreCatalogInfo() {
+    return await this.apiDataSource.fetchMitreCatalogInfo();
+  }
+
   async getExploitationPaths(projectId) {
     const rawData = await this.apiDataSource.fetchExploitationPaths(projectId);
     const paths = (rawData.paths || []).map(path => new ExploitationPath(path));

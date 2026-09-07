@@ -22,6 +22,15 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
+  /**
+   * Recuento y versión del catálogo MITRE ATT&CK efectivamente cargado.
+   * Devuelve { count, attack_version, attack_spec_version, catalog_updated_at }.
+   */
+  async fetchMitreCatalogInfo() {
+    const res = await fetch('/api/infrastructure/mitre-ttp-count');
+    return await this._handleResponse(res);
+  }
+
   async fetchExploitationPaths(projectId) {
     const url = projectId
       ? `/api/infrastructure/exploitation-paths?project_id=${projectId}`

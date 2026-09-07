@@ -18,6 +18,7 @@ import {
   cveDeHallazgo, vulnerabilidadesPorCVE,
 } from './grafo';
 import { TACTICS, normalizeTacticKeys } from '../mitre/tactics';
+import { metricasDeRemediacion } from '../remediacion/metricas';
 
 const SEVERIDADES = ['Critical', 'High', 'Medium', 'Low'];
 
@@ -64,7 +65,7 @@ function hojaPortada(d, idx) {
 // ═════════════════════════════════════════════════════════════════════════
 // 2 · RESUMEN EJECUTIVO
 // ═════════════════════════════════════════════════════════════════════════
-function hojaResumen(d, idx) {
+function hojaResumen(d, idx, rem) {
   const proj = props(idx.de('Project')[0]);
   const endpoints = idx.de('Endpoint');
   const vulns = idx.de('Vulnerability');
@@ -141,7 +142,18 @@ function hojaResumen(d, idx) {
     ...Object.entries(d.cola?.priority_tier_counts || {})
       .filter(([tier]) => tier !== 'ALL')
       .map(([tier, n]) => [`   prioridad ${tier}`, n, '']),
-    ['Parches identificados', idx.de('Patch').length, ''],
+    ['Parches identificados', idx.de('Patch').length, `Cubren ${rem.disponibilidad.cvesConParche} de ${rem.disponibilidad.cvesTotales} CVE del alcance`],
+    ['Hallazgos abiertos con parche disponible', rem.disponibilidad.abiertosConParche,
+      rem.disponibilidad.accionablePct === null ? '' : `${rem.disponibilidad.accionablePct}% del backlog es accionable por parcheo`],
+    ['Hallazgos abiertos sin parche disponible', rem.disponibilidad.abiertosSinParche, 'Solo admiten mitigación o aceptación formal'],
+    ['Parches declarados aplicados', rem.aplicados.total,
+      rem.aplicados.total > 0 ? `${rem.aplicados.oficiales} oficiales · ${rem.aplicados.mitigaciones} mitigaciones` : 'Sin declaraciones registradas'],
+    ['Tiempo medio de remediación (MTTR)', rem.mttr.media,
+      rem.mttr.n > 0 ? `días · mediana ${rem.mttr.mediana} · sobre ${rem.mttr.n} hallazgos cerrados` : 'Sin hallazgos cerrados que medir'],
+    ['   cerrados dentro del plazo de SLA', rem.mttr.cumplimiento.enPlazo,
+      rem.mttr.cumplimiento.pct === null ? 'Ningún cierre tiene plazo acordado que medir' : `${rem.mttr.cumplimiento.pct}% de ${rem.mttr.cumplimiento.medidos} cierres medibles`],
+    ['Edad media del backlog abierto', rem.backlog.media,
+      rem.backlog.vencidos > 0 ? `días · ${rem.backlog.vencidos} ya han pasado de su plazo` : 'días desde la detección'],
     ['Incumplimientos de SLA abiertos', (d.breaches || []).length, ''],
     ['Rutas de explotación detectadas', (d.rutas || []).length, ''],
     [],
@@ -641,26 +653,44 @@ function hojaCola(d) {
 // ═════════════════════════════════════════════════════════════════════════
 // 10 · PARCHES
 // ═════════════════════════════════════════════════════════════════════════
-function hojaParches(d, idx) {
+function hojaParches(d, idx, rem) {
   const columnas = [
     { clave: 'id', titulo: 'ID', tipo: T.TEXTO },
     { clave: 'cves', titulo: 'CVE que corrige', tipo: T.TEXTO },
     { clave: 'nCves', titulo: 'Nº de CVE', tipo: T.ENTERO },
     { clave: 'severidadMax', titulo: 'Severidad máxima cubierta', tipo: T.TEXTO },
+    { clave: 'aplicaciones', titulo: 'Veces declarado aplicado', tipo: T.ENTERO },
+    { clave: 'activos', titulo: 'Activos donde se ha aplicado', tipo: T.TEXTO, ancho: 45 },
+    { clave: 'ultimaAplicacion', titulo: 'Última aplicación', tipo: T.FECHA },
     { clave: 'url', titulo: 'URL', tipo: T.TEXTO, ancho: 70 },
     { clave: 'fecha', titulo: 'Fecha de publicación', tipo: T.FECHA },
     { clave: 'descripcion', titulo: 'Descripción', tipo: T.TEXTO, ancho: 60 },
   ];
 
+  // Declaraciones agrupadas por parche: la hoja pasa así de listar el catálogo de
+  // arreglos disponibles a decir además cuáles se han puesto y dónde.
+  const aplicacionesPorParche = new Map();
+  for (const a of rem.aplicados.ultimas) {
+    if (a.parcheID === null || a.parcheID === undefined) continue;
+    const clave = String(a.parcheID);
+    if (!aplicacionesPorParche.has(clave)) aplicacionesPorParche.set(clave, []);
+    aplicacionesPorParche.get(clave).push(a);
+  }
+
   const filas = idx.de('Patch').map(p0 => {
     const p = props(p0);
     const vulns = idx.hacia(p0, 'FIXES');
     const scores = vulns.map(v => aNumero(props(v).base_score)).filter(n => n !== null);
+    const aplicaciones = aplicacionesPorParche.get(String(p.id)) || [];
+    const fechas = aplicaciones.map(a => a.aplicadoEn).filter(Boolean);
     return {
       id: p.id,
       cves: vulns.map(v => props(v).cve_id).filter(Boolean),
       nCves: vulns.length,
       severidadMax: scores.length > 0 ? severidadDeScore(Math.max(...scores)) : null,
+      aplicaciones: aplicaciones.length > 0 ? aplicaciones.length : null,
+      activos: [...new Set(aplicaciones.map(a => a.endpoint || a.contenedor || a.activoID).filter(Boolean))],
+      ultimaAplicacion: fechas.length > 0 ? new Date(Math.max(...fechas.map(f => f.getTime()))) : null,
       url: p.url,
       fecha: p.release_date,
       descripcion: p.description,
@@ -668,6 +698,162 @@ function hojaParches(d, idx) {
   }).sort((a, b) => b.nCves - a.nCves);
 
   return tabla('Parches', columnas, filas);
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// 10 · PARCHEO Y MTTR
+// ═════════════════════════════════════════════════════════════════════════
+
+/**
+ * Resumen del ritmo de parcheo: qué parte del backlog tiene arreglo publicado, qué se ha
+ * declarado aplicado y cuánto se tarda en cerrar un hallazgo desde que se detecta.
+ *
+ * Las cifras salen del mismo cálculo que publican las láminas del PPTX, para que el libro
+ * y la presentación del mismo proyecto no puedan dar un MTTR distinto.
+ */
+function hojaParcheoMTTR(d, rem) {
+  const P = rem.disponibilidad;
+  const A = rem.aplicados;
+  const M = rem.mttr;
+  const B = rem.backlog;
+
+  const dia = (n) => (Number.isFinite(n) ? n : null);
+  const pct = (n) => (Number.isFinite(n) ? `${n}%` : '');
+
+  const filas = [
+    ['PARCHEO Y TIEMPO DE REMEDIACIÓN'],
+    [],
+    ['DISPONIBILIDAD DE PARCHE', 'Valor', 'Detalle'],
+    ['Parches identificados', P.parches, 'Nodos Patch enlazados por FIXES a alguna CVE del alcance'],
+    ['CVE con parche publicado', P.cvesConParche, `${pct(P.coberturaPct)} de las ${P.cvesTotales} CVE del proyecto`],
+    ['Hallazgos abiertos con parche', P.abiertosConParche, `${pct(P.accionablePct)} del backlog es accionable por parcheo`],
+    ['Hallazgos abiertos sin parche', P.abiertosSinParche, 'Solo admiten mitigación compensatoria o aceptación formal'],
+    [],
+    ['PARCHES DECLARADOS APLICADOS', 'Valor', 'Detalle'],
+    ['Declaraciones registradas', A.total, `Sobre ${A.activos} ${A.activos === 1 ? 'activo' : 'activos'} y ${A.cves} ${A.cves === 1 ? 'CVE' : 'CVE distintas'}`],
+    ['   parches oficiales', A.oficiales, 'Cierran el hallazgo: el software deja de ser vulnerable'],
+    ['   mitigaciones', A.mitigaciones, 'Corrección temporal o solución alternativa: el hallazgo sigue abierto'],
+    ['   reversiones', A.revertidos, 'Declaradas como UNAVAILABLE, revierten una declaración previa'],
+    ['Verificadas contra la versión instalada', A.verificados,
+      A.total > 0 ? `de ${A.total} ${A.total === 1 ? 'declaración' : 'declaraciones'}` : ''],
+    ['   sin verificación concluyente', A.noConcluyentes, 'No consta la versión que corrige el fallo, así que no hay contra qué comparar'],
+    ['Aplicadas en los últimos 30 días', A.enPeriodo, ''],
+    [],
+    ['TIEMPO DE REMEDIACIÓN (MTTR)', 'Días', 'Detalle'],
+    ['Media', dia(M.media), `Sobre ${M.n} ${M.n === 1 ? 'hallazgo cerrado' : 'hallazgos cerrados'} con fecha de detección y de cierre`],
+    ['Mediana', dia(M.mediana), 'La mitad de los cierres queda por debajo de este tiempo'],
+    ['Percentil 90', dia(M.p90), 'El decil más lento supera este tiempo'],
+    ['Mínimo', dia(M.min), ''],
+    ['Máximo', dia(M.max), ''],
+    ['Media de los últimos 30 días', dia(M.enPeriodo.media), `${M.enPeriodo.n} ${M.enPeriodo.n === 1 ? 'cierre' : 'cierres'} en la ventana`],
+    [],
+    ['MTTR POR SEVERIDAD', 'Días (media)', 'Frente al plazo acordado'],
+    ...SEVERIDADES.map(sev => {
+      const b = M.porSeveridad[sev];
+      if (b.n === 0) return [sev, null, 'Sin cierres medidos'];
+      const ref = Number.isFinite(b.slaDias)
+        ? `SLA ${b.slaDias} d — ${b.media > b.slaDias ? `excedido en ${Math.round((b.media - b.slaDias) * 10) / 10} d` : 'dentro de plazo'}`
+        : 'Sin plazo acordado para esta severidad';
+      return [sev, dia(b.media), `${b.n} ${b.n === 1 ? 'cierre' : 'cierres'} · mediana ${b.mediana} d · ${ref}`];
+    }),
+    [],
+    ['MTTR POR GRUPO DE MANTENIMIENTO', 'Días (media)', 'Detalle'],
+    ['Servidores', dia(M.porCategoria.Server.media), `${M.porCategoria.Server.n} cierres · mediana ${M.porCategoria.Server.mediana ?? '—'} d`],
+    ['Puestos de trabajo', dia(M.porCategoria.Workstation.media), `${M.porCategoria.Workstation.n} cierres · mediana ${M.porCategoria.Workstation.mediana ?? '—'} d`],
+    ['Sin clasificar', dia(M.porCategoria.sinClasificar.media), `${M.porCategoria.sinClasificar.n} cierres — sin categoría no hay SLA aplicable`],
+    [],
+    ['CUMPLIMIENTO EN EL CIERRE', 'Valor', 'Detalle'],
+    ['Cierres con plazo medible', M.cumplimiento.medidos, 'Requiere categoría del activo y severidad con SLA acordado'],
+    ['   cerrados dentro de plazo', M.cumplimiento.enPlazo, pct(M.cumplimiento.pct)],
+    ['   cerrados fuera de plazo', M.cumplimiento.fuera, ''],
+    ['Cerrados sin marcas de tiempo', M.sinFechas, 'Quedan fuera del cálculo del MTTR'],
+    ['Reemplazados al cambiar la imagen', M.supersedidos, 'Estado SUPERSEDED: el cierre no lo produce un trabajo de remediación'],
+    [],
+    ['BACKLOG ABIERTO', 'Valor', 'Detalle'],
+    ['Hallazgos abiertos', B.n, 'La contraparte del MTTR: lo que todavía no se ha cerrado'],
+    ['Edad media', dia(B.media), 'Días desde la detección'],
+    ['Edad mediana', dia(B.mediana), ''],
+    ['Percentil 90 de edad', dia(B.p90), ''],
+    ['Abiertos con el plazo ya vencido', B.vencidos, 'Superan los días de SLA de su par (grupo, severidad)'],
+    ['Hallazgo abierto más antiguo', dia(B.masViejo?.edadDias),
+      B.masViejo ? [B.masViejo.cve, B.masViejo.endpoint, B.masViejo.software].filter(Boolean).join(' · ') : ''],
+  ];
+
+  return libre('Parcheo y MTTR', filas, [46, 18, 72]);
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// 12 · PARCHES DECLARADOS APLICADOS
+// ═════════════════════════════════════════════════════════════════════════
+
+/**
+ * Histórico de declaraciones: una fila por arista (:Patch)-[:APPLIED_TO]->(activo).
+ *
+ * Es la evidencia de que el parche no solo existe sino que se ha puesto, con quién lo
+ * declaró y qué dijo la verificación automática contra la versión instalada.
+ */
+function hojaParchesAplicados(rem) {
+  const columnas = [
+    { clave: 'cve', titulo: 'CVE', tipo: T.TEXTO },
+    { clave: 'nivel', titulo: 'Nivel de remediación', tipo: T.TEXTO },
+    { clave: 'oficial', titulo: 'Cierra el hallazgo', tipo: T.BOOL },
+    { clave: 'factor', titulo: 'Factor de remediación', tipo: T.DECIMAL2 },
+    { clave: 'endpoint', titulo: 'Endpoint', tipo: T.TEXTO },
+    { clave: 'contenedor', titulo: 'Contenedor', tipo: T.TEXTO },
+    { clave: 'software', titulo: 'Software', tipo: T.TEXTO },
+    { clave: 'tipoActivo', titulo: 'Tipo de activo', tipo: T.TEXTO },
+    { clave: 'activoID', titulo: 'ID del activo', tipo: T.TEXTO },
+    { clave: 'aplicadoEn', titulo: 'Aplicado', tipo: T.FECHA },
+    { clave: 'aplicadoPor', titulo: 'Declarado por', tipo: T.TEXTO },
+    { clave: 'verificado', titulo: 'Verificado', tipo: T.BOOL },
+    { clave: 'verificacionConcluyente', titulo: 'Verificación concluyente', tipo: T.BOOL },
+    { clave: 'motivoVerificacion', titulo: 'Resultado de la verificación', tipo: T.TEXTO, ancho: 55 },
+    { clave: 'versionInstalada', titulo: 'Versión instalada', tipo: T.TEXTO },
+    { clave: 'versionEsperada', titulo: 'Versión que corrige', tipo: T.TEXTO },
+    { clave: 'parcheID', titulo: 'ID del parche', tipo: T.TEXTO },
+    { clave: 'parcheURL', titulo: 'URL del parche', tipo: T.TEXTO, ancho: 70 },
+    { clave: 'notas', titulo: 'Notas', tipo: T.TEXTO, ancho: 60 },
+  ];
+
+  const filas = rem.aplicados.ultimas.map(a => ({ ...a, nivel: a.nivelES }));
+
+  return tabla('Parches aplicados', columnas, filas);
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// 13 · CIERRES Y MTTR
+// ═════════════════════════════════════════════════════════════════════════
+
+/**
+ * Una fila por hallazgo cerrado con el reloj completo: es el detalle que sostiene el
+ * MTTR del resumen, para que la media se pueda auditar caso a caso en vez de tener que
+ * creérsela.
+ */
+function hojaCierres(rem) {
+  const columnas = [
+    { clave: 'cve', titulo: 'CVE', tipo: T.TEXTO },
+    { clave: 'severidad', titulo: 'Severidad', tipo: T.TEXTO },
+    { clave: 'categoria', titulo: 'Grupo de mantenimiento', tipo: T.TEXTO },
+    { clave: 'endpoint', titulo: 'Endpoint', tipo: T.TEXTO },
+    { clave: 'contenedor', titulo: 'Contenedor', tipo: T.TEXTO },
+    { clave: 'software', titulo: 'Software', tipo: T.TEXTO },
+    { clave: 'version', titulo: 'Versión', tipo: T.TEXTO },
+    { clave: 'estado', titulo: 'Estado', tipo: T.TEXTO },
+    { clave: 'detectado', titulo: 'Detectado', tipo: T.FECHA },
+    { clave: 'resuelto', titulo: 'Cerrado', tipo: T.FECHA },
+    { clave: 'dias', titulo: 'Días hasta el cierre', tipo: T.DECIMAL },
+    { clave: 'slaDias', titulo: 'Días de SLA', tipo: T.ENTERO },
+    { clave: 'dentroDeSLA', titulo: 'Cerrado en plazo', tipo: T.BOOL },
+    { clave: 'desvioDias', titulo: 'Desvío sobre el plazo', tipo: T.DECIMAL },
+    { clave: 'nivelES', titulo: 'Nivel de remediación declarado', tipo: T.TEXTO },
+    { clave: 'declarado', titulo: 'Con declaración de parche', tipo: T.BOOL },
+    { clave: 'verificado', titulo: 'Parche verificado', tipo: T.BOOL },
+    { clave: 'aplicadoPor', titulo: 'Declarado por', tipo: T.TEXTO },
+  ];
+
+  const filas = [...rem.cierres].sort((a, b) => (b.dias ?? 0) - (a.dias ?? 0));
+
+  return tabla('Cierres y MTTR', columnas, filas);
 }
 
 // ═════════════════════════════════════════════════════════════════════════
@@ -905,6 +1091,16 @@ const MOTIVOS = {
   'Endpoints|Categoría': 'Clasificación Server/Workstation opcional; sin ella el SLA por categoría no aplica.',
   'Endpoints|Actualizado': 'Solo se rellena si el endpoint se ha editado tras crearse.',
   'Parches|Fecha de publicación': 'El proveedor de parches no siempre publica fecha.',
+  'Parches|Veces declarado aplicado': 'Solo se rellena en los parches que alguien ha declarado como aplicados sobre un activo.',
+  'Parches|Activos donde se ha aplicado': 'Solo se rellena en los parches que alguien ha declarado como aplicados sobre un activo.',
+  'Parches|Última aplicación': 'Solo se rellena en los parches que alguien ha declarado como aplicados sobre un activo.',
+  'Parches aplicados|Contenedor': 'Solo aplica a las declaraciones sobre un activo que vive dentro de un contenedor.',
+  'Parches aplicados|Versión que corrige': 'Vacía cuando el proveedor no publica la versión que corrige el fallo; sin ella la verificación no puede ser concluyente.',
+  'Parches aplicados|Notas': 'Campo libre de la declaración: solo lo rellena quien la registra.',
+  'Cierres y MTTR|Contenedor': 'Solo aplica a los hallazgos detectados dentro de un contenedor.',
+  'Cierres y MTTR|Nivel de remediación declarado': 'Vacío en los hallazgos que se cerraron sin declarar parche, por ejemplo si el software desapareció del inventario.',
+  'Cierres y MTTR|Declarado por': 'Vacío en los hallazgos cerrados sin una declaración de parche asociada.',
+  'Cierres y MTTR|Parche verificado': 'Vacío en los hallazgos cerrados sin una declaración de parche asociada.',
   'Top Threat Actors|Origen': 'MITRE no publica origen para la mayoría de los grupos.',
   'Top Threat Actors|Motivación': 'MITRE no publica motivación para la mayoría de los grupos.',
   'Redes e IPs|CIDR': 'Solo aplica a filas de tipo Red, no a direcciones IP.',
@@ -980,6 +1176,21 @@ const MOTIVOS_POR_GRUPO = [
     columnas: ['CVSS base', 'Días restantes', 'Activos afectados', 'Primera detección', 'CVE'],
     motivo: 'Solo aplica a las filas de incumplimiento, no a las de configuración de SLA.',
   },
+  {
+    hoja: 'Cierres y MTTR',
+    columnas: ['Grupo de mantenimiento', 'Días de SLA', 'Cerrado en plazo', 'Desvío sobre el plazo'],
+    motivo: 'Requieren que el endpoint tenga categoría Server/Workstation y que su severidad tenga plazo acordado; sin las dos cosas no hay compromiso contra el que medir el cierre.',
+  },
+  {
+    hoja: 'Cierres y MTTR',
+    columnas: ['Endpoint', 'Software', 'Versión'],
+    motivo: 'Vacío cuando el hallazgo cuelga de una imagen de contenedor que no resuelve activo ni instalación concreta.',
+  },
+  {
+    hoja: 'Parches aplicados',
+    columnas: ['Endpoint', 'Software'],
+    motivo: 'Se resuelven subiendo por el grafo desde el activo parcheado; vacíos si la instalación no cuelga de ningún endpoint del proyecto.',
+  },
 ];
 
 function motivoDeHueco(hoja, columna) {
@@ -1034,9 +1245,17 @@ function hojaCobertura(especificaciones) {
  * La hoja de cobertura se calcula a partir de las demás, así que va la última.
  */
 export function construirEspecificaciones(datos, idx) {
+  // Un único cálculo de parcheo y MTTR para todo el libro, y el mismo que usan las
+  // láminas del PPTX: si cada hoja lo recalculara podrían discrepar entre ellas.
+  const rem = metricasDeRemediacion(idx, {
+    slaConfig: datos.slaConfig,
+    ahora: (datos.generadoEn instanceof Date ? datos.generadoEn : new Date()).getTime(),
+    ventanaDias: 30,
+  });
+
   const hojas = [
     hojaPortada(datos, idx),
-    hojaResumen(datos, idx),
+    hojaResumen(datos, idx, rem),
     hojaEndpoints(datos, idx),
     hojaContenedores(datos, idx),
     hojaRedes(datos, idx),
@@ -1044,7 +1263,10 @@ export function construirEspecificaciones(datos, idx) {
     hojaVulnerabilidades(datos, idx),
     hojaHallazgos(datos, idx),
     hojaCola(datos),
-    hojaParches(datos, idx),
+    hojaParcheoMTTR(datos, rem),
+    hojaParches(datos, idx, rem),
+    hojaParchesAplicados(rem),
+    hojaCierres(rem),
     hojaMatrizTTP(datos),
     hojaTacticas(datos),
     hojaActores(datos, idx),

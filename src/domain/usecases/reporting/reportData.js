@@ -10,6 +10,8 @@
  */
 
 import { TACTICS, normalizeTacticKeys } from '../../mitre/tactics';
+import { indexarGrafo } from '../../excel/grafo';
+import { metricasDeRemediacion } from '../../remediacion/metricas';
 
 const DIA_MS = 24 * 60 * 60 * 1000;
 
@@ -267,6 +269,14 @@ export async function recopilarDatos(repositorio, projectId, ventanaDias) {
     parche: Boolean(i.patch_available),
   }));
 
+  // ── Parcheo y tiempo de remediación ───────────────────────────────────
+  // El cálculo es el mismo que publica el informe técnico en Excel: recorre el grafo
+  // entero, no la muestra de la cola, porque el MTTR se mide sobre hallazgos cerrados
+  // y esos ya no están en la cola de parcheo.
+  const remediacion = metricasDeRemediacion(indexarGrafo(grafo), {
+    slaConfig, ahora, ventanaDias,
+  });
+
   // ── Inteligencia de amenazas ──────────────────────────────────────────
   const matrizArr = Array.isArray(matrizCruda) ? matrizCruda : (matrizCruda?.data || matrizCruda?.ttps || []);
   const porTactica = {};
@@ -333,6 +343,7 @@ export async function recopilarDatos(repositorio, projectId, ventanaDias) {
     // El endpoint devuelve `total`, no `count`: con la clave equivocada el informe
     // enseñaba como total de la cola las 15 filas que él mismo recorta.
     cola: colaItems, colaTotal: cola?.total ?? colaItems.length,
+    remediacion,
     ttp, apts,
     ventanaDias, generadoEn: new Date(ahora),
     // Marcas de disponibilidad, para que las láminas puedan decir "sin dato" con criterio.
@@ -343,6 +354,10 @@ export async function recopilarDatos(repositorio, projectId, ventanaDias) {
       sla: Array.isArray(slaConfig) && slaConfig.length > 0,
       breaches: breaches.length > 0,
       cola: Boolean(cola),
+      // El MTTR necesita hallazgos ya cerrados: en un proyecto recién inventariado no
+      // hay ninguno y la lámina tiene que decirlo en vez de enseñar un cero.
+      mttr: remediacion.mttr.n > 0,
+      parchesAplicados: remediacion.aplicados.total > 0,
     },
   };
 }

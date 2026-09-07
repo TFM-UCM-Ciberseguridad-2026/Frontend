@@ -449,6 +449,35 @@ export function acciones(ctx, D, gob) {
       r: 'Equipo Infraestructura', c: C.CRIT,
     });
   }
+  // Severidades cuyo tiempo medio de cierre no cabe en el plazo acordado: el problema no
+  // es un hallazgo concreto sino la capacidad de cierre, y se corrige con capacidad o
+  // renegociando el plazo, no escalando caso a caso.
+  const lentas = SEV_ORDER.filter(sev => {
+    const b = D.remediacion.mttr.porSeveridad[sev];
+    return b.n > 0 && Number.isFinite(b.slaDias) && b.media > b.slaDias;
+  });
+  if (lentas.length > 0) {
+    const peor = D.remediacion.mttr.porSeveridad[lentas[0]];
+    lista.push({
+      t: `Recuperar el ritmo de cierre en severidad ${SEV_ES[lentas[0]].toLowerCase()}`,
+      d: `El tiempo medio de remediación es de ${peor.media} días frente a los ${peor.slaDias} acordados. Mientras la media siga por encima del plazo, cada tanda nueva de hallazgos de esa severidad nace condenada a vencer: procede ampliar la ventana de mantenimiento o revisar el plazo con el Comité.`,
+      r: 'Equipo Infraestructura', c: C.CRIT,
+    });
+  }
+  if (D.remediacion.disponibilidad.abiertosSinParche > 0) {
+    lista.push({
+      t: `Decidir sobre los ${D.remediacion.disponibilidad.abiertosSinParche} hallazgos sin parche disponible`,
+      d: 'No son accionables por parcheo: el fabricante no ha publicado arreglo. Cada uno necesita mitigación compensatoria o aceptación formal con caducidad, y hasta entonces envejece en el backlog consumiendo plazo de SLA.',
+      r: 'CISO', c: C.HIGH,
+    });
+  }
+  if (D.remediacion.aplicados.total === 0 && D.remediacion.disponibilidad.abiertosConParche > 0) {
+    lista.push({
+      t: 'Registrar los parches aplicados en la ventana de mantenimiento',
+      d: `No consta ninguna declaración de parche, y hay ${D.remediacion.disponibilidad.abiertosConParche} hallazgos abiertos con arreglo ya publicado. Sin la declaración el hallazgo no se cierra, el riesgo del activo no baja y el trabajo hecho no queda acreditado como evidencia de SI-2.`,
+      r: 'Equipo Infraestructura', c: C.HIGH,
+    });
+  }
   if (D.enriquecimiento.epss === 0 && D.enriquecimiento.total > 0) {
     lista.push({
       t: 'Ejecutar el enriquecimiento EPSS y KEV',
@@ -523,9 +552,9 @@ export function trazabilidad(ctx) {
     ['CM-8', 'Inventario de componentes del sistema', 'Inventario y grupos de mantenimiento', '1'],
     ['RA-5', 'Escaneo de vulnerabilidades', 'Cobertura del análisis y calidad del dato', '1'],
     ['RA-3', 'Evaluación de riesgos', 'Panorama por severidad · Matriz de decisión · Concentración por táctica', '2'],
-    ['SI-2', 'Corrección de errores (flaw remediation)', 'Cumplimiento de SLA · Cola priorizada · Envejecimiento · Vencimientos', '3'],
-    ['CM-3', 'Control de cambios de configuración', 'Procedimiento de despliegue por anillos', '3'],
-    ['CA-7', 'Monitorización continua', 'Cadencia semanal y mensual del informe · Recálculo periódico de riesgo', '4'],
+    ['SI-2', 'Corrección de errores (flaw remediation)', 'Cumplimiento de SLA · Cola priorizada · Envejecimiento · Vencimientos · Parches aplicados', '3'],
+    ['CM-3', 'Control de cambios de configuración', 'Procedimiento de despliegue por anillos · Declaración y verificación de parches', '3'],
+    ['CA-7', 'Monitorización continua', 'Cadencia semanal y mensual del informe · Recálculo periódico de riesgo · Ritmo de remediación (MTTR)', '4'],
     ['SI-5', 'Alertas y avisos de seguridad', 'Inteligencia de amenazas · Matriz ATT&CK · Actores correlacionados', '4'],
     ['PM-1', 'Programa de seguridad de la información', 'Gobierno documental y matriz RACI', '4'],
     ['PM-4', 'Plan de acción e hitos', 'Acciones para el próximo periodo', '—'],
@@ -558,7 +587,8 @@ export function trazabilidad(ctx) {
   });
   s.addText(
     'riesgo = probabilidad × exposición × factor de remediación × impacto     ·     prioridad = riesgo × criticidad del activo × urgencia / máximo teórico\n' +
-    'fecha límite = fecha de detección + días del par (grupo de mantenimiento, severidad)     ·     cumplimiento = hallazgos en plazo ÷ hallazgos del grupo',
+    'fecha límite = fecha de detección + días del par (grupo de mantenimiento, severidad)     ·     cumplimiento = hallazgos en plazo ÷ hallazgos del grupo\n' +
+    'MTTR = media de (fecha de cierre − fecha de detección) sobre los hallazgos cerrados     ·     backlog accionable = hallazgos abiertos con parche publicado ÷ hallazgos abiertos',
     { x: PAGE.M + 0.26, y: 5.8, w: CW - 0.55, h: 0.7, fontSize: 8.5, fontFace: F.MONO, color: C.TEXT_2, lineSpacingMultiple: 1.45 }
   );
 
