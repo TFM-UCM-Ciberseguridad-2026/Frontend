@@ -46,7 +46,9 @@ export function PatchQueuePage({
   appliedPatchHistory,
   appliedPatchHistoryLoading,
   appliedPatchHistoryError,
-  fetchAppliedPatchHistory
+  fetchAppliedPatchHistory,
+  patchFocus,
+  onPatchFocusConsumed
 }) {
   // Centralized hook for advanced filtering, sorting, and pagination
   const {
@@ -79,6 +81,29 @@ export function PatchQueuePage({
     if (!selectedPatchItem?.cve_id) return;
     fetchPatchesForCVE?.(selectedPatchItem.cve_id);
   }, [selectedPatchItem?.cve_id, fetchPatchesForCVE]);
+
+  // Llegada desde la ficha de una técnica ATT&CK: se filtra la cola por su CVE. El
+  // filtro pasa por el debounce del hook, así que la fila tarda un momento en aparecer
+  // y la selección se hace en un efecto aparte, cuando la cola ya se ha recargado.
+  useEffect(() => {
+    if (!patchFocus?.cve_id) return;
+    updateFilter('search', patchFocus.cve_id);
+  }, [patchFocus?.cve_id]);
+
+  // Con una sola fila que case, se abre directamente su ficha de aplicación; con varias
+  // se deja la cola filtrada, porque elegir activo por el usuario no es cosa nuestra.
+  useEffect(() => {
+    if (!patchFocus?.cve_id || patchQueueLoading) return;
+
+    const candidatas = queue.filter(item => item.cve_id === patchFocus.cve_id);
+    const exacta = patchFocus.asset_id
+      ? candidatas.find(item => String(item.asset_id || item.installation_id) === String(patchFocus.asset_id))
+      : null;
+    const elegida = exacta || (candidatas.length === 1 ? candidatas[0] : null);
+
+    if (elegida) setSelectedPatchItem(elegida);
+    if (candidatas.length > 0 || totalItems === 0) onPatchFocusConsumed?.();
+  }, [patchFocus?.cve_id, patchFocus?.asset_id, queue, patchQueueLoading, totalItems]);
 
   const openInGraph = (item) => {
     const found = focusPatchQueueItem?.(item);

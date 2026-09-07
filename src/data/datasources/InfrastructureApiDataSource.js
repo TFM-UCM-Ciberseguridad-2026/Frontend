@@ -406,6 +406,14 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
+  // Parches de todas las CVE del proyecto en una sola llamada. Los consume la ficha de
+  // una técnica ATT&CK, que reúne hasta un centenar de CVE: pedirlos uno a uno sería un
+  // aluvión de peticiones cada vez que se abre una técnica.
+  async fetchPatchesForProject(projectId) {
+    const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/cve-patches`);
+    return await this._handleResponse(res);
+  }
+
   async declarePatchApplied(assetId, payload) {
     const isContainer = payload?.asset_type === 'CONTAINER';
     const res = await fetch(`/${isContainer ? 'api/containers' : 'api/installations'}/${encodeURIComponent(assetId)}/applied-patches`, {

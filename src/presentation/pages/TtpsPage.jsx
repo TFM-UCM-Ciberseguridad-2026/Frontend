@@ -1,13 +1,27 @@
 import React, { useState, useRef } from 'react';
 import { useTTPSocket } from '../hooks/useTTPSocket';
 import { TACTICS, normalizeTacticKey, normalizeTacticKeys } from '../../domain/mitre/tactics';
+import { NIVEL_ES } from '../../domain/remediacion/metricas';
 import './TtpsPage.css';
 import TTPDashboard from '../components/TTPDashboard/TTPDashboard.jsx';
 
 // Reexportados por compatibilidad con quien ya los importaba desde esta página.
 export { TACTICS, normalizeTacticKey };
 
-export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchInfrastructure, graphData }) {
+/** Dominio de una URL de parche, que es lo único que cabe en la ficha. */
+function dominioDe(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+}
+
+export function TtpsPage({
+  fetchTTPMatrix, selectedProjectId, showToast, fetchInfrastructure, graphData,
+  projectPatchesByCVE, projectPatchesLoading, fetchProjectPatches,
+  fetchAppliedPatchHistory, onOpenPatchInQueue,
+}) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTtpId, setSelectedTtpId] = useState(null);
   const [modalTtp, setModalTtp] = useState(null);
@@ -102,7 +116,11 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
               // que casaba: T1078 es Defense Evasion, Persistence, Privilege
               // Escalation e Initial Access a la vez, y así se pinta en la matriz.
               tactics: normalizeTacticKeys(rawTactic),
-              remed: ['Implementar filtrado y monitorización de seguridad.']
+              // El backend marca resuelta la técnica cuyas CVE están TODAS cerradas.
+              // Una mitigada o una sin hallazgo la mantienen activa.
+              resolved: ttp.resolved === true,
+              openCves: Number(ttp.open_cves ?? 0),
+              totalCves: Number(ttp.total_cves ?? (ttp.cves || []).length),
             };
           }).filter(t => t.id !== '');
 
@@ -116,11 +134,57 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
       });
   }, [fetchTTPMatrix, selectedProjectId, showToast]);
 
-  // Filtrar TTPs por búsqueda
-  const filteredTtps = finalTtps.filter(t => 
-    t.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Los parches del proyecto se piden una vez y alimentan la ficha de cada técnica.
+  React.useEffect(() => {
+    if (selectedProjectId) fetchProjectPatches?.(selectedProjectId);
+  }, [selectedProjectId, fetchProjectPatches]);
+
+  // Filtrar por búsqueda y empujar las técnicas resueltas al final. La API no devuelve
+  // ningún orden garantizado, así que esta es la única ordenación de la pantalla: al ser
+  // estable, dentro de cada grupo se respeta el orden en el que llegaron.
+  const filteredTtps = React.useMemo(() => {
+    const q = searchQuery.toLowerCase();
+    return finalTtps
+      .filter(t => t.id.toLowerCase().includes(q) || t.name.toLowerCase().includes(q))
+      .sort((a, b) => Number(a.resolved) - Number(b.resolved));
+  }, [finalTtps, searchQuery]);
+
+  const ttpsActivas = React.useMemo(() => finalTtps.filter(t => !t.resolved), [finalTtps]);
+  const ttpsResueltas = React.useMemo(() => finalTtps.filter(t => t.resolved), [finalTtps]);
+
+  // Índice CVE -> instalaciones donde tiene hallazgo, para poder pedir el histórico de
+  // parches aplicados de una CVE ya cerrada. Sale del grafo que la página ya tiene.
+  const instalacionesPorCVE = React.useMemo(() => {
+    const nodos = graphData?.nodes || [];
+    const relaciones = graphData?.relationships || [];
+    const porId = new Map(nodos.map(n => [n.id, n]));
+    const esFinding = n => n?.labels?.includes('Finding') || n?.primaryLabel === 'Finding';
+
+    // finding -> CVE y soporte -> finding, que son las dos aristas que hacen falta.
+    const cvePorFinding = new Map();
+    const soportePorFinding = new Map();
+    for (const r of relaciones) {
+      if (r.type === 'OF_VULNERABILITY') {
+        const cve = porId.get(r.target)?.properties?.cve_id;
+        if (cve) cvePorFinding.set(r.source, cve);
+      } else if (r.type === 'HAS_FINDING') {
+        soportePorFinding.set(r.target, porId.get(r.source));
+      }
+    }
+
+    const indice = new Map();
+    for (const n of nodos) {
+      if (!esFinding(n)) continue;
+      const cve = cvePorFinding.get(n.id);
+      const soporte = soportePorFinding.get(n.id);
+      const id = soporte?.properties?.id;
+      if (!cve || !id) continue;
+      const tipo = soporte.labels?.includes('Container') ? 'CONTAINER' : 'SOFTWARE_INSTALLATION';
+      if (!indice.has(cve)) indice.set(cve, []);
+      if (!indice.get(cve).some(a => a.id === id)) indice.get(cve).push({ id, tipo });
+    }
+    return indice;
+  }, [graphData]);
 
 
   const handleSelectTtp = (id) => {
@@ -147,10 +211,55 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
     setModalTtp(ttp);
   };
 
-  const handleMarkMitigated = () => {
-    if (showToast) {
-      showToast(`TTP ${modalTtp?.id} marcada como mitigada correctamente.`, 'success');
+  // Estados de parcheo de una CVE, tal y como los publica la matriz.
+  const CVE_ESTADO = {
+    OPEN: { etiqueta: 'Sin parchear', clase: 'estado-open' },
+    MITIGATED: { etiqueta: 'Mitigada', clase: 'estado-mitigada' },
+    PATCHED: { etiqueta: 'Parcheada', clase: 'estado-parcheada' },
+    UNKNOWN: { etiqueta: 'Sin hallazgo', clase: 'estado-desconocido' },
+  };
+  const estadoDeCVE = (cve) => CVE_ESTADO[cve?.status] || CVE_ESTADO.UNKNOWN;
+  const estaCerrada = (cve) => cve?.status === 'PATCHED';
+
+  // Histórico de parches aplicados, por CVE ya cerrada. La cola de parcheo no sirve para
+  // estas: excluye los hallazgos cerrados, así que llevar allí dejaría una tabla vacía.
+  const [historialPorCVE, setHistorialPorCVE] = useState({});
+
+  const verHistorialDeCVE = async (cveID) => {
+    if (historialPorCVE[cveID]) {
+      setHistorialPorCVE(prev => ({ ...prev, [cveID]: { ...prev[cveID], abierto: !prev[cveID].abierto } }));
+      return;
     }
+
+    const activos = instalacionesPorCVE.get(cveID) || [];
+    if (activos.length === 0) {
+      setHistorialPorCVE(prev => ({ ...prev, [cveID]: { abierto: true, cargando: false, filas: [] } }));
+      return;
+    }
+
+    setHistorialPorCVE(prev => ({ ...prev, [cveID]: { abierto: true, cargando: true, filas: [] } }));
+
+    const porActivo = await Promise.all(
+      activos.map(a => Promise.resolve(fetchAppliedPatchHistory?.(a.id, a.tipo)).catch(() => []))
+    );
+    // El endpoint devuelve el histórico del activo entero: aquí solo interesa esta CVE.
+    const filas = porActivo.flat().filter(Boolean).filter(x => !x.cve_id || x.cve_id === cveID);
+
+    setHistorialPorCVE(prev => ({ ...prev, [cveID]: { abierto: true, cargando: false, filas } }));
+  };
+
+  // Un parche de una CVE todavía abierta se puede abrir en la cola; uno de una CVE
+  // cerrada no, porque la cola solo lista lo pendiente.
+  const abrirParche = (cve) => {
+    if (estaCerrada(cve)) {
+      verHistorialDeCVE(cve.id);
+      return;
+    }
+    const activos = instalacionesPorCVE.get(cve.id) || [];
+    onOpenPatchInQueue?.({
+      cve_id: cve.id,
+      asset_id: activos.length === 1 ? activos[0].id : undefined,
+    });
     setModalTtp(null);
   };
 
@@ -195,7 +304,7 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
           <h2>Tácticas, Técnicas y Procedimientos (TTPs)</h2>
         </div>
         <p style={{ maxWidth: '450px', fontSize: '13.5px', textAlign: 'right', margin: 0, opacity: 0.9 }}>
-          Selecciona una TTP en el listado para localizarla en la matriz MITRE ATT&CK. Vuelve a hacer clic sobre la misma TTP para abrir su ficha completa con descripción, CVE asociada y remediaciones recomendadas.
+          Selecciona una TTP en el listado para localizarla en la matriz MITRE ATT&CK. Vuelve a hacer clic sobre la misma TTP para abrir su ficha completa con descripción, CVE asociadas y los parches publicados para cada una.
         </p>
       </section>
 
@@ -323,7 +432,12 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
               <div className="matrix-scroll">
                 <div className="matrix">
                   {TACTICS.map((tac) => {
-                    const ttpsInTactic = finalTtps.filter((t) => t.tactics.includes(tac.key));
+                    // Dentro de cada columna, las resueltas al fondo. El orden que llega
+                    // de la API no está garantizado, y `sort` es estable, así que esto no
+                    // altera el orden relativo dentro de cada grupo.
+                    const ttpsInTactic = finalTtps
+                      .filter((t) => t.tactics.includes(tac.key))
+                      .sort((x, y) => Number(x.resolved) - Number(y.resolved));
                     return (
                       <div key={tac.key} className="tactic-col">
                         <div className="tactic-head">
@@ -337,8 +451,9 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
                             <div
                               key={ttp.id}
                               ref={(el) => (cellRefs.current[`${tac.key}:${ttp.id}`] = el)}
-                              className={`cell ${isSelected ? 'selected' : ''}`}
+                              className={`cell ${isSelected ? 'selected' : ''} ${ttp.resolved ? 'cell--resuelta' : ''}`}
                               onClick={() => handleSelectTtp(ttp.id)}
+                              title={ttp.resolved ? 'Todas sus CVE están cerradas' : undefined}
                             >
                               <span className="cid">{ttp.id}</span>
                               <span className="cname">{ttp.name}</span>
@@ -360,7 +475,11 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                      <span style={{ fontSize: '10px', color: 'var(--c400)', textTransform: 'uppercase', letterSpacing: '1.5px', fontFamily: '"Share Tech Mono", monospace' }}>Detectadas</span>
-                     <span style={{ fontSize: '14px', color: 'var(--c50)', fontWeight: '600' }}>TTPs en Entorno</span>
+                     <span style={{ fontSize: '14px', color: 'var(--c50)', fontWeight: '600' }}>
+                        {ttpsResueltas.length > 0
+                          ? `${ttpsActivas.length} activas · ${ttpsResueltas.length} resueltas`
+                          : 'TTPs en Entorno'}
+                     </span>
                   </div>
                </div>
                
@@ -411,14 +530,21 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
             </div>
 
             <div className="ttp-list">
-              {filteredTtps.map((ttp) => {
+              {filteredTtps.map((ttp, idx) => {
                 const etiquetas = TACTICS.filter(t => ttp.tactics.includes(t.key));
                 const isSelected = selectedTtpId === ttp.id;
-                
+                // Las resueltas van al final: el separador marca dónde empiezan.
+                const abreResueltas = ttp.resolved && !filteredTtps[idx - 1]?.resolved;
+
                 return (
+                  <React.Fragment key={ttp.id}>
+                  {abreResueltas && (
+                    <div className="ttp-list-separador">
+                      TTPs resueltas ({filteredTtps.filter(t => t.resolved).length})
+                    </div>
+                  )}
                   <div 
-                    key={ttp.id} 
-                    className={`ttp-item ${isSelected ? 'selected' : ''}`}
+                    className={`ttp-item ${isSelected ? 'selected' : ''} ${ttp.resolved ? 'ttp-item--resuelta' : ''}`}
                     onClick={() => handleSelectTtp(ttp.id)}
                     onDoubleClick={() => handleOpenModalForTtp(ttp)}
                   >
@@ -427,8 +553,11 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
                       <span className="tactic-tag">{etiquetas.map(t => t.label).join(' · ')}</span>
                     </div>
                     <div className="tname">{ttp.name}</div>
-                    <div className="hint">Clic de nuevo para abrir detalle ➔</div>
+                    <div className="hint">
+                      {ttp.resolved ? 'Resuelta · todas sus CVE cerradas' : 'Clic de nuevo para abrir detalle ➔'}
+                    </div>
                   </div>
+                  </React.Fragment>
                 );
               })}
               {filteredTtps.length === 0 && (
@@ -496,40 +625,110 @@ export function TtpsPage({ fetchTTPMatrix, selectedProjectId, showToast, fetchIn
               </div>
             )}
 
-            {modalTtp.remed && modalTtp.remed.length > 0 && (
-              <div className="sec">
-                <p className="sec-label">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <path d="M9 12.5 11 15l4.5-5" />
-                    <circle cx="12" cy="12" r="9" />
-                  </svg>
-                  Remediaciones recomendadas
+            <div className="sec">
+              <p className="sec-label">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 0 5.4-5.4" />
+                  <path d="M15 5l4 4" />
+                </svg>
+                Parches
+              </p>
+
+              {modalTtp.resolved && (
+                <p className="patch-banner-resuelta">
+                  Todas las CVE de esta técnica están cerradas. La técnica se mantiene en la matriz,
+                  marcada como resuelta, para poder auditarla.
                 </p>
-                <ul className="remed-list">
-                  {modalTtp.remed.map((r, idx) => (
-                    <li key={idx}>
-                      <span className="chk">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <path d="M20 6L9 17l-5-5" />
-                        </svg>
-                      </span>
-                      <span>{r}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+              )}
+
+              {(!modalTtp.cves || modalTtp.cves.length === 0) ? (
+                <p className="patch-vacio">Esta técnica no tiene CVE asociadas en este proyecto.</p>
+              ) : projectPatchesLoading ? (
+                <p className="patch-vacio">Cargando parches del proyecto…</p>
+              ) : (
+                <div className="patch-list">
+                  {modalTtp.cves.map((cve, idx) => {
+                    const parches = projectPatchesByCVE?.get?.(cve.id) || [];
+                    const estado = estadoDeCVE(cve);
+                    const historial = historialPorCVE[cve.id];
+
+                    return (
+                      <div className="patch-cve-group" key={cve.id || idx}>
+                        <div className="patch-cve-head">
+                          <span className="patch-cve-id">{cve.id}</span>
+                          <span className={`patch-cve-estado ${estado.clase}`}>{estado.etiqueta}</span>
+                          {cve.findings_total > 0 && (
+                            <span className="patch-cve-activos">
+                              {cve.findings_open} de {cve.findings_total} {cve.findings_total === 1 ? "hallazgo abierto" : "hallazgos abiertos"}
+                            </span>
+                          )}
+                        </div>
+
+                        {parches.length === 0 ? (
+                          <p className="patch-sin-parche">
+                            Sin parche publicado: solo admite mitigación compensatoria o aceptación formal.
+                          </p>
+                        ) : (
+                          <ul className="patch-items">
+                            {parches.map(parche => (
+                              <li key={parche.patch_id}>
+                                <button
+                                  type="button"
+                                  className="patch-item"
+                                  onClick={() => abrirParche(cve)}
+                                  title={estaCerrada(cve)
+                                    ? "Ver el histórico de aplicación de este parche"
+                                    : "Abrir en la cola de parcheo"}
+                                >
+                                  <span className="patch-item-desc">
+                                    {parche.description || `Parche #${parche.patch_id}`}
+                                  </span>
+                                  {parche.url && (
+                                    <span className="patch-item-url">{dominioDe(parche.url)}</span>
+                                  )}
+                                  <span className="patch-item-accion">
+                                    {estaCerrada(cve) ? "Ver histórico ➔" : "Ver en la cola ➔"}
+                                  </span>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+
+                        {historial?.abierto && (
+                          <div className="patch-historial">
+                            {historial.cargando ? (
+                              <span className="patch-vacio">Cargando histórico…</span>
+                            ) : historial.filas.length === 0 ? (
+                              <span className="patch-vacio">
+                                No consta ninguna declaración de parche para esta CVE.
+                              </span>
+                            ) : (
+                              historial.filas.map((h, i) => (
+                                <div className="patch-historial-fila" key={i}>
+                                  <span>{NIVEL_ES[h.remediation_level] || h.remediation_level || "Aplicado"}</span>
+                                  <span>{h.applied_at ? new Date(h.applied_at).toLocaleDateString("es-ES") : "—"}</span>
+                                  <span>{h.applied_by || "—"}</span>
+                                  <span title={h.verification?.reason || undefined}>
+                                    {h.verification?.verified
+                                      ? "Verificado"
+                                      : h.verification?.conclusive ? "No coincide" : "No concluyente"}
+                                  </span>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
             <div className="modal-actions" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <button type="button" className="btn btn-outline" onClick={() => setModalTtp(null)} style={{ height: 'auto', padding: '8px 16px', fontSize: '11px' }}>
                 Cerrar
-              </button>
-              <button type="button" className="btn btn-primary" onClick={handleMarkMitigated} style={{ height: 'auto', padding: '8px 16px', fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: '14px', height: '14px', flexShrink: 0 }}>
-                  <path d="M9 12.5 11 15l4.5-5" />
-                  <circle cx="12" cy="12" r="9" />
-                </svg>
-                Marcar como mitigada
               </button>
             </div>
           </div>

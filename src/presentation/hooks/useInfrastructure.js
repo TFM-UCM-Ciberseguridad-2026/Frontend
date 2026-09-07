@@ -31,6 +31,7 @@ import { GetPatchQueueUseCase } from '../../domain/usecases/GetPatchQueueUseCase
 import { RefreshPatchesForVulnerabilityUseCase } from '../../domain/usecases/RefreshPatchesForVulnerabilityUseCase';
 import { DeclarePatchAppliedUseCase } from '../../domain/usecases/DeclarePatchAppliedUseCase';
 import { GetPatchesForVulnerabilityUseCase } from '../../domain/usecases/GetPatchesForVulnerabilityUseCase';
+import { GetPatchesForProjectUseCase } from '../../domain/usecases/GetPatchesForProjectUseCase';
 import { ExportWeeklyReportUseCase } from '../../domain/usecases/ExportWeeklyReportUseCase';
 import { ExportMonthlyReportUseCase } from '../../domain/usecases/ExportMonthlyReportUseCase';
 import { GetAppliedPatchHistoryUseCase } from '../../domain/usecases/GetAppliedPatchHistoryUseCase';
@@ -144,6 +145,10 @@ export function useInfrastructure() {
   const [patchApplyingKey, setPatchApplyingKey] = useState(null);
   const [patchApplyError, setPatchApplyError] = useState(null);
   const [patchesByCVE, setPatchesByCVE] = useState({});
+  // Parches de todo el proyecto, indexados por CVE. Los usa la ficha de una técnica
+  // ATT&CK, que los necesita para muchas CVE a la vez.
+  const [projectPatchesByCVE, setProjectPatchesByCVE] = useState(new Map());
+  const [projectPatchesLoading, setProjectPatchesLoading] = useState(false);
   const [patchDetailsLoading, setPatchDetailsLoading] = useState(false);
   const [patchDetailsError, setPatchDetailsError] = useState(null);
   const [patchProjectRefreshLoading, setPatchProjectRefreshLoading] = useState(false);
@@ -193,6 +198,7 @@ export function useInfrastructure() {
   const refreshPatchesForVulnerabilityUseCase = useMemo(() => new RefreshPatchesForVulnerabilityUseCase(repository), [repository]);
   const declarePatchAppliedUseCase = useMemo(() => new DeclarePatchAppliedUseCase(repository), [repository]);
   const getPatchesForVulnerabilityUseCase = useMemo(() => new GetPatchesForVulnerabilityUseCase(repository), [repository]);
+  const getPatchesForProjectUseCase = useMemo(() => new GetPatchesForProjectUseCase(repository), [repository]);
   const getAppliedPatchHistoryUseCase = useMemo(() => new GetAppliedPatchHistoryUseCase(repository), [repository]);
 
   // Memoizado sobre la función estable del contexto (no sobre el objeto `toast`,
@@ -624,6 +630,32 @@ export function useInfrastructure() {
       setPatchApplyingKey(null);
     }
   };
+
+  // Se pide una vez por proyecto y queda cacheado: la ficha de una técnica lo consulta
+  // para cada una de sus CVE, y volver a la red en cada apertura sería absurdo.
+  //
+  // useCallback no es cosmético aquí: la pestaña de TTPs la invoca desde un efecto que la
+  // lleva en su lista de dependencias, y una función nueva en cada render encadenaría una
+  // petición por render.
+  const fetchProjectPatches = useCallback(async (projectId) => {
+    if (!projectId) {
+      setProjectPatchesByCVE(new Map());
+      return new Map();
+    }
+    setProjectPatchesLoading(true);
+    try {
+      const mapa = await getPatchesForProjectUseCase.execute(projectId);
+      setProjectPatchesByCVE(mapa);
+      return mapa;
+    } catch (err) {
+      // Un fallo aquí deja la ficha sin parches, pero no debe tumbar la pestaña de TTPs.
+      console.warn('[parches del proyecto] no se pudieron cargar:', err);
+      setProjectPatchesByCVE(new Map());
+      return new Map();
+    } finally {
+      setProjectPatchesLoading(false);
+    }
+  }, [getPatchesForProjectUseCase]);
 
   const focusPatchQueueItem = (item) => {
     const findingNode = (graphData?.nodes || []).find(n =>
@@ -1702,6 +1734,9 @@ export function useInfrastructure() {
     patchDetailsLoading,
     patchDetailsError,
     fetchPatchesForCVE,
+    projectPatchesByCVE,
+    projectPatchesLoading,
+    fetchProjectPatches,
     refreshPatchesForProject,
     patchProjectRefreshLoading,
     patchProjectRefreshError,

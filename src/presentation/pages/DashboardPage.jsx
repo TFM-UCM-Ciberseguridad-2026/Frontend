@@ -94,6 +94,9 @@ export function DashboardPage({
   patchDetailsLoading,
   patchDetailsError,
   fetchPatchesForCVE,
+  projectPatchesByCVE,
+  projectPatchesLoading,
+  fetchProjectPatches,
   isAnalysisPending,
   refreshPatchesForProject,
   patchProjectRefreshLoading,
@@ -106,12 +109,16 @@ export function DashboardPage({
   fetchAppliedPatchHistory
 }) {
   const [activeNav, setActiveNav] = useState('grafo');
+  // Petición de foco para la cola de parcheo: la fija la ficha de una técnica al pinchar
+  // un parche, y la consume PatchQueuePage al montarse. Se limpia en cuanto se aplica.
+  const [patchFocus, setPatchFocus] = useState(null);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
 
   useEffect(() => {
     setShowExportModal(false);
     setShowImportModal(false);
+    setPatchFocus(null);
   }, [selectedProjectId]);
 
   const categories = [
@@ -246,6 +253,8 @@ export function DashboardPage({
             appliedPatchHistoryInstallationId={appliedPatchHistoryInstallationId}
             fetchAppliedPatchHistory={fetchAppliedPatchHistory}
             setActiveNav={setActiveNav}
+            patchFocus={patchFocus}
+            onPatchFocusConsumed={() => setPatchFocus(null)}
           />
         )}
 
@@ -262,6 +271,11 @@ export function DashboardPage({
             fetchTTPMatrix={fetchTTPMatrix}
             selectedProjectId={selectedProjectId}
             graphData={graphData}
+            projectPatchesByCVE={projectPatchesByCVE}
+            projectPatchesLoading={projectPatchesLoading}
+            fetchProjectPatches={fetchProjectPatches}
+            fetchAppliedPatchHistory={fetchAppliedPatchHistory}
+            onOpenPatchInQueue={(focus) => { setPatchFocus(focus); setActiveNav('patch-queue'); }}
           />
         )}
 

@@ -122,6 +122,10 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     return await this.apiDataSource.fetchPatchesForVulnerability(cveId);
   }
 
+  async getPatchesForProject(projectId) {
+    return await this.apiDataSource.fetchPatchesForProject(projectId);
+  }
+
   async declarePatchApplied(assetId, payload) {
     return await this.apiDataSource.declarePatchApplied(assetId, payload);
   }
