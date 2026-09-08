@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import '../AddAssets/AddAssetsButton.css';
 import { validateNetworkForm, validateAssetIps } from '../../../domain/entities/networkValidation';
+import { validateHardwareForm, legacyCpuCores, ARQUITECTURAS, LIMITES } from '../../../domain/entities/hardwareValidation';
 
 // Los cinco roles que acepta el backend (domain.IsValidEndpointType). De este tipo depende
 // la categoría del activo y, con ella, el SLA de parcheo que se le exige.
@@ -133,13 +134,20 @@ export function EditNodeModal({ node, onClose, updateNode, allNodes = [] }) {
         justification: ''
       });
     } else if (label === 'Hardware') {
+      // Sin valores por defecto: lo que no está medido se muestra vacío. Antes se rellenaba
+      // con 4 núcleos, 8 GB, 100 GB y x86_64, y bastaba abrir y guardar para que esas cifras
+      // inventadas quedaran escritas como si fueran reales.
+      const arquitectura = (props.architecture || props.type || '').toLowerCase();
       setFormData({
         manufacturer: props.manufacturer || '',
         modelo: props.model || props.modelo || '',
-        cpu: props.cpu || '4',
-        ram_gb: props.ram ?? props.ram_gb ?? 8,
-        storage_gb: props.storage ?? props.storage_gb ?? 100,
-        tipo: props.type || props.tipo || 'x86_64',
+        serial_number: props.serial_number || '',
+        cpu: props.cpu_cores ?? legacyCpuCores(props.cpu),
+        ram_gb: props.ram ?? props.ram_gb ?? '',
+        storage_gb: props.storage ?? props.storage_gb ?? '',
+        // El valor antiguo podía ser un rol ("virtual-server"); solo se conserva si es
+        // una arquitectura reconocida, para que se corrija a mano en vez de colarse.
+        tipo: ARQUITECTURAS.some(a => a.value === arquitectura) ? arquitectura : '',
         justification: ''
       });
     } else if (label === 'SoftwareInstallation') {
@@ -271,6 +279,12 @@ export function EditNodeModal({ node, onClose, updateNode, allNodes = [] }) {
       const validationError = validateNetworkForm(formData, otherNetworks, currentIdStr);
       if (validationError) {
         setFormError(validationError);
+        return;
+      }
+    } else if (label === 'Hardware') {
+      const hwError = validateHardwareForm(formData);
+      if (hwError) {
+        setFormError(hwError);
         return;
       }
     }
@@ -673,11 +687,13 @@ export function EditNodeModal({ node, onClose, updateNode, allNodes = [] }) {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
                   <div>
-                    <div className="asset-field-label">CPU Cores</div>
+                    <div className="asset-field-label">Núcleos de CPU</div>
                     <input
-                      type="text"
+                      type="number"
+                      min="0"
+                      max={LIMITES.cpuCores}
                       className="asset-input"
-                      value={formData.cpu || ''}
+                      value={formData.cpu ?? ''}
                       onChange={(e) => updateField('cpu', e.target.value)}
                     />
                   </div>
@@ -704,17 +720,31 @@ export function EditNodeModal({ node, onClose, updateNode, allNodes = [] }) {
                 </div>
 
                 <div>
+                  <div className="asset-field-label">Número de serie</div>
+                  <input
+                    type="text"
+                    className="asset-input"
+                    placeholder="SN-8839201AB"
+                    value={formData.serial_number || ''}
+                    onChange={(e) => updateField('serial_number', e.target.value)}
+                  />
+                </div>
+
+                <div>
                   <div className="asset-field-label">Arquitectura</div>
                   <select
                     className="asset-input"
-                    value={formData.tipo || 'x86_64'}
+                    value={formData.tipo || ''}
                     onChange={(e) => updateField('tipo', e.target.value)}
                   >
-                    <option value="x86_64">x86_64</option>
-                    <option value="arm64">arm64 (AArch64)</option>
-                    <option value="i386">i386 (x86 32-bit)</option>
-                    <option value="riscv64">riscv64</option>
+                    <option value="">Sin especificar</option>
+                    {ARQUITECTURAS.map(a => (
+                      <option key={a.value} value={a.value}>{a.label}</option>
+                    ))}
                   </select>
+                  <div className="asset-field-help">
+                    El rol del equipo (servidor, router, firewall...) se define en el endpoint, no aquí.
+                  </div>
                 </div>
               </>
             )}

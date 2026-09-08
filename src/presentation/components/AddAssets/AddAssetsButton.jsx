@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useToast } from '../../context/ToastContext';
 import { validateNetworkForm, validateAssetIps } from '../../../domain/entities/networkValidation';
+import { validateHardwareForm, ARQUITECTURAS, LIMITES } from '../../../domain/entities/hardwareValidation';
 
 const ASSET_TYPES = [
   { key: 'endpoint', label: 'Endpoint', icon: '💻', description: 'Equipo, servidor o dispositivo de red' },
@@ -232,6 +233,12 @@ export function AddAssetButton({
         }
         case 'hardware': {
           const { endpoint_id, ...rest } = data;
+          const hwError = validateHardwareForm(rest);
+          if (hwError) {
+            setFormError(hwError);
+            setLoading(false);
+            return;
+          }
           if (createHardware) {
             await createHardware(endpoint_id, rest);
           }
@@ -773,19 +780,24 @@ export function AddAssetButton({
                   placeholder="PowerEdge R740"
                   value={forms.hardware.modelo}
                   onChange={(e) => updateField('hardware', 'modelo', e.target.value)}
-                  required
                 />
               </div>
 
               <div>
-                <div className="asset-field-label">Tipo</div>
-                <input
-                  type="text"
+                <div className="asset-field-label">Arquitectura</div>
+                <select
                   className="asset-input"
-                  placeholder="server, router, switch..."
                   value={forms.hardware.tipo}
                   onChange={(e) => updateField('hardware', 'tipo', e.target.value)}
-                />
+                >
+                  <option value="">Sin especificar</option>
+                  {ARQUITECTURAS.map(a => (
+                    <option key={a.value} value={a.value}>{a.label}</option>
+                  ))}
+                </select>
+                <div className="asset-field-help">
+                  El rol del equipo (servidor, router, firewall...) se define en el endpoint, no aquí.
+                </div>
               </div>
 
               <div>
@@ -796,7 +808,6 @@ export function AddAssetButton({
                   placeholder="Dell, HPE, Cisco..."
                   value={forms.hardware.manufacturer}
                   onChange={(e) => updateField('hardware', 'manufacturer', e.target.value)}
-                  required
                 />
               </div>
 
@@ -812,11 +823,13 @@ export function AddAssetButton({
               </div>
 
               <div>
-                <div className="asset-field-label">CPU</div>
+                <div className="asset-field-label">Núcleos de CPU</div>
                 <input
-                  type="text"
+                  type="number"
+                  min="0"
+                  max={LIMITES.cpuCores}
                   className="asset-input"
-                  placeholder="Intel Xeon Platinum 8380"
+                  placeholder="16"
                   value={forms.hardware.cpu}
                   onChange={(e) => updateField('hardware', 'cpu', e.target.value)}
                 />

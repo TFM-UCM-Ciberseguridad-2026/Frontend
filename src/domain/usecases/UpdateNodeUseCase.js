@@ -1,3 +1,5 @@
+import { validateHardwareForm, normalizeHardwarePayload } from '../entities/hardwareValidation';
+
 export class UpdateNodeUseCase {
   constructor(infrastructureRepository) {
     this.infrastructureRepository = infrastructureRepository;
@@ -25,7 +27,11 @@ export class UpdateNodeUseCase {
       };
       return await this.infrastructureRepository.updateNetwork(id, cleanPayload);
     } else if (cat.includes('hardware') || cat === 'hw') {
-      return await this.infrastructureRepository.updateHardware(id, payload);
+      const error = validateHardwareForm(payload);
+      if (error) {
+        throw new Error(error);
+      }
+      return await this.infrastructureRepository.updateHardware(id, normalizeHardwarePayload(payload));
     } else if (cat.includes('installation') || cat === 'instalacion' || cat === 'softwareinstallation') {
       return await this.infrastructureRepository.updateSoftwareInstallation(id, payload);
     } else if (cat.includes('software') || cat === 'sw') {
