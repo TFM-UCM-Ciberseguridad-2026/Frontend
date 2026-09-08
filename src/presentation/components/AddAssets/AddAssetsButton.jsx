@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useToast } from '../../context/ToastContext';
+import { validateNetworkForm, validateAssetIps } from '../../../domain/entities/networkValidation';
 
 const ASSET_TYPES = [
   { key: 'endpoint', label: 'Endpoint', icon: '💻', description: 'Equipo, servidor o dispositivo de red' },
@@ -195,6 +196,12 @@ export function AddAssetButton({
               return;
             }
           }
+          const ipError = validateAssetIps(rest.ips, [...(endpoints || []), ...(containers || [])]);
+          if (ipError) {
+            setFormError(ipError);
+            setLoading(false);
+            return;
+          }
           if (createEndpoint) {
             await createEndpoint(project_id, rest);
           }
@@ -211,6 +218,12 @@ export function AddAssetButton({
               setLoading(false);
               return;
             }
+          }
+          const ipError = validateAssetIps(rest.ips, [...(endpoints || []), ...(containers || [])]);
+          if (ipError) {
+            setFormError(ipError);
+            setLoading(false);
+            return;
           }
           if (createContainer) {
             await createContainer(host_id, rest);
@@ -240,26 +253,11 @@ export function AddAssetButton({
           break;
         }
         case 'network': {
-          const newName = (data.nombre || '').toLowerCase().trim();
-          if (newName) {
-            const isNameDuplicate = (networks || []).some(n => (n.nombre || n.name || '').toLowerCase().trim() === newName);
-            if (isNameDuplicate) {
-              setFormError('Ya existe una red con este nombre. Por favor, elige un nombre único.');
-              setLoading(false);
-              return;
-            }
-          }
-          const newVlan = parseInt(data.vlan_id, 10);
-          if (!isNaN(newVlan) && newVlan > 0) {
-            const isVlanDuplicate = (networks || []).some(n => {
-              const nVlan = parseInt(n.vlan_id ?? n.vlan ?? 0, 10);
-              return !isNaN(nVlan) && nVlan === newVlan;
-            });
-            if (isVlanDuplicate) {
-              setFormError('El VLAN ID ya está asignado a otra red. Por favor, elige un VLAN ID único.');
-              setLoading(false);
-              return;
-            }
+          const validationError = validateNetworkForm(data, networks);
+          if (validationError) {
+            setFormError(validationError);
+            setLoading(false);
+            return;
           }
           if (createNetwork) {
             await createNetwork(data);

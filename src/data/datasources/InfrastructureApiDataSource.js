@@ -1,3 +1,9 @@
+// Tope de subida. Debe ir a la par con client_max_body_size del bloque /api/ en
+// nginx.conf: si aquí se pone más de lo que nginx acepta, el usuario gasta la subida
+// entera para acabar recibiendo un 413.
+export const MAX_IMPORT_MB = 1024;
+export const MAX_IMPORT_BYTES = MAX_IMPORT_MB * 1024 * 1024;
+
 export class InfrastructureApiDataSource {
   async fetchInfrastructure(projectId) {
     const url = projectId ? `/api/infrastructure?project_id=${projectId}` : '/api/infrastructure';
@@ -441,6 +447,16 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
+  // Mensajes para los errores que no genera el backend sino el proxy que tiene delante.
+  // Sus respuestas vienen en HTML, así que sin esto acababa la página entera de nginx
+  // impresa dentro del panel de error.
+  static _PROXY_ERRORS = {
+    413: `El archivo supera el tamaño máximo admitido (${MAX_IMPORT_MB} MB).`,
+    502: 'El servidor no está disponible. Comprueba que el backend esté levantado.',
+    503: 'El servidor no está disponible en este momento. Inténtalo de nuevo en unos segundos.',
+    504: 'El servidor ha tardado demasiado en responder. La operación sigue en curso o hay demasiados datos que procesar.'
+  };
+
   async _handleResponse(res) {
     if (!res.ok) {
       let backendMessage = res.statusText || 'Error en la petición';
@@ -451,7 +467,16 @@ export class InfrastructureApiDataSource {
             const errBody = JSON.parse(text);
             backendMessage = errBody.error || errBody.message || JSON.stringify(errBody);
           } catch {
-            backendMessage = text.trim();
+            // No es JSON: o es un texto corto del backend, o una página de error del
+            // proxy. Solo se muestra tal cual si parece un mensaje, no un documento.
+            const trimmed = text.trim();
+            const looksLikeMarkup = /^\s*</.test(trimmed);
+            if (looksLikeMarkup || trimmed.length > 300) {
+              backendMessage = InfrastructureApiDataSource._PROXY_ERRORS[res.status]
+                || `El servidor respondió con un error ${res.status}.`;
+            } else {
+              backendMessage = trimmed;
+            }
           }
         }
       } catch {}

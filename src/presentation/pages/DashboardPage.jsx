@@ -133,14 +133,16 @@ export function DashboardPage({
     .filter(n => n.labels?.includes('Endpoint') || n.primaryLabel === 'Endpoint')
     .map(n => ({
       id: String(n.properties?.id ?? n.id),
-      name: n.properties?.name || n.properties?.hostname || `Endpoint ${String(n.properties?.id ?? n.id)}`
+      name: n.properties?.name || n.properties?.hostname || `Endpoint ${String(n.properties?.id ?? n.id)}`,
+      ips: n.properties?.ips || []
     }));
 
   const containers = (graphData?.nodes || [])
     .filter(n => n.labels?.includes('Container') || n.primaryLabel === 'Container')
     .map(n => ({
       id: String(n.properties?.id ?? n.id),
-      name: n.properties?.name || n.properties?.hostname || String(n.properties?.id ?? n.id)
+      name: n.properties?.name || n.properties?.hostname || String(n.properties?.id ?? n.id),
+      ips: n.properties?.ips || []
     }));
 
   const networks = (graphData?.nodes || [])
@@ -148,6 +150,7 @@ export function DashboardPage({
     .map(n => ({
       id: String(n.properties?.id ?? n.id),
       nombre: n.properties?.nombre || n.properties?.name || '',
+      cidr: n.properties?.cidr || '',
       vlan_id: n.properties?.vlan_id ?? n.vlan_id ?? 0
     }));
 

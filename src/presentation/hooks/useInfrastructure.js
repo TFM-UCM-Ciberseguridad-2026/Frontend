@@ -227,7 +227,8 @@ export function useInfrastructure() {
       setGraphData(data);
     } catch (err) {
       console.error(err);
-      const errorMsg = `No se pudo conectar a la base de datos de Neo4j. Detalles: ${err.message}`;
+      // No damos por hecho la causa: un 504 es un timeout, no una caída de Neo4j.
+      const errorMsg = `No se pudo cargar el grafo de infraestructura. ${err.message}`;
       setError(errorMsg);
       toast.error(err.message, 'Error de Conexión');
     } finally {
@@ -502,7 +503,10 @@ export function useInfrastructure() {
     setShowFindingVulnsModal(false);
   };
 
-  const updateNode = async (category, id, data, selectedProjectId) => {
+  // El proyecto sale del estado del hook, no de un parámetro: declararlo como argumento
+  // tapaba el selectedProjectId del closure y, como el único llamante pasa tres argumentos,
+  // toda edición de red viajaba con project_id 0 y la red se quedaba huérfana del proyecto.
+  const updateNode = async (category, id, data) => {
     try {
       const res = await updateNodeUseCase.execute(category, id, data, selectedProjectId);
       toast.success('¡Activo actualizado y auditado!', 'Edición Guardada');

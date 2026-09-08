@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import '../AddAssets/AddAssetsButton.css';
+import { validateNetworkForm, validateAssetIps } from '../../../domain/entities/networkValidation';
 
 // Los cinco roles que acepta el backend (domain.IsValidEndpointType). De este tipo depende
 // la categoría del activo y, con ella, el SLA de parcheo que se le exige.
@@ -197,6 +198,20 @@ export function EditNodeModal({ node, onClose, updateNode, allNodes = [] }) {
 
     const currentIdStr = String(node.properties?.id || node.domainId || node.id || '');
 
+    // Endpoints y contenedores comparten espacio de direcciones: una IP no puede repetirse
+    // entre ellos, así que la comprobación se hace contra los dos tipos a la vez.
+    const otherAssets = (allNodes || [])
+      .filter(n => {
+        const cat = n.primaryLabel || n.labels?.[0];
+        return cat === 'Endpoint' || cat === 'Container' ||
+          (n.labels || []).some(l => l === 'Endpoint' || l === 'Container');
+      })
+      .map(n => ({
+        id: String(n.properties?.id ?? n.domainId ?? n.id ?? ''),
+        name: n.properties?.hostname || n.properties?.name || n.name || '',
+        ips: n.properties?.ips || []
+      }));
+
     if (label === 'Endpoint') {
       const newName = (formData.hostname || '').toLowerCase().trim();
       if (newName) {
@@ -212,6 +227,11 @@ export function EditNodeModal({ node, onClose, updateNode, allNodes = [] }) {
           setFormError('Ya existe un activo con este nombre. Por favor, elige un nombre único.');
           return;
         }
+      }
+      const ipError = validateAssetIps(formData.ips, otherAssets, currentIdStr);
+      if (ipError) {
+        setFormError(ipError);
+        return;
       }
     } else if (label === 'Container') {
       const newName = (formData.name || '').toLowerCase().trim();
@@ -229,36 +249,29 @@ export function EditNodeModal({ node, onClose, updateNode, allNodes = [] }) {
           return;
         }
       }
-    } else if (label === 'Network') {
-      const newName = (formData.nombre || '').toLowerCase().trim();
-      if (newName) {
-        const isNameDuplicate = (allNodes || []).some(n => {
-          const nIdStr = String(n.properties?.id || n.domainId || n.id || '');
-          if (nIdStr === currentIdStr) return false;
-          const nCat = n.primaryLabel || n.labels?.[0];
-          if (nCat !== 'Network' && !(n.labels || []).some(l => l === 'Network')) return false;
-          const nName = (n.properties?.nombre || n.properties?.name || n.name || '').toLowerCase().trim();
-          return nName === newName;
-        });
-        if (isNameDuplicate) {
-          setFormError('Ya existe una red con este nombre. Por favor, elige un nombre único.');
-          return;
-        }
+      const ipError = validateAssetIps(formData.ips, otherAssets, currentIdStr);
+      if (ipError) {
+        setFormError(ipError);
+        return;
       }
-      const newVlan = parseInt(formData.vlan_id, 10);
-      if (!isNaN(newVlan) && newVlan > 0) {
-        const isVlanDuplicate = (allNodes || []).some(n => {
-          const nIdStr = String(n.properties?.id || n.domainId || n.id || '');
-          if (nIdStr === currentIdStr) return false;
-          const nCat = n.primaryLabel || n.labels?.[0];
-          if (nCat !== 'Network' && !(n.labels || []).some(l => l === 'Network')) return false;
-          const nVlan = parseInt(n.properties?.vlan_id ?? n.vlan_id ?? 0, 10);
-          return !isNaN(nVlan) && nVlan === newVlan;
-        });
-        if (isVlanDuplicate) {
-          setFormError('El VLAN ID ya está asignado a otra red. Por favor, elige un VLAN ID único.');
-          return;
-        }
+    } else if (label === 'Network') {
+      // Las demás redes conocidas, en el mismo formato que espera validateNetworkForm.
+      const otherNetworks = (allNodes || [])
+        .filter(n => {
+          const cat = n.primaryLabel || n.labels?.[0];
+          return cat === 'Network' || (n.labels || []).some(l => l === 'Network');
+        })
+        .map(n => ({
+          id: String(n.properties?.id ?? n.domainId ?? n.id ?? ''),
+          nombre: n.properties?.nombre || n.properties?.name || n.name || '',
+          cidr: n.properties?.cidr || '',
+          vlan_id: n.properties?.vlan_id ?? n.vlan_id ?? 0
+        }));
+
+      const validationError = validateNetworkForm(formData, otherNetworks, currentIdStr);
+      if (validationError) {
+        setFormError(validationError);
+        return;
       }
     }
 
