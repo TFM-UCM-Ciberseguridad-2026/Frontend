@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useToast } from '../../context/ToastContext';
-import { validateNetworkForm, validateAssetIps } from '../../../domain/entities/networkValidation';
+import { validateNetworkForm, validateAssetIps, describeSubnetImpact } from '../../../domain/entities/networkValidation';
 import { validateHardwareForm, ARQUITECTURAS, LIMITES } from '../../../domain/entities/hardwareValidation';
 
 const ASSET_TYPES = [
@@ -92,6 +92,12 @@ export function AddAssetButton({
   }));
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState(null);
+
+  // Aviso (no bloqueante) sobre la jerarquía de subredes en la que cae el CIDR tecleado.
+  const subnetImpact = React.useMemo(
+    () => describeSubnetImpact(forms.network, networks),
+    [forms.network, networks]
+  );
 
   // --- Estados para el flujo en 2 pasos de CPE Software ---
   const [softwareStep, setSoftwareStep] = useState('form'); // 'form' | 'checking' | 'suggestions'
@@ -1200,8 +1206,19 @@ export function AddAssetButton({
                 />
                 <div className="asset-field-help">
                   Los endpoints con una IP dentro del CIDR y esta misma VLAN se enlazarán automáticamente a la red.
+                  Deja VLAN 0 si este rango es una red padre que agrupa varias subredes: con una VLAN declarada
+                  solo captaría las IPs de esa VLAN.
                 </div>
               </div>
+
+              {/* Aviso de jerarquía: al declarar una subred más específica dentro de un rango
+                  que ya tenía activos, esos activos se reasignan. Sin este aviso sería una
+                  regla invisible y el movimiento parecería espontáneo. */}
+              {subnetImpact && (
+                <div className="asset-field-help" style={{ borderLeft: '2px solid var(--c300)', paddingLeft: '8px', color: 'var(--c200)' }}>
+                  {subnetImpact}
+                </div>
+              )}
 
               <div>
                 <div className="asset-field-label">Descripción</div>
