@@ -115,17 +115,18 @@ export function DashboardPage({
     setShowImportModal(false);
   }, [selectedProjectId]);
 
-  const categories = [
+const categories = [
     { key: 'ALL', label: 'Todos', color: '#7973FF' },
     { key: 'Network', label: 'Red / Subred', color: '#7973FF' },
     { key: 'Endpoint', label: 'Endpoint', color: '#FFFFFF' },
-    { key: 'Container', label: 'Contenedor', color: '#00D1FF' },
-    { key: 'ContainerImage', label: 'Imagen Contenedor', color: '#00A3FF' },
-    { key: 'Hardware', label: 'Hardware', color: '#A5A5FF' },
+    { key: 'Container', label: 'Contenedor', color: '#0db7ed' },
+    { key: 'ContainerImage', label: 'Imagen Contenedor', color: '#0db7ed' },
+    { key: 'Hardware', label: 'Hardware', color: '#a855f7' },
     { key: 'Project', label: 'Proyecto', color: '#4D3BFF' },
     { key: 'SoftwareInstallation', label: 'Instalación', color: '#3813FF' },
     { key: 'Software', label: 'Software', color: '#CDCFFF' },
-    { key: 'Finding', label: 'Hallazgo', color: '#ef4444' },
+    { key: 'Finding', label: 'Hallazgo', color: '#f59e0b' },
+    { key: 'Vulnerability', label: 'Vulnerabilidad (CVE)', color: '#ef4444' },
     { key: 'Remediation', label: 'Remediación', color: '#2701D6' },
   ];
 
@@ -223,9 +224,14 @@ export function DashboardPage({
 
         {activeNav === 'inventario' && (
           <InventoryPage
-            graphData={graphData}
             categories={categories.filter(c => !['Finding', 'Remediation', 'Vulnerability', 'CWE', 'CVE'].includes(c.key))}
             selectedProjectId={selectedProjectId}
+            updateNode={updateNode}
+            deleteNode={deleteNode}
+            renameProject={renameProject}
+            deleteProject={deleteProject}
+            fetchFindingVulnerabilities={fetchFindingVulnerabilities}
+            fetchEndpointPatchHistory={fetchEndpointPatchHistory}
           />
         )}
 

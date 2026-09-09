@@ -1,5 +1,4 @@
-import React, { useState, useMemo } from 'react';
-import { getGraphFacets } from '../../utils/graphFilterUtils';
+import React, { useState, useEffect } from 'react';
 
 export function GraphFilterSidebar({
   graphData,
@@ -26,8 +25,32 @@ export function GraphFilterSidebar({
     advanced: true
   });
 
-  // Facetas dinámicas y contadores calculados en tiempo real a partir del grafo
-  const facets = useMemo(() => getGraphFacets(graphData?.nodes || []), [graphData]);
+  // Progreso fluido y reactivo gestionado internamente
+  const [progressPercent, setProgressPercent] = useState(0);
+
+  useEffect(() => {
+    let timer = null;
+    if (vulnScanLoading) {
+      setProgressPercent(8);
+      timer = setInterval(() => {
+        setProgressPercent(prev => {
+          if (prev < 35) return prev + 5;
+          if (prev < 70) return prev + 3;
+          if (prev < 92) return prev + 1;
+          return prev;
+        });
+      }, 160);
+    } else {
+      if (progressPercent > 0) {
+        setProgressPercent(100);
+        const resetTimer = setTimeout(() => setProgressPercent(0), 600);
+        return () => clearTimeout(resetTimer);
+      }
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [vulnScanLoading]);
 
   const toggleSection = (sectionKey) => {
     setOpenSections(prev => ({
@@ -36,30 +59,33 @@ export function GraphFilterSidebar({
     }));
   };
 
-  // Calcular total de filtros activos
   const activeAdvancedCount = [
     graphAdvancedFilters.ipSearch?.trim(),
     graphAdvancedFilters.vendorSearch?.trim(),
-    graphAdvancedFilters.networkSearch?.trim(),
     graphAdvancedFilters.environment !== 'ALL' ? graphAdvancedFilters.environment : null,
     graphAdvancedFilters.internetExposed !== 'ALL' ? graphAdvancedFilters.internetExposed : null,
     graphAdvancedFilters.status !== 'ALL' ? graphAdvancedFilters.status : null,
-    graphAdvancedFilters.riskTier !== 'ALL' ? graphAdvancedFilters.riskTier : null,
-    graphAdvancedFilters.onlyVulnerable ? true : null
+    graphAdvancedFilters.riskTier !== 'ALL' ? graphAdvancedFilters.riskTier : null
   ].filter(Boolean).length;
 
   const activeFilterCount = (filterType !== 'ALL' ? 1 : 0) + (searchQuery.trim() !== '' ? 1 : 0) + activeAdvancedCount;
 
   const handleResetFilters = () => {
-    setFilterType('ALL');
-    setSearchQuery('');
     if (clearGraphAdvancedFilters) {
       clearGraphAdvancedFilters();
+    } else {
+      setFilterType('ALL');
+      setSearchQuery('');
     }
   };
 
   const totalNodes = graphData?.nodes?.length || 0;
   const totalEdges = graphData?.links?.length || graphData?.edges?.length || graphData?.relationships?.length || 0;
+
+  // Cálculo del trazado SVG del anillo de progreso
+  const radius = 8.5;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (progressPercent / 100) * circumference;
 
   return (
     <aside className="sidebar compact-sidebar">
@@ -86,7 +112,7 @@ export function GraphFilterSidebar({
         )}
       </div>
 
-      {/* BARRA DE BÚSQUEDA COMPACTA CON ICONO SVG */}
+      {/* BÚSQUEDA */}
       <div className="compact-search-wrapper">
         <svg className="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <circle cx="11" cy="11" r="8" />
@@ -111,9 +137,9 @@ export function GraphFilterSidebar({
         )}
       </div>
 
-      {/* BANNER: ENRIQUECIMIENTO NVD EN SEGUNDO PLANO */}
+      {/* BANNER ENRIQUECIMIENTO NVD */}
       {isAnalysisPending && (
-        <div className="nvd-pending-banner" title="El enriquecimiento de vulnerabilidades con datos de NVD está en curso. El grafo se actualizará automáticamente al finalizar.">
+        <div className="nvd-pending-banner" title="El enriquecimiento de vulnerabilidades con datos de NVD está en curso.">
           <svg className="spin-icon nvd-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
           </svg>
@@ -121,7 +147,7 @@ export function GraphFilterSidebar({
         </div>
       )}
 
-      {/* BOTONES DE ACCIÓN RÁPIDA EN EL SIDEBAR */}
+      {/* BOTONES DE ACCIÓN */}
       <div className="sidebar-action-group">
         <div className="sidebar-action-title">Acciones de Análisis</div>
         <div className="sidebar-action-buttons">
@@ -156,6 +182,7 @@ export function GraphFilterSidebar({
             )
           )}
 
+          {/* BOTÓN CON RUEDA DE PROGRESO FLUIDA */}
           {analyzeProjectVulnerabilities && (
             <button
               type="button"
@@ -164,9 +191,28 @@ export function GraphFilterSidebar({
               onClick={analyzeProjectVulnerabilities}
             >
               <span className="ic">
-                {vulnScanLoading ? (
-                  <svg className="spin-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                {vulnScanLoading || progressPercent > 0 ? (
+                  <svg width="18" height="18" viewBox="0 0 24 24" style={{ transform: 'rotate(-90deg)', flexShrink: 0 }}>
+                    <circle
+                      cx="12"
+                      cy="12"
+                      r={radius}
+                      stroke="rgba(122, 115, 255, 0.25)"
+                      strokeWidth="2.5"
+                      fill="none"
+                    />
+                    <circle
+                      cx="12"
+                      cy="12"
+                      r={radius}
+                      stroke="var(--c400, #7973FF)"
+                      strokeWidth="2.5"
+                      strokeDasharray={circumference}
+                      strokeDashoffset={strokeDashoffset}
+                      strokeLinecap="round"
+                      fill="none"
+                      style={{ transition: 'stroke-dashoffset 0.18s linear' }}
+                    />
                   </svg>
                 ) : (
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -176,7 +222,11 @@ export function GraphFilterSidebar({
                   </svg>
                 )}
               </span>
-              <span>{vulnScanLoading ? 'Analizando...' : 'Analizar vulnerabilidades'}</span>
+              <span>
+                {vulnScanLoading || progressPercent > 0
+                  ? `Analizando... ${progressPercent}%`
+                  : 'Analizar vulnerabilidades'}
+              </span>
             </button>
           )}
 
@@ -206,9 +256,8 @@ export function GraphFilterSidebar({
         </div>
       </div>
 
-      {/* CONTENEDOR DE SECCIONES CON SCROLL SLIM */}
+      {/* SECCIONES DE FILTRO */}
       <div className="filter-scroll-container">
-        
         {/* SECCIÓN 1: CATEGORÍAS */}
         <div className="filter-accordion">
           <button
@@ -263,7 +312,7 @@ export function GraphFilterSidebar({
           )}
         </div>
 
-        {/* SECCIÓN 2: FILTROS AVANZADOS INTERACTIVOS */}
+        {/* SECCIÓN 2: FILTROS AVANZADOS */}
         <div className="filter-accordion">
           <button
             className="accordion-header"
@@ -289,20 +338,7 @@ export function GraphFilterSidebar({
           </button>
 
           {openSections.advanced && (
-            <div className="accordion-content" style={{ padding: '10px 4px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              
-              {/* Filtro: Solo Vulnerables */}
-              <label style={{ fontSize: '11px', color: 'var(--c200)', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={Boolean(graphAdvancedFilters.onlyVulnerable)}
-                  onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('onlyVulnerable', e.target.checked)}
-                  style={{ accentColor: '#ef4444', cursor: 'pointer' }}
-                />
-                <span>Solo vulnerables / hallazgos {facets.vulnerableCount > 0 && `(${facets.vulnerableCount})`}</span>
-              </label>
-
-              {/* A. EXPOSICIÓN A INTERNET */}
+            <div className="accordion-content" style={{ padding: '10px 4px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
                   Exposición a Internet:
@@ -312,13 +348,12 @@ export function GraphFilterSidebar({
                   value={graphAdvancedFilters.internetExposed || 'ALL'}
                   onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('internetExposed', e.target.value)}
                 >
-                  <option value="ALL">Todos los activos ({totalNodes})</option>
-                  <option value="TRUE">Solo Expuestos ({facets.internetExposed.exposed})</option>
-                  <option value="FALSE">Solo Internos ({facets.internetExposed.internal})</option>
+                  <option value="ALL">Todos los activos</option>
+                  <option value="TRUE">☁ Solo Expuestos</option>
+                  <option value="FALSE">🔒 Solo Internos</option>
                 </select>
               </div>
 
-              {/* B. ENTORNO DINÁMICO */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
                   Entorno de Despliegue:
@@ -329,64 +364,54 @@ export function GraphFilterSidebar({
                   onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('environment', e.target.value)}
                 >
                   <option value="ALL">Todos los entornos</option>
-                  {Object.entries(facets.environments).map(([envKey, count]) => (
-                    <option key={envKey} value={envKey}>
-                      {envKey} ({count})
-                    </option>
-                  ))}
-                  {Object.keys(facets.environments).length === 0 && (
-                    <>
-                      <option value="production">production</option>
-                      <option value="development">development</option>
-                      <option value="staging">staging</option>
-                    </>
-                  )}
+                  <option value="production">Production</option>
+                  <option value="development">Development</option>
+                  <option value="staging">Staging</option>
                 </select>
               </div>
 
-              {/* C. DIRECCIÓN IP / SUBRED / RED CON SUGERENCIAS DE DATALIST */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
                   IP / Subred (CIDR):
                 </label>
                 <input
                   type="text"
-                  list="network-ip-suggestions"
-                  className="sidebar-filter-control"
-                  placeholder="Ej. 192.168.1..., 10.0.1.0/24..."
+                  placeholder="Ej. 192.168.1..."
                   value={graphAdvancedFilters.ipSearch || ''}
                   onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('ipSearch', e.target.value)}
+                  style={{
+                    background: '#0d0d1a',
+                    border: '1px solid var(--line)',
+                    color: 'var(--c100)',
+                    padding: '5px 8px',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    fontFamily: 'Share Tech Mono, monospace'
+                  }}
                 />
-                <datalist id="network-ip-suggestions">
-                  {(facets.networks || []).map(net => (
-                    <option key={net.name || net.cidr} value={net.cidr || net.name}>
-                      {net.name}{net.cidr && net.name ? ` (${net.cidr})` : net.cidr}
-                    </option>
-                  ))}
-                </datalist>
               </div>
 
-              {/* D. PROVEEDOR / VENDOR CON SUGERENCIAS DE DATALIST */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
                   Proveedor / Vendor:
                 </label>
                 <input
                   type="text"
-                  list="vendor-suggestions"
-                  className="sidebar-filter-control"
                   placeholder="Ej. Apache, Cisco..."
                   value={graphAdvancedFilters.vendorSearch || ''}
                   onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('vendorSearch', e.target.value)}
+                  style={{
+                    background: '#0d0d1a',
+                    border: '1px solid var(--line)',
+                    color: 'var(--c100)',
+                    padding: '5px 8px',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    fontFamily: 'Share Tech Mono, monospace'
+                  }}
                 />
-                <datalist id="vendor-suggestions">
-                  {facets.vendors.map(v => (
-                    <option key={v.name} value={v.name}>{v.name} ({v.count})</option>
-                  ))}
-                </datalist>
               </div>
 
-              {/* E. ESTADO DINÁMICO */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
                   Estado de Ejecución:
@@ -397,22 +422,12 @@ export function GraphFilterSidebar({
                   onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('status', e.target.value)}
                 >
                   <option value="ALL">Todos los estados</option>
-                  {Object.entries(facets.statuses).map(([stKey, count]) => (
-                    <option key={stKey} value={stKey}>
-                      {stKey} ({count})
-                    </option>
-                  ))}
-                  {Object.keys(facets.statuses).length === 0 && (
-                    <>
-                      <option value="running">running</option>
-                      <option value="stopped">stopped</option>
-                      <option value="active">active</option>
-                    </>
-                  )}
+                  <option value="running">Running</option>
+                  <option value="stopped">Stopped</option>
+                  <option value="active">Active</option>
                 </select>
               </div>
 
-              {/* F. NIVEL DE RIESGO CON CONTADORES DINÁMICOS */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
                   Nivel de Riesgo:
@@ -423,13 +438,12 @@ export function GraphFilterSidebar({
                   onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('riskTier', e.target.value)}
                 >
                   <option value="ALL">Todos los niveles</option>
-                  <option value="CRITICAL">CRITICAL ({facets.riskTiers.CRITICAL || 0})</option>
-                  <option value="HIGH">HIGH ({facets.riskTiers.HIGH || 0})</option>
-                  <option value="MEDIUM">MEDIUM ({facets.riskTiers.MEDIUM || 0})</option>
-                  <option value="LOW">LOW ({facets.riskTiers.LOW || 0})</option>
+                  <option value="CRITICAL">Critical</option>
+                  <option value="HIGH">High</option>
+                  <option value="MEDIUM">Medium</option>
+                  <option value="LOW">Low</option>
                 </select>
               </div>
-
             </div>
           )}
         </div>

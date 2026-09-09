@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import '../Archive/ArchiveModal.css'; // Reusing archive modal styles for consistency
+import './ProjectActionModals.css';
 
 export function RenameProjectModal({ isOpen, onClose, project, onRename, projects = [] }) {
   const [newName, setNewName] = useState('');
@@ -13,7 +13,7 @@ export function RenameProjectModal({ isOpen, onClose, project, onRename, project
     }
   }, [isOpen, project]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !project) return null;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -46,52 +46,51 @@ export function RenameProjectModal({ isOpen, onClose, project, onRename, project
   };
 
   return (
-    <div className="archive-modal-overlay" onClick={onClose}>
-      <div className="archive-modal-container" onClick={e => e.stopPropagation()}>
-        <div className="archive-modal-header">
-          <h2>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-            </svg>
-            Renombrar Proyecto
-          </h2>
-          <button className="archive-close-btn" onClick={onClose}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
+    <div className="project-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="project-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="project-modal-header">
+          <div>
+            <h2 className="project-modal-title">RENOMBRAR PROYECTO</h2>
+            <div className="project-modal-subtitle">
+              Proyecto actual: <strong style={{ color: '#ffffff' }}>{project.name}</strong>
+            </div>
+          </div>
+          <button className="project-modal-close" onClick={onClose} title="Cerrar">
+            ✕
           </button>
         </div>
 
-        <form onSubmit={handleSubmit}>
-          <div className="archive-section-label" style={{ marginTop: '20px' }}>Nuevo nombre para el proyecto</div>
-          <input
-            type="text"
-            className="archive-select"
-            style={{ width: '100%', padding: '12px', boxSizing: 'border-box' }}
-            value={newName}
-            onChange={(e) => {
-              setNewName(e.target.value);
-              setFormError(null);
-            }}
-            placeholder="Introduce el nuevo nombre..."
-            autoFocus
-          />
+        <form onSubmit={handleSubmit} className="project-modal-body">
+          <div>
+            <label className="project-field-label">Nuevo nombre para el proyecto</label>
+            <input
+              type="text"
+              className="project-input"
+              value={newName}
+              onChange={(e) => {
+                setNewName(e.target.value);
+                setFormError(null);
+              }}
+              placeholder="Introduce el nuevo nombre..."
+              autoFocus
+              required
+            />
+          </div>
 
           {formError && (
-            <div style={{ color: '#ff4a4a', fontSize: '0.85rem', marginTop: '10px' }}>
+            <div style={{ color: '#ff4a4a', fontSize: '0.85rem', marginTop: '0.5rem', fontFamily: 'Rajdhani, sans-serif' }}>
               ⚠️ {formError}
             </div>
           )}
 
-          <div className="archive-modal-actions" style={{ marginTop: '30px' }}>
-            <button type="button" className="archive-btn archive-btn-secondary" onClick={onClose} disabled={loading}>
+          <div className="project-modal-actions">
+            <button type="button" className="project-btn-cancel" onClick={onClose} disabled={loading}>
               Cancelar
             </button>
             <button
               type="submit"
-              className="archive-btn archive-btn-primary"
-              disabled={loading || !newName.trim() || newName === project?.name}
+              className="project-btn-save"
+              disabled={loading || !newName.trim() || newName.trim() === project?.name}
             >
               {loading ? 'Guardando...' : 'Guardar Cambios'}
             </button>
@@ -105,45 +104,52 @@ export function RenameProjectModal({ isOpen, onClose, project, onRename, project
 export function DeleteProjectModal({ isOpen, onClose, project, onDelete }) {
   if (!isOpen || !project) return null;
 
+  const handleDelete = () => {
+    onDelete(project.id);
+    onClose();
+  };
+
   return (
-    <div className="archive-modal-overlay" onClick={onClose}>
-      <div className="archive-modal-container" onClick={e => e.stopPropagation()} style={{ maxWidth: '450px' }}>
-        <div className="archive-modal-header" style={{ borderBottomColor: '#6a1a1a' }}>
-          <h2 style={{ color: '#ff4d4f' }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-            </svg>
-            Eliminar Proyecto
-          </h2>
-          <button className="archive-close-btn" onClick={onClose}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
+    <div className="project-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="project-modal project-modal--danger" onClick={(e) => e.stopPropagation()}>
+        <div className="project-modal-header">
+          <div>
+            <h2 className="project-modal-title project-modal-title--danger">
+              ELIMINAR PROYECTO
+            </h2>
+            <div className="project-modal-subtitle">
+              Confirma la baja del proyecto: <strong style={{ color: '#ffffff' }}>{project.name}</strong>
+            </div>
+          </div>
+          <button className="project-modal-close" onClick={onClose} title="Cerrar">
+            ✕
           </button>
         </div>
 
-        <div style={{ padding: '20px 0', color: '#ccc', lineHeight: '1.6' }}>
-          <p>¿Estás completamente seguro de que deseas eliminar el proyecto <strong>{project.name}</strong>?</p>
-          <p style={{ color: '#ff4d4f', fontSize: '13px', marginTop: '10px' }}>
-            Esta acción eliminará en cascada toda la infraestructura (endpoints, redes, contenedores) y hallazgos asociados a este proyecto. <strong>Esta acción no se puede deshacer.</strong>
-          </p>
-        </div>
+        <div className="project-modal-body">
+          <div className="project-danger-alert">
+            <span className="icon">⚠️</span>
+            <div>
+              <span>¿Eliminar el proyecto <strong>"{project.name}"</strong> de forma permanente?</span>
+              <br />
+              <span>
+                Esta acción eliminará en cascada todos los endpoints, redes, contenedores, instalaciones y hallazgos asociados.
+              </span>
+            </div>
+          </div>
 
-        <div className="archive-modal-actions">
-          <button className="archive-btn archive-btn-secondary" onClick={onClose}>
-            Cancelar
-          </button>
-          <button
-            className="archive-btn archive-btn-primary"
-            style={{ backgroundColor: '#cc0000', borderColor: '#cc0000' }}
-            onClick={() => {
-              onDelete(project.id);
-              onClose();
-            }}
-          >
-            Eliminar Definitivamente
-          </button>
+          <div className="project-modal-actions">
+            <button type="button" className="project-btn-cancel" onClick={onClose}>
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="project-btn-delete"
+              onClick={handleDelete}
+            >
+              Confirmar
+            </button>
+          </div>
         </div>
       </div>
     </div>

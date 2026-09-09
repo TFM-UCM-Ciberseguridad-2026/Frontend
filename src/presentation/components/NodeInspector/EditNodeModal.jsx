@@ -368,11 +368,6 @@ export function EditNodeModal({ node, onClose, updateNode, allNodes = [] }) {
                       <option key={t.value} value={t.value}>{t.label}</option>
                     ))}
                   </select>
-                  {originalRawTipo && (
-                    <p className="asset-field-warning" style={{ color: '#60a5fa', background: 'rgba(59, 130, 246, 0.1)', padding: '8px 12px', borderRadius: '6px', marginTop: '6px' }}>
-                      ℹ️ El activo tenía asignado el tipo no estándar <strong>"{originalRawTipo}"</strong>. Se ha preseleccionado <strong>"{ENDPOINT_TYPES.find(t => t.value === formData.tipo)?.label || formData.tipo}"</strong> para incorporarlo al SLA de parcheo. Puedes ajustarlo si lo deseas.
-                    </p>
-                  )}
                 </div>
 
                 <div>

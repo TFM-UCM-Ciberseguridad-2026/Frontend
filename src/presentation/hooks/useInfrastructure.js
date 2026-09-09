@@ -1424,6 +1424,9 @@ export function useInfrastructure() {
       .filter(item => item.imageId);
   }, [filteredGraphData]);
 
+// Estado para la rueda de progreso dinámico
+  const [vulnScanProgress, setVulnScanProgress] = useState({ current: 0, total: 0, percent: 0, statusText: '' });
+
   const analyzeProjectVulnerabilities = async () => {
     if (!selectedProjectId || vulnScanLoading || riskComputeLoading) return;
 
@@ -1437,75 +1440,97 @@ export function useInfrastructure() {
     let cacheHits = 0;
     let freshQueries = 0;
 
+    const installations = getSelectedProjectSoftwareInstallations();
+    const containerImages = getSelectedProjectContainerImages();
+    const allItems = [
+      ...installations.map(inst => ({ type: 'software', ...inst })),
+      ...containerImages.map(img => ({ type: 'image', ...img }))
+    ];
+
+    const totalItems = allItems.length;
+    if (totalItems === 0) {
+      toast.warning('No hay software instalado ni imágenes de contenedor en el proyecto seleccionado.', 'Análisis de Vulnerabilidades');
+      setVulnScanLoading(false);
+      return;
+    }
+
+    setVulnScanProgress({ current: 0, total: totalItems, percent: 5, statusText: 'Iniciando...' });
+    const failedItems = [];
+    const itemWeight = 100 / totalItems;
+
     try {
-      const installations = getSelectedProjectSoftwareInstallations();
-      const containerImages = getSelectedProjectContainerImages();
-      
-      if (installations.length === 0 && containerImages.length === 0) {
-        toast.warning('No hay software instalado ni imágenes de contenedor en el proyecto seleccionado.', 'Análisis de Vulnerabilidades');
-        setVulnScanLoading(false);
-        return;
-      }
+      for (let i = 0; i < totalItems; i++) {
+        const item = allItems[i];
+        const basePercent = Math.round(i * itemWeight);
 
-      const failedItems = [];
+        // Ticker de progreso continuo mientras esperamos la respuesta de red de la API
+        let currentSub = basePercent + 2;
+        const maxSub = Math.round(basePercent + itemWeight * 0.88);
 
-      for (const installation of installations) {
-        try {
-          const result = await scanInstallationVulnerabilitiesUseCase.execute(
-            installation.installationId,
-            installation.softwareId,
-            {
-              forceRefresh: shouldForceVulnRefresh(installation.installationNode)
-            }
-          );
-
-          processedCVEs += Number(result?.processed || result?.vulnerabilities_found || 0);
-          findingsCreated += Number(result?.findings_created || 0);
-          findingsExisting += Number(result?.findings_existing || 0);
-
-          if (result?.cache_hit) {
-            cacheHits++;
-          } else {
-            freshQueries++;
+        const subInterval = setInterval(() => {
+          if (currentSub < maxSub) {
+            currentSub += 3;
+            setVulnScanProgress({
+              current: i,
+              total: totalItems,
+              percent: Math.min(96, currentSub),
+              statusText: item.type === 'software' ? `Analizando ${item.softwareName || 'software'}...` : `Escaneando ${item.imageName || 'imagen'}...`
+            });
           }
+        }, 120);
 
-          successCount++;
+        try {
+          if (item.type === 'software') {
+            const result = await scanInstallationVulnerabilitiesUseCase.execute(
+              item.installationId,
+              item.softwareId,
+              { forceRefresh: shouldForceVulnRefresh(item.installationNode) }
+            );
+
+            processedCVEs += Number(result?.processed || result?.vulnerabilities_found || 0);
+            findingsCreated += Number(result?.findings_created || 0);
+            findingsExisting += Number(result?.findings_existing || 0);
+            if (result?.cache_hit) cacheHits++; else freshQueries++;
+            successCount++;
+          } else {
+            const result = await scanContainerImageVulnerabilitiesUseCase.execute(
+              item.imageId,
+              item.imageName,
+              { forceRefresh: shouldForceVulnRefresh(item.imageNode) }
+            );
+
+            processedCVEs += Number(result?.processed || result?.vulnerabilities_found || 0);
+            findingsCreated += Number(result?.findings_created || 0);
+            findingsExisting += Number(result?.findings_existing || 0);
+            if (result?.cache_hit) cacheHits++; else freshQueries++;
+            successCount++;
+          }
         } catch (err) {
-          console.error(`Error analizando software ${installation.softwareName || installation.installationId}:`, err);
-          failedItems.push(`Soft: ${installation.softwareName || installation.installationId}`);
+          console.error(`Error analizando elemento:`, err);
+          failedItems.push(`${item.type === 'software' ? 'Soft' : 'Img'}: ${item.softwareName || item.imageName || item.installationId || item.imageId}`);
+        } finally {
+          clearInterval(subInterval);
+          const completedPercent = Math.round((i + 1) * itemWeight);
+          setVulnScanProgress({
+            current: i + 1,
+            total: totalItems,
+            percent: Math.min(100, completedPercent),
+            statusText: `Completado ${i + 1}/${totalItems}`
+          });
         }
       }
 
-      for (const image of containerImages) {
-        try {
-          const result = await scanContainerImageVulnerabilitiesUseCase.execute(
-            image.imageId,
-            image.imageName,
-            {
-              forceRefresh: shouldForceVulnRefresh(image.imageNode)
-            }
-          );
-
-          processedCVEs += Number(result?.processed || result?.vulnerabilities_found || 0);
-          findingsCreated += Number(result?.findings_created || 0);
-          findingsExisting += Number(result?.findings_existing || 0);
-
-          if (result?.cache_hit) {
-            cacheHits++;
-          } else {
-            freshQueries++;
-          }
-
-          successCount++;
-        } catch (err) {
-          console.error(`Error analizando imagen ${image.imageName || image.imageId}:`, err);
-          failedItems.push(`Img: ${image.imageName || image.imageId}`);
-        }
-      }
-
+      setVulnScanProgress({ current: totalItems, total: totalItems, percent: 100, statusText: 'Actualizando grafo...' });
       await fetchInfrastructure(true);
 
-      const totalItems = installations.length + containerImages.length;
+      if (successCount > 0) {
+        setVulnScanProgress({ current: totalItems, total: totalItems, percent: 100, statusText: 'Calculando riesgos...' });
+        await computeSelectedProjectRisk();
+      }
+
+      // Pausa visual al 100% para que el usuario aprecie la rueda completa
+      await new Promise(resolve => setTimeout(resolve, 600));
+
       const summaryLines = [
         `Vulnerabilidades analizadas: ${successCount} elemento(s).`,
         `Instalaciones software: ${installations.length}.`,
@@ -1536,10 +1561,7 @@ export function useInfrastructure() {
       toast.error(`Error inesperado analizando vulnerabilidades: ${err.message}`, 'Falló el Análisis');
     } finally {
       setVulnScanLoading(false);
-    }
-
-    if (successCount > 0) {
-      await computeSelectedProjectRisk();
+      setVulnScanProgress({ current: 0, total: 0, percent: 0, statusText: '' });
     }
   };
 
@@ -1663,6 +1685,7 @@ export function useInfrastructure() {
       setPatchProjectRefreshProgress(null);
     }
   };
+  
 
   return {
     showDashboard,

@@ -1,6 +1,8 @@
 export function getNodeColor(node) {
   if (!node) return '#7973FF';
-  const cat = typeof node === 'string' ? node : node.categoryId;
+  const cat = typeof node === 'string'
+    ? node
+    : (node.primaryLabel || node.categoryId || node.labels?.[0]);
 
   switch (cat) {
     case 'proyecto':
@@ -14,7 +16,11 @@ export function getNodeColor(node) {
       return '#FFFFFF';
     case 'hardware':
     case 'Hardware':
-      return '#A5A5FF';
+      return '#a855f7';
+    case 'container':
+    case 'Container':
+    case 'ContainerImage':
+      return '#0db7ed';
     case 'instalacion':
     case 'SoftwareInstallation':
       return '#3813FF';
@@ -23,14 +29,16 @@ export function getNodeColor(node) {
       return '#CDCFFF';
     case 'hallazgo':
     case 'Finding':
-      return '#ef4444';
+      return '#f59e0b';
     case 'vulnerabilidad':
     case 'Vulnerability':
       return '#ef4444';
     case 'remediacion':
     case 'Remediation':
-    case 'Patch':
       return '#2701D6';
+    case 'parche':
+    case 'Patch':
+      return '#2103A9';
     default:
       return '#7973FF';
   }

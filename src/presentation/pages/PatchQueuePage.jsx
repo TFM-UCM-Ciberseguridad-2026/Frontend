@@ -17,10 +17,10 @@ function patchAvailability(item) {
   switch (item.remediation_kind) {
     case 'OFFICIAL_FIX':
       return { label: 'Patch oficial', className: 'yes' };
+    case 'MITIGATION':
+    case 'TEMPORARY_FIX':
     case 'WORKAROUND':
       return { label: 'Mitigación', className: 'warning' };
-    case 'TEMPORARY_FIX':
-      return { label: 'Temporal', className: 'warning' };
     case 'UNAVAILABLE':
     default:
       return { label: 'Sin remediación', className: 'no' };
