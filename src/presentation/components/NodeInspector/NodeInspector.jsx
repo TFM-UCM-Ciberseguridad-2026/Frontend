@@ -168,7 +168,6 @@ const getVisibleAssetAttributes = (node) => {
       break;
 
     default: {
-      // Lista de claves internas a omitir para cualquier otro tipo
       const internalKeys = [
         'id', 'name', 'nombre', 'title', 'findings', '_ensure_created', 'element_id',
         'technical_driver_installation_id', 'technical_driver_software_name', 'technical_driver_risk_score', 'technical_driver_cve_id',
@@ -228,25 +227,6 @@ export function NodeInspector({
     }
     return [];
   }, [selectedNode]);
-
-  // Calcula el conjunto de IDs de findings que pertenecen a la ruta activa
-  const pathFindingKeys = useMemo(() => {
-    const keys = { ids: new Set(), cves: new Set() };
-    if (!selectedExploitationPath?.steps) return keys;
-    selectedExploitationPath.steps.forEach(step => {
-      if (!step) return;
-      if (step.finding_id) keys.ids.add(String(step.finding_id).trim());
-      if (step.vulnerability) keys.cves.add(String(step.vulnerability).trim().toLowerCase());
-      if (Array.isArray(step.finding_ids)) step.finding_ids.forEach(id => keys.ids.add(String(id).trim()));
-      if (Array.isArray(step.findings)) {
-        step.findings.forEach(f => {
-          if (f.id) keys.ids.add(String(f.id).trim());
-          if (f.cve_id) keys.cves.add(String(f.cve_id).trim().toLowerCase());
-        });
-      }
-    });
-    return keys;
-  }, [selectedExploitationPath]);
 
   // Determina si un finding pertenece a la ruta activa
   const isInPath = useCallback((f) => {
@@ -313,7 +293,6 @@ export function NodeInspector({
       if (isInPath(f)) inPath.push(f);
       else outPath.push(f);
     });
-    // Sort each group by risk_score DESC
     const byRisk = (a, b) => Number(b.properties?.risk_score || 0) - Number(a.properties?.risk_score || 0);
     return [...inPath.sort(byRisk), ...outPath.sort(byRisk)];
   }, [findingsList, isInPath]);
@@ -340,7 +319,7 @@ export function NodeInspector({
     }
   }, [selectedNode?.id, targetPathFindingId, sortedFindings]);
 
-  // Carga segura del histórico de parches (evita bucles infinitos y llamadas a funciones inexistentes)
+  // Carga del histórico de parches cuando se selecciona un Endpoint
   useEffect(() => {
     let isMounted = true;
 
@@ -493,7 +472,6 @@ export function NodeInspector({
               const numIdStr = nameMatchStr ? nameMatchStr[1] : '';
               const cIds = [fId, propId, propFindingId, numIdStr].filter(Boolean);
 
-              // Intentar extraer la CVE directamente de las propiedades del hallazgo (cve_id, cve, finding_key, title, name)
               const directCve = (() => {
                 if (props.cve_id) return String(props.cve_id).trim();
                 if (props.cve) return String(props.cve).trim();
@@ -505,7 +483,6 @@ export function NodeInspector({
                 return m ? m[1].toUpperCase() : '';
               })();
 
-              // Muestra la CVE correspondiente a la etapa de la ruta activa para este finding
               const pathCve = inPath
                 ? (selectedExploitationPath?.steps?.find(s => {
                     if (!s) return false;
@@ -582,61 +559,61 @@ export function NodeInspector({
 
                       <div className="props finding-props-container">
                         <div className="prop-row">
-                            <div className="k">ESTADO FINDING</div>
-                            <div className="v">{props.status || 'OPEN'}</div>
-                          </div>
+                          <div className="k">ESTADO FINDING</div>
+                          <div className="v">{props.status || 'OPEN'}</div>
+                        </div>
 
+                        <div className="prop-row">
+                          <div className="k">ESTADO PARCHE</div>
+                          <div className="v">{findingPatchState.label}</div>
+                        </div>
+
+                        <div className="prop-row">
+                          <div className="k">RISK TIER</div>
+                          <div className="v">{displayTier(props.risk_tier, props.risk_score)}</div>
+                        </div>
+
+                        <div className="prop-row">
+                          <div className="k">PRIORITY TIER</div>
+                          <div className="v">{displayTier(props.priority_tier, props.priority_score)}</div>
+                        </div>
+
+                        {props.first_seen && (
                           <div className="prop-row">
-                            <div className="k">ESTADO PARCHE</div>
-                            <div className="v">{findingPatchState.label}</div>
+                            <div className="k">DETECTADO EL</div>
+                            <div className="v">{new Date(props.first_seen).toLocaleDateString()}</div>
                           </div>
+                        )}
 
-                          <div className="prop-row">
-                            <div className="k">RISK TIER</div>
-                            <div className="v">{displayTier(props.risk_tier, props.risk_score)}</div>
-                          </div>
+                        <div className="prop-row">
+                          <div className="k">IMPACT</div>
+                          <div className="v">{props.impact_score ?? 'N/A'}</div>
+                        </div>
 
-                          <div className="prop-row">
-                            <div className="k">PRIORITY TIER</div>
-                            <div className="v">{displayTier(props.priority_tier, props.priority_score)}</div>
-                          </div>
+                        <div className="prop-row">
+                          <div className="k">LIKELIHOOD</div>
+                          <div className="v">{props.likelihood ?? 'N/A'}</div>
+                        </div>
 
-                          {props.first_seen && (
-                            <div className="prop-row">
-                              <div className="k">DETECTADO EL</div>
-                              <div className="v">{new Date(props.first_seen).toLocaleDateString()}</div>
-                            </div>
-                          )}
+                        <div className="prop-row">
+                          <div className="k">EXPOSURE</div>
+                          <div className="v">{props.exposure_factor ?? 'N/A'}</div>
+                        </div>
 
-                          <div className="prop-row">
-                            <div className="k">IMPACT</div>
-                            <div className="v">{props.impact_score ?? 'N/A'}</div>
-                          </div>
+                        <div className="prop-row">
+                          <div className="k">REMEDIATION FACTOR</div>
+                          <div className="v">{props.remediation_factor ?? 'N/A'}</div>
+                        </div>
 
-                          <div className="prop-row">
-                            <div className="k">LIKELIHOOD</div>
-                            <div className="v">{props.likelihood ?? 'N/A'}</div>
-                          </div>
+                        <div className="prop-row">
+                          <div className="k">REMEDIATION KIND</div>
+                          <div className="v">{props.remediation_kind || 'UNAVAILABLE'}</div>
+                        </div>
 
-                          <div className="prop-row">
-                            <div className="k">EXPOSURE</div>
-                            <div className="v">{props.exposure_factor ?? 'N/A'}</div>
-                          </div>
-
-                          <div className="prop-row">
-                            <div className="k">REMEDIATION FACTOR</div>
-                            <div className="v">{props.remediation_factor ?? 'N/A'}</div>
-                          </div>
-
-                          <div className="prop-row">
-                            <div className="k">REMEDIATION KIND</div>
-                            <div className="v">{props.remediation_kind || 'UNAVAILABLE'}</div>
-                          </div>
-
-                          <div className="prop-row">
-                            <div className="k">PATCH AVAILABLE</div>
-                            <div className="v">{props.patch_available ? 'Sí' : 'No'}</div>
-                          </div>
+                        <div className="prop-row">
+                          <div className="k">PATCH AVAILABLE</div>
+                          <div className="v">{props.patch_available ? 'Sí' : 'No'}</div>
+                        </div>
                       </div>
 
                       <button
@@ -687,8 +664,19 @@ export function NodeInspector({
 
                 {!historyLoading && endpointHistory?.software_groups?.map((group) => {
                   const isSwExpanded = expandedSwGroup === group.installation_id;
-                  const patchesCount = group.applied_patches?.length || 0;
-                  const resolvedCount = group.resolved_findings?.length || 0;
+
+                  // Se combinan los hallazgos resueltos y los parches aplicados, ordenados de más reciente a más antiguo (applied_at descendente)
+                  const rawList = (group.resolved_findings && group.resolved_findings.length > 0)
+                    ? group.resolved_findings
+                    : (group.applied_patches || []);
+
+                  const sortedHistoryFindings = [...rawList].sort((a, b) => {
+                    const timeA = new Date(a.applied_at || 0).getTime();
+                    const timeB = new Date(b.applied_at || 0).getTime();
+                    return timeB - timeA; // Más recientes arriba
+                  });
+
+                  const patchesCount = sortedHistoryFindings.length;
 
                   return (
                     <div key={group.installation_id} className="endpoint-sw-history-card">
@@ -701,18 +689,18 @@ export function NodeInspector({
                           <span className="version-pill">v{group.current_version}</span>
                         </div>
                         <span className="patches-count-badge">
-                          {resolvedCount > 0 ? `${resolvedCount} findings resueltos` : `${patchesCount} parches`} {isSwExpanded ? '▲' : '▼'}
+                          {patchesCount} {patchesCount === 1 ? 'finding resuelto' : 'findings resueltos'} {isSwExpanded ? '▲' : '▼'}
                         </span>
                       </div>
 
                       {isSwExpanded && (
                         <div className="endpoint-sw-history-body">
-                          {resolvedCount === 0 && patchesCount === 0 ? (
+                          {sortedHistoryFindings.length === 0 ? (
                             <div style={{ color: 'var(--muted)', fontSize: '11px', padding: '4px' }}>
                               Sin parches aplicados aún en esta instalación.
                             </div>
                           ) : (
-                            (group.resolved_findings || []).map((f, fIdx) => (
+                            sortedHistoryFindings.map((f, fIdx) => (
                               <div key={fIdx} className="endpoint-applied-patch-row">
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                   <span className="patch-cve-badge">{f.cve_id}</span>
@@ -723,13 +711,13 @@ export function NodeInspector({
                                 <div style={{ fontSize: '11px', color: 'var(--c200)', marginTop: '4px' }}>
                                   {f.patch_description || 'Finding solucionado mediante parche'}
                                 </div>
-                                {f.expected_version && (
+                                {(f.expected_version || f.verification?.expected_version) && (
                                   <div style={{ fontSize: '10px', color: '#4ade80', marginTop: '2px' }}>
-                                    Versión objetivo: {f.expected_version}
+                                    Versión objetivo: {f.expected_version || f.verification?.expected_version}
                                   </div>
                                 )}
                                 <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '4px' }}>
-                                  Aplicado por: <strong>{f.applied_by || 'operator'}</strong> · {f.applied_at ? new Date(f.applied_at).toLocaleDateString() : 'N/A'}
+                                  Aplicado por: <strong>{f.applied_by || 'operator'}</strong> · {f.applied_at ? new Date(f.applied_at).toLocaleDateString() : 'N/A'} {f.applied_at ? new Date(f.applied_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                                 </div>
                                 {f.notes && (
                                   <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px', fontStyle: 'italic' }}>
@@ -773,7 +761,6 @@ export function NodeInspector({
         )}
       </div>
 
-      {/* MODALES DE EDICIÓN Y BORRADO */}
       {showEditModal && (
         <EditNodeModal
           node={selectedNode}
