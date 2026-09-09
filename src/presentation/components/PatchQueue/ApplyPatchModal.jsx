@@ -88,13 +88,11 @@ function getPatchActionType(fixedVersion, selectedPatch) {
 }
 
 function inferRemediationLevelFromPatch(patch, item) {
-  // En contenedores la aplicación de un parche es definitiva para ese activo
-  if (item?.asset_type === 'CONTAINER') return 'OFFICIAL_FIX';
   if (patch?.reference_type === 'MITIGATION') return 'WORKAROUND';
   if (patch?.fixed_version || item?.fixed_version) return 'OFFICIAL_FIX';
-  if (patch?.official === true) return 'OFFICIAL_FIX';
-  if (patch?.reference_type === 'FIXED_VERSION' || patch?.reference_type === 'PATCH') return 'OFFICIAL_FIX';
-  return 'OFFICIAL_FIX';
+  if (patch?.official === true) return 'TEMPORARY_FIX';
+  if (patch?.reference_type === 'FIXED_VERSION') return 'OFFICIAL_FIX';
+  return 'UNAVAILABLE';
 }
 
 function getPatchLinkLabel(patch) {
