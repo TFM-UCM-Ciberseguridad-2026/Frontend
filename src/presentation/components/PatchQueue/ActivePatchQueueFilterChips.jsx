@@ -53,8 +53,9 @@ export function ActivePatchQueueFilterChips({ filters = {}, onRemoveFilter, onCl
   if (filters.remediationKind && filters.remediationKind !== 'ALL') {
     const labels = {
       OFFICIAL_FIX: 'Fix Oficial',
+      MITIGATION: 'Mitigación',
       WORKAROUND: 'Mitigación',
-      TEMPORARY_FIX: 'Fix Temporal',
+      TEMPORARY_FIX: 'Mitigación',
       UNAVAILABLE: 'Sin Remediación'
     };
     chips.push({

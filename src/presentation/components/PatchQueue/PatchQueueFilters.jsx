@@ -92,8 +92,7 @@ export function PatchQueueFilters({ filters = {}, onUpdateFilter }) {
         >
           <option value="ALL">Cualquier remediación</option>
           <option value="OFFICIAL_FIX">Patch Oficial</option>
-          <option value="WORKAROUND">Mitigación / Workaround</option>
-          <option value="TEMPORARY_FIX">Fix Temporal</option>
+          <option value="MITIGATION">Mitigación</option>
           <option value="UNAVAILABLE">Sin Remediación</option>
         </select>
       </div>
