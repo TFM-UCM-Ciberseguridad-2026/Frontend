@@ -1,21 +1,75 @@
 import React, { useState } from 'react';
 import { RenameProjectModal, DeleteProjectModal } from './ProjectActionModals';
-import { formatPercent } from '../Risk/riskFormat';
 
-
-export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploitationPaths, setShowDashboard, projects, selectedProjectId, setSelectedProjectId, selectedProjectNode, onOpenExport, onOpenImport, renameProject, deleteProject }) {
+export function HudHeader({ 
+  activeNav, 
+  setActiveNav, 
+  fetchTopAPTs, 
+  fetchExploitationPaths, 
+  setShowDashboard, 
+  projects, 
+  selectedProjectId, 
+  setSelectedProjectId, 
+  onOpenExport, 
+  onOpenImport, 
+  renameProject, 
+  deleteProject 
+}) {
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   return (
     <header className="hud-header">
-      <div className="brand" style={{ cursor: 'pointer' }} onClick={() => setShowDashboard(false)}>
-        <div>
-          <h1 className="hud-title">Orquestador de Infraestructura</h1>
-          <small>GRAFO DE ACTIVOS · VISTA HUD</small>
-        </div>
-      </div>
+      {/* BOTÓN COMPACTO PANEL PRINCIPAL (EN DOS LÍNEAS) */}
+      <button
+        type="button"
+        className="nav-btn"
+        onClick={() => setShowDashboard && setShowDashboard(false)}
+        title="Volver al panel principal"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '7px',
+          marginRight: '14px',
+          padding: '5px 10px',
+          border: '1px solid var(--c700, #2f02ff)',
+          borderRadius: '6px',
+          background: 'rgba(47, 2, 255, 0.14)',
+          color: 'var(--c100, #e4e5ff)',
+          fontFamily: 'Orbitron, sans-serif',
+          fontSize: '9px',
+          letterSpacing: '0.8px',
+          fontWeight: '700',
+          cursor: 'pointer',
+          flexShrink: 0,
+          transition: 'all 0.2s ease',
+          boxShadow: '0 0 10px rgba(77, 59, 255, 0.2)'
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = 'rgba(77, 59, 255, 0.28)';
+          e.currentTarget.style.borderColor = 'var(--c400, #7973ff)';
+          e.currentTarget.style.color = '#ffffff';
+          e.currentTarget.style.boxShadow = '0 0 15px rgba(122, 115, 255, 0.45)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'rgba(47, 2, 255, 0.14)';
+          e.currentTarget.style.borderColor = 'var(--c700, #2f02ff)';
+          e.currentTarget.style.color = 'var(--c100, #e4e5ff)';
+          e.currentTarget.style.boxShadow = '0 0 10px rgba(77, 59, 255, 0.2)';
+        }}
+      >
+        <span className="ic" style={{ display: 'flex', alignItems: 'center' }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+            <polyline points="9 22 9 12 15 12 15 22" />
+          </svg>
+        </span>
+        <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15, textAlign: 'left' }}>
+          <span>PANEL</span>
+          <span>PRINCIPAL</span>
+        </span>
+      </button>
 
       <nav className="hud-nav">
         {projects && projects.length > 0 && (
@@ -56,12 +110,6 @@ export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploita
                 <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
               </svg>
             </button>
-          </div>
-        )}
-
-        {selectedProjectNode?.properties?.risk_tier && (
-          <div className="status-pill">
-            Risk {selectedProjectNode.properties.risk_tier} · {formatPercent(selectedProjectNode.properties.risk_score)}
           </div>
         )}
 
@@ -194,9 +242,9 @@ export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploita
                 onClick={() => { setArchiveOpen(false); onOpenImport && onOpenImport(); }}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="17 8 12 3 7 8" />
-                  <line x1="12" y1="3" x2="12" y2="15" />
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                  <polyline points="15 3 21 3 21 9" />
+                  <line x1="10" y1="14" x2="21" y2="3" />
                 </svg>
                 Importar
               </button>
@@ -215,6 +263,7 @@ export function HudHeader({ activeNav, setActiveNav, fetchTopAPTs, fetchExploita
           )}
         </div>
       </nav>
+
       {/* MODALES DE GESTIÓN DE PROYECTO */}
       <RenameProjectModal
         isOpen={showRenameModal}
