@@ -123,8 +123,8 @@ export function findSubnetRelations(cidr, existing = [], currentId = null) {
  *
  * Cubre las dos cosas que de otro modo serían reglas invisibles:
  *  - Que declarar una subred más específica se lleva los activos del rango padre.
- *  - Que una red padre con VLAN declarada no captará las IPs que no traigan esa VLAN, así
- *    que un supernet que agrupa varias subredes debe ir con VLAN 0.
+ *  - Que la VLAN se compara exactamente y el 0 no es un comodín, así que una red padre
+ *    solo capta las IPs que estén en su misma VLAN, tenga la que tenga.
  *
  * @returns {string|null}
  */
@@ -150,12 +150,13 @@ export function describeSubnetImpact(data, existing = [], currentId = null) {
     avisos.push(
       `${cidr} es una red padre: contiene a ${nombres}. Solo captará las IPs que no caigan en ninguna de sus subredes.`
     );
-    if (vlan > 0) {
-      avisos.push(
-        `Ojo: una red padre con VLAN ${vlan} solo empareja con IPs declaradas en esa misma VLAN. ` +
-        `Un rango que agrupa varias subredes normalmente debe dejarse con VLAN 0 para que capte todas.`
-      );
-    }
+    avisos.push(
+      vlan > 0
+        ? `Ojo: esta red padre solo captará IPs declaradas en la VLAN ${vlan}. Las de otras VLANs no ` +
+          `entrarán aunque su dirección caiga en el rango, y si tampoco encajan en una subred se quedarán sin red.`
+        : `Ojo: la VLAN 0 no es un comodín, es la VLAN nativa. Esta red padre solo captará IPs sin VLAN; ` +
+          `las etiquetadas necesitan una subred declarada en su misma VLAN o se quedarán sin red.`
+    );
   }
 
   return avisos.length > 0 ? avisos.join(' ') : null;

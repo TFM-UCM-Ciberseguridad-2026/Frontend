@@ -1205,9 +1205,10 @@ export function AddAssetButton({
                   onChange={(e) => updateField('network', 'vlan_id', e.target.value)}
                 />
                 <div className="asset-field-help">
-                  Los endpoints con una IP dentro del CIDR y esta misma VLAN se enlazarán automáticamente a la red.
-                  Deja VLAN 0 si este rango es una red padre que agrupa varias subredes: con una VLAN declarada
-                  solo captaría las IPs de esa VLAN.
+                  Los endpoints con una IP dentro del CIDR <strong>y exactamente esta VLAN</strong> se enlazarán
+                  automáticamente a la red. La VLAN 0 no es un comodín: es la VLAN nativa, y solo captará las IPs
+                  que tampoco lleven VLAN. Una IP etiquetada en otra VLAN no entrará en esta red aunque su
+                  dirección caiga dentro del rango.
                 </div>
               </div>
 
