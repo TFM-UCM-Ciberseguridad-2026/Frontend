@@ -14,6 +14,7 @@ import { GovernancePage } from './GovernancePage';
 export function DashboardPage({
   setShowDashboard,
   graphData,
+  allGraphData,
   loading,
   error,
   selectedNode,
@@ -270,7 +271,7 @@ export function DashboardPage({
             showToast={showToast}
             fetchTTPMatrix={fetchTTPMatrix}
             selectedProjectId={selectedProjectId}
-            graphData={graphData}
+            graphData={allGraphData || graphData}
             projectPatchesByCVE={projectPatchesByCVE}
             projectPatchesLoading={projectPatchesLoading}
             fetchProjectPatches={fetchProjectPatches}

@@ -163,25 +163,133 @@ export function TtpsPage({
     // finding -> CVE y soporte -> finding, que son las dos aristas que hacen falta.
     const cvePorFinding = new Map();
     const soportePorFinding = new Map();
+    // Mapeo bidireccional ContainerImage -> Container
+    const containerPorImagenId = new Map();
+
     for (const r of relaciones) {
       if (r.type === 'OF_VULNERABILITY') {
-        const cve = porId.get(r.target)?.properties?.cve_id;
+        const targetNode = porId.get(r.target);
+        const cve = targetNode?.properties?.cve_id || targetNode?.properties?.id;
         if (cve) cvePorFinding.set(r.source, cve);
       } else if (r.type === 'HAS_FINDING') {
         soportePorFinding.set(r.target, porId.get(r.source));
+      } else if (r.type === 'USES_IMAGE') {
+        const source = porId.get(r.source);
+        const target = porId.get(r.target);
+        if (source && target) {
+          const isSourceContainer = source.labels?.includes('Container') || source.primaryLabel === 'Container';
+          const isTargetContainer = target.labels?.includes('Container') || target.primaryLabel === 'Container';
+          if (isSourceContainer && target.properties?.id) {
+            containerPorImagenId.set(target.properties.id, source.properties?.id);
+          } else if (isTargetContainer && source.properties?.id) {
+            containerPorImagenId.set(source.properties.id, target.properties?.id);
+          }
+        }
       }
     }
 
     const indice = new Map();
     for (const n of nodos) {
       if (!esFinding(n)) continue;
-      const cve = cvePorFinding.get(n.id);
+
+      // Soporte para nodos agrupados en displayGraphData (FindingsGroup)
+      if (Array.isArray(n.properties?.findings)) {
+        for (const f of n.properties.findings) {
+          let cve = f.properties?.cve_id || f.properties?.driver_cve_id || f.cve_id;
+          if (!cve && typeof f.properties?.finding_key === 'string' && f.properties.finding_key.includes('|')) {
+            const parts = f.properties.finding_key.split('|');
+            const lastPart = parts[parts.length - 1];
+            if (lastPart.startsWith('CVE-')) cve = lastPart;
+          }
+          if (!cve) continue;
+
+          const ownerType = n.properties?.owner_type;
+          const esContenedor = ownerType === 'Container' || ownerType === 'ContainerImage' || Boolean(n.properties?.container_id) || Boolean(f.properties?.container_id);
+          const tipo = esContenedor ? 'CONTAINER' : 'SOFTWARE_INSTALLATION';
+          let id = null;
+          if (esContenedor) {
+            id =
+              n.properties?.container_id ||
+              f.properties?.container_id ||
+              (ownerType === 'Container' ? n.properties?.owner_id : null) ||
+              (n.properties?.container_image_id ? containerPorImagenId.get(n.properties.container_image_id) : null) ||
+              (typeof f.properties?.finding_key === 'string' ? f.properties.finding_key.split('|')[0] : null) ||
+              n.properties?.owner_id;
+          } else {
+            id =
+              n.properties?.software_installation_id ||
+              f.properties?.installation_id ||
+              (typeof f.properties?.finding_key === 'string' ? f.properties.finding_key.split('|')[0] : null) ||
+              n.properties?.owner_id;
+          }
+
+          if (!id) continue;
+          if (!indice.has(cve)) indice.set(cve, []);
+          if (!indice.get(cve).some(a => a.id === id && a.tipo === tipo)) {
+            indice.get(cve).push({ id, tipo });
+          }
+        }
+        continue;
+      }
+
+      // Obtener CVE
+      let cve = cvePorFinding.get(n.id) || n.properties?.cve_id || n.properties?.driver_cve_id;
+      if (!cve && typeof n.properties?.finding_key === 'string' && n.properties.finding_key.includes('|')) {
+        const parts = n.properties.finding_key.split('|');
+        const lastPart = parts[parts.length - 1];
+        if (lastPart.startsWith('CVE-')) cve = lastPart;
+      }
+      if (!cve) continue;
+
       const soporte = soportePorFinding.get(n.id);
-      const id = soporte?.properties?.id;
-      if (!cve || !id) continue;
-      const tipo = soporte.labels?.includes('Container') ? 'CONTAINER' : 'SOFTWARE_INSTALLATION';
+
+      // Determinar si es un hallazgo de contenedor (directo o vía imagen de contenedor)
+      const esImagenContenedor =
+        n.properties?.context_type === 'CONTAINER_IMAGE' ||
+        soporte?.labels?.includes('ContainerImage') ||
+        soporte?.primaryLabel === 'ContainerImage';
+
+      const esContenedorDirecto =
+        soporte?.labels?.includes('Container') ||
+        soporte?.primaryLabel === 'Container';
+
+      const esContenedor = Boolean(n.properties?.container_id) || esImagenContenedor || esContenedorDirecto;
+
+      let id = null;
+      let tipo = 'SOFTWARE_INSTALLATION';
+
+      if (esContenedor) {
+        tipo = 'CONTAINER';
+        // Prioridad de resolución de id del contenedor:
+        // 1. container_id en las propiedades del finding
+        // 2. si el soporte es el propio contenedor, su id
+        // 3. resolución por relación USES_IMAGE hacia el contenedor anfitrión
+        // 4. container_id en el soporte
+        // 5. primer segmento de finding_key ("container_id|image_id|cve_id")
+        id =
+          n.properties?.container_id ||
+          (esContenedorDirecto ? soporte?.properties?.id : null) ||
+          (soporte?.properties?.id ? containerPorImagenId.get(soporte.properties.id) : null) ||
+          soporte?.properties?.container_id ||
+          (esImagenContenedor && typeof n.properties?.finding_key === 'string'
+            ? n.properties.finding_key.split('|')[0]
+            : null) ||
+          soporte?.properties?.id;
+      } else {
+        tipo = 'SOFTWARE_INSTALLATION';
+        id =
+          soporte?.properties?.id ||
+          soporte?.properties?.installation_id ||
+          n.properties?.installation_id ||
+          (typeof n.properties?.finding_key === 'string' ? n.properties.finding_key.split('|')[0] : null);
+      }
+
+      if (!id) continue;
+
       if (!indice.has(cve)) indice.set(cve, []);
-      if (!indice.get(cve).some(a => a.id === id)) indice.get(cve).push({ id, tipo });
+      if (!indice.get(cve).some(a => a.id === id && a.tipo === tipo)) {
+        indice.get(cve).push({ id, tipo });
+      }
     }
     return indice;
   }, [graphData]);
@@ -227,11 +335,39 @@ export function TtpsPage({
 
   const verHistorialDeCVE = async (cveID) => {
     if (historialPorCVE[cveID]) {
-      setHistorialPorCVE(prev => ({ ...prev, [cveID]: { ...prev[cveID], abierto: !prev[cveID].abierto } }));
-      return;
+      // Si ya está abierto, cerrarlo; si estaba cerrado y con datos, abrirlo;
+      // si estaba cerrado pero con 0 filas (posible carga previa vacía o incompleta), reintentar consulta.
+      if (!historialPorCVE[cveID].abierto && (historialPorCVE[cveID].filas?.length || 0) > 0) {
+        setHistorialPorCVE(prev => ({ ...prev, [cveID]: { ...prev[cveID], abierto: true } }));
+        return;
+      } else if (historialPorCVE[cveID].abierto) {
+        setHistorialPorCVE(prev => ({ ...prev, [cveID]: { ...prev[cveID], abierto: false } }));
+        return;
+      }
     }
 
-    const activos = instalacionesPorCVE.get(cveID) || [];
+    let activos = instalacionesPorCVE.get(cveID) || [];
+    if (activos.length === 0) {
+      // Fallback de seguridad: buscar en todos los contenedores e instalaciones del grafo
+      const candidatos = [];
+      const nodos = graphData?.nodes || [];
+      for (const n of nodos) {
+        if (n.labels?.includes('Container') || n.primaryLabel === 'Container') {
+          if (n.properties?.id) candidatos.push({ id: n.properties.id, tipo: 'CONTAINER' });
+        } else if (n.labels?.includes('SoftwareInstallation') || n.primaryLabel === 'SoftwareInstallation') {
+          const id = n.properties?.id || n.properties?.installation_id;
+          if (id) candidatos.push({ id, tipo: 'SOFTWARE_INSTALLATION' });
+        }
+      }
+      const seenCand = new Set();
+      activos = candidatos.filter(c => {
+        const k = `${c.tipo}:${c.id}`;
+        if (seenCand.has(k)) return false;
+        seenCand.add(k);
+        return true;
+      });
+    }
+
     if (activos.length === 0) {
       setHistorialPorCVE(prev => ({ ...prev, [cveID]: { abierto: true, cargando: false, filas: [] } }));
       return;
@@ -243,7 +379,16 @@ export function TtpsPage({
       activos.map(a => Promise.resolve(fetchAppliedPatchHistory?.(a.id, a.tipo)).catch(() => []))
     );
     // El endpoint devuelve el histórico del activo entero: aquí solo interesa esta CVE.
-    const filas = porActivo.flat().filter(Boolean).filter(x => !x.cve_id || x.cve_id === cveID);
+    const filasBrutas = porActivo.flat().filter(Boolean).filter(x => !x.cve_id || x.cve_id === cveID);
+    const seen = new Set();
+    const filas = [];
+    for (const f of filasBrutas) {
+      const key = `${f.patch_id || ''}|${f.applied_at || ''}|${f.asset_id || f.installation_id || f.container_id || ''}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        filas.push(f);
+      }
+    }
 
     setHistorialPorCVE(prev => ({ ...prev, [cveID]: { abierto: true, cargando: false, filas } }));
   };
