@@ -244,8 +244,12 @@ function getNodeDepth(n) {
   const label = (n.primaryLabel || n.labels?.[0] || '').toLowerCase().trim();
   const labels = (n.labels || []).map(l => String(l).toLowerCase().trim());
 
-  if (cat === 'red' || cat === 'network' || label === 'network' || labels.includes('network') || labels.includes('subnet')) return 0;
-  if (cat === 'proyecto' || cat === 'project' || label === 'project' || labels.includes('project')) return 1;
+  // El proyecto es la raíz y las redes son sus hijas: el proyecto CONTAINS_NETWORK a la red,
+  // y el endpoint pertenece a la red por su IP. Antes estaba al revés (redes en el 0, arriba
+  // del todo, proyecto en el 1), lo que dejaba a la red sin línea hacia el proyecto y a los
+  // endpoints colgando directamente de éste, cruzando el carril de las redes.
+  if (cat === 'proyecto' || cat === 'project' || label === 'project' || labels.includes('project')) return 0;
+  if (cat === 'red' || cat === 'network' || label === 'network' || labels.includes('network') || labels.includes('subnet')) return 1;
   if (cat === 'endpoint' || label === 'endpoint' || labels.includes('endpoint')) return 2;
   // IMPORTANTE: ContainerImage debe evaluarse ANTES que Container
   if (cat.includes('imagen') || cat.includes('image') || label.includes('containerimage') || labels.some(l => l.includes('containerimage'))) return 3.6;
@@ -284,8 +288,9 @@ function getHierarchyData(nodes, relationships) {
     const dT = depthMap.get(t);
     if (dS === undefined || dT === undefined) return;
 
-    // Ignorar aristas donde alguno de los nodos es una Red (depth 0)
-    if (dS === 0 || dT === 0) return;
+    // Las aristas que tocan una red SÍ cuentan. Antes se descartaban aquí, y ése era el
+    // motivo de que una red no tuviera ni padre ni hijos: quedaba fuera del árbol y había
+    // que colocarla a mano en una banda propia.
 
     if (dS !== dT) {
       const parentId = dS < dT ? s : t;
@@ -297,17 +302,29 @@ function getHierarchyData(nodes, relationships) {
         primaryParentMap.set(childId, parentId);
       } else {
         const currentParentDepth = depthMap.get(currentParentId) || 0;
-        // Preferir el padre real con mayor profundidad (más cercano al nodo hijo)
+        // Preferir el padre real con mayor profundidad (más cercano al nodo hijo). Esto es
+        // lo que hace que un endpoint cuelgue de su red (1) y no de su proyecto (0), aunque
+        // las dos aristas existan: HAS_ENDPOINT y CONNECTED_TO.
         if (parentDepth > currentParentDepth) {
+          primaryParentMap.set(childId, parentId);
+        } else if (parentDepth === currentParentDepth && parentId < currentParentId) {
+          // Empate a profundidad: gana el id de nodo menor. Es el caso del endpoint
+          // multi-homed, que cuelga de dos redes y en un árbol solo puede tener una de
+          // padre; sin este desempate ganaría la que llegase antes en la lista de
+          // relaciones y el árbol cambiaría de forma entre recargas. El criterio de cuál
+          // de las dos gana es arbitrario —se comparan elementId de Neo4j, no el CIDR—,
+          // lo que importa es que sea siempre la misma. La arista a la otra red se sigue
+          // dibujando como línea cruzada, así que el multi-homing no se pierde de vista.
           primaryParentMap.set(childId, parentId);
         }
       }
     }
   });
 
-  // Pasada de protección: si un nodo Finding/Vulnerability/Software/ContainerImage quedó apuntando a Project (depth 1)
-  // pero tiene una conexión a un Endpoint/Container/Installation (depth >= 2), forzar la reasignación
-  // a ese Endpoint/Container para garantizar que se colapse al plegar el Endpoint.
+  // Pasada de protección: si un nodo Finding/Vulnerability/Software/ContainerImage quedó apuntando
+  // al Proyecto o a una Red (depth < 2) pero tiene una conexión a un Endpoint/Container/Installation
+  // (depth >= 2), forzar la reasignación a ese Endpoint/Container para garantizar que se colapse
+  // al plegar el Endpoint.
   rels.forEach(rel => {
     const s = getCanonicalNodeId(rel.source, nodes);
     const t = getCanonicalNodeId(rel.target, nodes);
@@ -320,7 +337,7 @@ function getHierarchyData(nodes, relationships) {
       const currentParentId = primaryParentMap.get(childId);
       if (currentParentId) {
         const currentParentDepth = depthMap.get(currentParentId) || 0;
-        if (currentParentDepth === 1) { // Si apuntaba a Project
+        if (currentParentDepth < 2) { // Si apuntaba al Proyecto (0) o a una Red (1)
           primaryParentMap.set(childId, parentId);
         }
       }
@@ -580,31 +597,9 @@ export function NetworkGraph({
       return;
     }
 
-    const rels = graphData.relationships || [];
     const depths = {};
     visibleNodes.forEach(n => {
       depths[n.id] = getNodeDepth(n);
-    });
-
-    // Mapear cada Endpoint a su ID de Red (Network) para agrupamiento por subred
-    const endpointNetworkMap = new Map();
-    rels.forEach(rel => {
-      const s = String(rel.source);
-      const t = String(rel.target);
-      const nodeA = visibleNodes.find(n => String(n.id) === s);
-      const nodeB = visibleNodes.find(n => String(n.id) === t);
-      if (!nodeA || !nodeB) return;
-
-      const isNetA = nodeA.primaryLabel === 'Network' || nodeA.categoryId === 'red' || (nodeA.labels || []).includes('Network');
-      const isNetB = nodeB.primaryLabel === 'Network' || nodeB.categoryId === 'red' || (nodeB.labels || []).includes('Network');
-      const isEpA = nodeA.primaryLabel === 'Endpoint' || nodeA.categoryId === 'endpoint' || (nodeA.labels || []).includes('Endpoint');
-      const isEpB = nodeB.primaryLabel === 'Endpoint' || nodeB.categoryId === 'endpoint' || (nodeB.labels || []).includes('Endpoint');
-
-      if (isNetA && isEpB) {
-        endpointNetworkMap.set(t, s);
-      } else if (isNetB && isEpA) {
-        endpointNetworkMap.set(s, t);
-      }
     });
 
     // Cómputo de posiciones objetivo deterministas con Tidier Trees (Asignación Recursiva de Ancho por Subárbol)
@@ -625,17 +620,17 @@ export function NetworkGraph({
       }
     });
 
-    // Agrupar los Endpoints hijos del Proyecto por su ID de Subred (Network Proximity Sorting)
-    childMap.forEach((childrenList, parentId) => {
-      const parentNode = nodeById.get(parentId);
-      if (parentNode && (parentNode.primaryLabel === 'Project' || parentNode.categoryId === 'proyecto')) {
-        childrenList.sort((a, b) => {
-          const netA = endpointNetworkMap.get(String(a.id)) || '';
-          const netB = endpointNetworkMap.get(String(b.id)) || '';
-          if (netA !== netB) return netA.localeCompare(netB);
-          return String(a.name || a.id).localeCompare(String(b.name || b.id));
-        });
-      }
+    // Orden estable de los hermanos. Ya no hace falta agrupar los endpoints por su red a
+    // mano: ahora cuelgan de ella, así que la agrupación sale de la propia jerarquía. Lo que
+    // sí conviene es que las redes salgan antes que los endpoints sueltos que cuelgan
+    // directamente del proyecto, para que el carril de redes quede a la izquierda.
+    childMap.forEach((childrenList) => {
+      childrenList.sort((a, b) => {
+        const dA = depths[a.id] !== undefined ? depths[a.id] : 99;
+        const dB = depths[b.id] !== undefined ? depths[b.id] : 99;
+        if (dA !== dB) return dA - dB;
+        return String(a.name || a.id).localeCompare(String(b.name || b.id));
+      });
     });
 
     // Ancho mínimo base para cada nodo hoja (garantiza cero solapamiento)
@@ -681,8 +676,8 @@ export function NetworkGraph({
       });
     };
 
-    // Raíz del Árbol Principal: Proyecto (Depth 1)
-    const projectRoots = visibleNodes.filter(n => depths[n.id] === 1);
+    // Raíz del Árbol Principal: Proyecto (Depth 0)
+    const projectRoots = visibleNodes.filter(n => depths[n.id] === 0);
     const rootsToUse = projectRoots.length > 0 ? projectRoots : (visibleNodes.length > 0 ? [visibleNodes[0]] : []);
 
     rootsToUse.forEach(r => computeSubtreeWidth(r.id));
@@ -692,33 +687,28 @@ export function NetworkGraph({
     rootsToUse.forEach(r => {
       const rWidth = subtreeWidthMap.get(String(r.id)) || MIN_LEAF_SPACING;
       const rCenterX = currentRootLeft + (rWidth / 2);
-      positionSubtree(r.id, rCenterX, -320 + 1 * 190); // -130px para Proyecto en Nivel 1
+      const rDepth = depths[r.id] !== undefined ? depths[r.id] : 0;
+      positionSubtree(r.id, rCenterX, -320 + rDepth * 190);
       currentRootLeft += rWidth;
     });
 
-    // Posicionar Nodos de Red (Depth 0) en Nivel 0 (y = -320) centrados sobre sus Endpoints
-    const networkNodes = visibleNodes.filter(n => depths[n.id] === 0);
-    networkNodes.forEach(netNode => {
-      const netIdStr = String(netNode.id);
-      const connectedEndpoints = visibleNodes.filter(n => depths[n.id] === 2 && endpointNetworkMap.get(String(n.id)) === netIdStr);
+    // Las redes ya NO se posicionan aparte: son hijas del proyecto, así que las coloca
+    // positionSubtree como a cualquier otro nodo, centradas sobre sus propios endpoints.
+    // Antes había aquí un bloque que las clavaba en y = -320 y les calculaba la X como
+    // promedio de la de sus endpoints, precisamente porque estaban fuera del árbol.
+    // Las redes sin proyecto ni activos las recoge el fallback de huérfanos de abajo.
 
-      let netX = WORLD_CENTER_X;
-      if (connectedEndpoints.length > 0) {
-        const sumX = connectedEndpoints.reduce((acc, ep) => {
-          const pos = treeTargetMap.get(String(ep.id));
-          return acc + (pos ? pos.x : WORLD_CENTER_X);
-        }, 0);
-        netX = sumX / connectedEndpoints.length;
-      }
-      treeTargetMap.set(netIdStr, { x: netX, y: -320 });
-    });
-
-    // Fallback para nodos huérfanos no posicionados
+    // Fallback para nodos huérfanos no posicionados: se apartan a la derecha del árbol,
+    // pero conservando su carril. Aquí caen, por ejemplo, las redes que no cuelgan de
+    // ningún proyecto: quedan a un lado en el nivel de redes, que es exactamente la pista
+    // de que están sueltas.
     let orphanCount = 0;
     visibleNodes.forEach(n => {
       const idStr = String(n.id);
       if (!treeTargetMap.has(idStr)) {
-        const d = depths[n.id] || 3;
+        // `|| 3` mandaría al nivel 3 a cualquier nodo de profundidad 0, que desde el
+        // reordenamiento es el propio Proyecto.
+        const d = depths[n.id] !== undefined ? depths[n.id] : 3;
         const fallbackX = WORLD_CENTER_X + (totalRootsWidth / 2) + 200 + (orphanCount * MIN_LEAF_SPACING);
         const fallbackY = -320 + d * 190;
         treeTargetMap.set(idStr, { x: fallbackX, y: fallbackY });
@@ -1225,12 +1215,12 @@ export function NetworkGraph({
             // Grafo STIX: gravedad radial por profundidad de nodo (mismos niveles que Árbol)
             const depth = getNodeDepth(node.entity);
             let targetRadius;
-            if (depth === 1) targetRadius = 0;        // PROYECTO → centro
-            else if (depth === 2) targetRadius = 190; // ENDPOINTS
-            else if (depth >= 3 && depth < 4) targetRadius = 330; // INSTALACIONES Y CONTENEDORES
-            else if (depth >= 4 && depth < 5) targetRadius = 480; // SOFTWARE, HALLAZGOS Y HARDWARE
-            else if (depth >= 5) targetRadius = 600;  // VULNERABILIDADES Y REMEDIACIONES
-            else targetRadius = 720;                  // REDES Y SEGMENTOS (depth 0)
+            if (depth === 0) targetRadius = 0;        // PROYECTO → centro
+            else if (depth === 1) targetRadius = 105; // REDES Y SEGMENTOS
+            else if (depth === 2) targetRadius = 240; // ENDPOINTS
+            else if (depth >= 3 && depth < 4) targetRadius = 380; // INSTALACIONES Y CONTENEDORES
+            else if (depth >= 4 && depth < 5) targetRadius = 510; // SOFTWARE, HALLAZGOS Y HARDWARE
+            else targetRadius = 630;                  // VULNERABILIDADES Y REMEDIACIONES
 
             const dx = node.x - WORLD_CENTER_X;
             const dy = node.y - WORLD_CENTER_Y;
@@ -1314,8 +1304,8 @@ export function NetworkGraph({
       // Renderizar Guías Horizontales de Nivel (Tier Bands) en Modo Árbol
       if (layoutMode === 'tree') {
         const levelLabels = [
-          { depth: 0, label: 'NIVEL 0 · REDES Y SEGMENTOS' },
-          { depth: 1, label: 'NIVEL 1 · PROYECTO' },
+          { depth: 0, label: 'NIVEL 0 · PROYECTO' },
+          { depth: 1, label: 'NIVEL 1 · REDES Y SEGMENTOS' },
           { depth: 2, label: 'NIVEL 2 · ENDPOINTS' },
           { depth: 3, label: 'NIVEL 3 · INSTALACIONES Y CONTENEDORES' },
           { depth: 4, label: 'NIVEL 4 · SOFTWARE, HALLAZGOS, HARDWARE E IMÁGENES' },
@@ -1344,11 +1334,11 @@ export function NetworkGraph({
       // Renderizar Anillos Concéntricos en Modo STIX (Radios idénticos a las físicas)
       if (layoutMode === 'stix') {
         const stixRings = [
-          { radius: 190, label: 'NIVEL 2 · ENDPOINTS',                        color: 'rgba(255, 255, 255, 0.04)', stroke: 'rgba(255, 255, 255, 0.2)' },
-          { radius: 330, label: 'NIVEL 3 · INSTALACIONES Y CONTENEDORES',      color: 'rgba(13, 183, 237, 0.05)',  stroke: 'rgba(13, 183, 237, 0.25)' },
-          { radius: 480, label: 'NIVEL 4 · SOFTWARE, HALLAZGOS Y HARDWARE',    color: 'rgba(245, 158, 11, 0.05)',  stroke: 'rgba(245, 158, 11, 0.25)' },
-          { radius: 600, label: 'NIVEL 5 · VULNERABILIDADES Y REMEDIACIONES',  color: 'rgba(239, 68, 68, 0.06)',   stroke: 'rgba(239, 68, 68, 0.3)' },
-          { radius: 720, label: 'NIVEL 0 · REDES Y SEGMENTOS',                color: 'rgba(121, 115, 255, 0.06)', stroke: 'rgba(121, 115, 255, 0.25)' }
+          { radius: 105, label: 'NIVEL 1 · REDES Y SEGMENTOS',                color: 'rgba(121, 115, 255, 0.06)', stroke: 'rgba(121, 115, 255, 0.25)' },
+          { radius: 240, label: 'NIVEL 2 · ENDPOINTS',                        color: 'rgba(255, 255, 255, 0.04)', stroke: 'rgba(255, 255, 255, 0.2)' },
+          { radius: 380, label: 'NIVEL 3 · INSTALACIONES Y CONTENEDORES',      color: 'rgba(13, 183, 237, 0.05)',  stroke: 'rgba(13, 183, 237, 0.25)' },
+          { radius: 510, label: 'NIVEL 4 · SOFTWARE, HALLAZGOS Y HARDWARE',    color: 'rgba(245, 158, 11, 0.05)',  stroke: 'rgba(245, 158, 11, 0.25)' },
+          { radius: 630, label: 'NIVEL 5 · VULNERABILIDADES Y REMEDIACIONES',  color: 'rgba(239, 68, 68, 0.06)',   stroke: 'rgba(239, 68, 68, 0.3)' }
         ];
 
         ctx.save();
@@ -1388,12 +1378,16 @@ export function NetworkGraph({
         if (!na || !nb) continue;
 
         const isNetworkEdge = na.entity.primaryLabel === 'Network' || nb.entity.primaryLabel === 'Network';
-        const isProjectToNetwork =
-          (na.entity.primaryLabel === 'Project' && nb.entity.primaryLabel === 'Network') ||
-          (nb.entity.primaryLabel === 'Project' && na.entity.primaryLabel === 'Network');
 
-        // Omitir enlace directo entre Proyecto y Red en el lienzo para no sobrecargar el centro
-        if (isProjectToNetwork) continue;
+        // El enlace Proyecto -> Red SÍ se dibuja: es el primer tramo de la cadena
+        // proyecto -> red -> endpoint, y antes se omitía, que era el motivo de que la red
+        // apareciese suelta arriba sin nada que la uniera a su proyecto.
+
+        // HAS_ENDPOINT no se dibuja nunca. Un endpoint con red ya llega por su red, y
+        // pintar además la línea del proyecto duplicaría cada rama; un endpoint sin red
+        // (sin IPs, o con la IP fuera de todo rango) se queda a propósito en su carril sin
+        // nada por arriba, que es justo la señal de que no está segmentado.
+        if (rel.type === 'HAS_ENDPOINT') continue;
 
         const naId = String(na.id);
         const nbId = String(nb.id);
@@ -1612,7 +1606,7 @@ export function NetworkGraph({
         }
 
         // Etiqueta Nombre del Nodo
-        const rawName = node.entity.name || '';
+        const rawName = node.entity.name || node.entity.properties?.nombre || node.entity.properties?.name || node.entity.properties?.hostname || String(node.entity.id);
         const shouldTruncate = layoutMode === 'tree' && !isSelected && rawName.length > 17;
         const displayName = shouldTruncate ? rawName.substring(0, 15) + '…' : rawName;
 

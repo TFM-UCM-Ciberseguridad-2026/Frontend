@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './ArchiveModal.css';
+import { MAX_IMPORT_MB, MAX_IMPORT_BYTES } from '../../../data/datasources/InfrastructureApiDataSource';
 
 export function ImportModal({
   isOpen,
@@ -42,6 +43,14 @@ export function ImportModal({
 
     if (!file.name.endsWith('.json')) {
       setErrorMsg('Por favor selecciona un archivo con extensión .json');
+      return;
+    }
+
+    // Se avisa antes de leer el fichero: si lo rechazara el servidor, el usuario habría
+    // esperado a que se subiera entero para recibir un 413.
+    if (file.size > MAX_IMPORT_BYTES) {
+      const tamMB = (file.size / (1024 * 1024)).toFixed(1);
+      setErrorMsg(`El archivo ocupa ${tamMB} MB y el máximo admitido son ${MAX_IMPORT_MB} MB.`);
       return;
     }
 

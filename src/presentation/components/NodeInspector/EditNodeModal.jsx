@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import '../AddAssets/AddAssetsButton.css';
+import { validateNetworkForm, validateAssetIps } from '../../../domain/entities/networkValidation';
+import { validateHardwareForm, legacyCpuCores, ARQUITECTURAS, LIMITES } from '../../../domain/entities/hardwareValidation';
 
 // Los cinco roles que acepta el backend (domain.IsValidEndpointType). De este tipo depende
 // la categoría del activo y, con ella, el SLA de parcheo que se le exige.
@@ -35,16 +37,16 @@ const normalizeLegacyEndpointType = (rawTipo) => {
   return 'Server';
 };
 
-export function EditNodeModal({ node, onClose, updateNode }) {
+export function EditNodeModal({ node, onClose, updateNode, allNodes = [] }) {
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState(null);
   const [formData, setFormData] = useState({ justification: '' });
   const [originalRawTipo, setOriginalRawTipo] = useState(null);
+  const label = node.primaryLabel || node.labels?.[0];
 
   useEffect(() => {
     if (!node || !node.properties) return;
     const props = { ...node.properties };
-    const label = node.primaryLabel;
 
     if (label === 'Endpoint') {
       const rawTipo = props.tipo || props.type;
@@ -132,13 +134,20 @@ export function EditNodeModal({ node, onClose, updateNode }) {
         justification: ''
       });
     } else if (label === 'Hardware') {
+      // Sin valores por defecto: lo que no está medido se muestra vacío. Antes se rellenaba
+      // con 4 núcleos, 8 GB, 100 GB y x86_64, y bastaba abrir y guardar para que esas cifras
+      // inventadas quedaran escritas como si fueran reales.
+      const arquitectura = (props.architecture || props.type || '').toLowerCase();
       setFormData({
         manufacturer: props.manufacturer || '',
         modelo: props.model || props.modelo || '',
-        cpu: props.cpu || '4',
-        ram_gb: props.ram ?? props.ram_gb ?? 8,
-        storage_gb: props.storage ?? props.storage_gb ?? 100,
-        tipo: props.type || props.tipo || 'x86_64',
+        serial_number: props.serial_number || '',
+        cpu: props.cpu_cores ?? legacyCpuCores(props.cpu),
+        ram_gb: props.ram ?? props.ram_gb ?? '',
+        storage_gb: props.storage ?? props.storage_gb ?? '',
+        // El valor antiguo podía ser un rol ("virtual-server"); solo se conserva si es
+        // una arquitectura reconocida, para que se corrija a mano en vez de colarse.
+        tipo: ARQUITECTURAS.some(a => a.value === arquitectura) ? arquitectura : '',
         justification: ''
       });
     } else if (label === 'SoftwareInstallation') {
@@ -148,6 +157,7 @@ export function EditNodeModal({ node, onClose, updateNode }) {
         status: props.status || 'active',
         detected_by: props.detected_by || '',
         package_manager: props.package_manager || '',
+        criticality_level: props.criticality_level || 'STANDARD',
         justification: ''
       });
     } else if (label === 'Software') {
@@ -163,10 +173,9 @@ export function EditNodeModal({ node, onClose, updateNode }) {
     } else {
       setFormData({ ...props, justification: '' });
     }
-  }, [node]);
+  }, [node, label]);
 
   if (!node) return null;
-  const label = node.primaryLabel;
 
   const updateField = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -193,6 +202,91 @@ export function EditNodeModal({ node, onClose, updateNode }) {
     if (!formData.justification || formData.justification.trim() === '') {
       setFormError('El motivo/justificación técnica es obligatorio para registrar la modificación.');
       return;
+    }
+
+    const currentIdStr = String(node.properties?.id || node.domainId || node.id || '');
+
+    // Endpoints y contenedores comparten espacio de direcciones: una IP no puede repetirse
+    // entre ellos, así que la comprobación se hace contra los dos tipos a la vez.
+    const otherAssets = (allNodes || [])
+      .filter(n => {
+        const cat = n.primaryLabel || n.labels?.[0];
+        return cat === 'Endpoint' || cat === 'Container' ||
+          (n.labels || []).some(l => l === 'Endpoint' || l === 'Container');
+      })
+      .map(n => ({
+        id: String(n.properties?.id ?? n.domainId ?? n.id ?? ''),
+        name: n.properties?.hostname || n.properties?.name || n.name || '',
+        ips: n.properties?.ips || []
+      }));
+
+    if (label === 'Endpoint') {
+      const newName = (formData.hostname || '').toLowerCase().trim();
+      if (newName) {
+        const isDuplicate = (allNodes || []).some(n => {
+          const nIdStr = String(n.properties?.id || n.domainId || n.id || '');
+          if (nIdStr === currentIdStr) return false;
+          const nCat = n.primaryLabel || n.labels?.[0];
+          if (nCat !== 'Endpoint' && nCat !== 'Container' && !(n.labels || []).some(l => l === 'Endpoint' || l === 'Container')) return false;
+          const nName = (n.properties?.hostname || n.properties?.name || n.name || '').toLowerCase().trim();
+          return nName === newName;
+        });
+        if (isDuplicate) {
+          setFormError('Ya existe un activo con este nombre. Por favor, elige un nombre único.');
+          return;
+        }
+      }
+      const ipError = validateAssetIps(formData.ips, otherAssets, currentIdStr);
+      if (ipError) {
+        setFormError(ipError);
+        return;
+      }
+    } else if (label === 'Container') {
+      const newName = (formData.name || '').toLowerCase().trim();
+      if (newName) {
+        const isDuplicate = (allNodes || []).some(n => {
+          const nIdStr = String(n.properties?.id || n.domainId || n.id || '');
+          if (nIdStr === currentIdStr) return false;
+          const nCat = n.primaryLabel || n.labels?.[0];
+          if (nCat !== 'Endpoint' && nCat !== 'Container' && !(n.labels || []).some(l => l === 'Endpoint' || l === 'Container')) return false;
+          const nName = (n.properties?.hostname || n.properties?.name || n.name || '').toLowerCase().trim();
+          return nName === newName;
+        });
+        if (isDuplicate) {
+          setFormError('Ya existe un activo con este nombre. Por favor, elige un nombre único.');
+          return;
+        }
+      }
+      const ipError = validateAssetIps(formData.ips, otherAssets, currentIdStr);
+      if (ipError) {
+        setFormError(ipError);
+        return;
+      }
+    } else if (label === 'Network') {
+      // Las demás redes conocidas, en el mismo formato que espera validateNetworkForm.
+      const otherNetworks = (allNodes || [])
+        .filter(n => {
+          const cat = n.primaryLabel || n.labels?.[0];
+          return cat === 'Network' || (n.labels || []).some(l => l === 'Network');
+        })
+        .map(n => ({
+          id: String(n.properties?.id ?? n.domainId ?? n.id ?? ''),
+          nombre: n.properties?.nombre || n.properties?.name || n.name || '',
+          cidr: n.properties?.cidr || '',
+          vlan_id: n.properties?.vlan_id ?? n.vlan_id ?? 0
+        }));
+
+      const validationError = validateNetworkForm(formData, otherNetworks, currentIdStr);
+      if (validationError) {
+        setFormError(validationError);
+        return;
+      }
+    } else if (label === 'Hardware') {
+      const hwError = validateHardwareForm(formData);
+      if (hwError) {
+        setFormError(hwError);
+        return;
+      }
     }
 
     setLoading(true);
@@ -588,11 +682,13 @@ export function EditNodeModal({ node, onClose, updateNode }) {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
                   <div>
-                    <div className="asset-field-label">CPU Cores</div>
+                    <div className="asset-field-label">Núcleos de CPU</div>
                     <input
-                      type="text"
+                      type="number"
+                      min="0"
+                      max={LIMITES.cpuCores}
                       className="asset-input"
-                      value={formData.cpu || ''}
+                      value={formData.cpu ?? ''}
                       onChange={(e) => updateField('cpu', e.target.value)}
                     />
                   </div>
@@ -619,17 +715,31 @@ export function EditNodeModal({ node, onClose, updateNode }) {
                 </div>
 
                 <div>
+                  <div className="asset-field-label">Número de serie</div>
+                  <input
+                    type="text"
+                    className="asset-input"
+                    placeholder="SN-8839201AB"
+                    value={formData.serial_number || ''}
+                    onChange={(e) => updateField('serial_number', e.target.value)}
+                  />
+                </div>
+
+                <div>
                   <div className="asset-field-label">Arquitectura</div>
                   <select
                     className="asset-input"
-                    value={formData.tipo || 'x86_64'}
+                    value={formData.tipo || ''}
                     onChange={(e) => updateField('tipo', e.target.value)}
                   >
-                    <option value="x86_64">x86_64</option>
-                    <option value="arm64">arm64 (AArch64)</option>
-                    <option value="i386">i386 (x86 32-bit)</option>
-                    <option value="riscv64">riscv64</option>
+                    <option value="">Sin especificar</option>
+                    {ARQUITECTURAS.map(a => (
+                      <option key={a.value} value={a.value}>{a.label}</option>
+                    ))}
                   </select>
+                  <div className="asset-field-help">
+                    El rol del equipo (servidor, router, firewall...) se define en el endpoint, no aquí.
+                  </div>
                 </div>
               </>
             )}

@@ -134,14 +134,25 @@ const categories = [
     .filter(n => n.labels?.includes('Endpoint') || n.primaryLabel === 'Endpoint')
     .map(n => ({
       id: String(n.properties?.id ?? n.id),
-      name: n.properties?.name || n.properties?.hostname || `Endpoint ${String(n.properties?.id ?? n.id)}`
+      name: n.properties?.name || n.properties?.hostname || `Endpoint ${String(n.properties?.id ?? n.id)}`,
+      ips: n.properties?.ips || []
     }));
 
   const containers = (graphData?.nodes || [])
     .filter(n => n.labels?.includes('Container') || n.primaryLabel === 'Container')
     .map(n => ({
       id: String(n.properties?.id ?? n.id),
-      name: n.properties?.name || n.properties?.hostname || String(n.properties?.id ?? n.id)
+      name: n.properties?.name || n.properties?.hostname || String(n.properties?.id ?? n.id),
+      ips: n.properties?.ips || []
+    }));
+
+  const networks = (graphData?.nodes || [])
+    .filter(n => n.labels?.includes('Network') || n.primaryLabel === 'Network')
+    .map(n => ({
+      id: String(n.properties?.id ?? n.id),
+      nombre: n.properties?.nombre || n.properties?.name || '',
+      cidr: n.properties?.cidr || '',
+      vlan_id: n.properties?.vlan_id ?? n.vlan_id ?? 0
     }));
 
   return (
@@ -189,6 +200,7 @@ const categories = [
             projects={projects}
             endpoints={endpoints}
             containers={containers}
+            networks={networks}
             showToast={showToast}
             createEndpoint={createEndpoint}
             createContainer={createContainer}

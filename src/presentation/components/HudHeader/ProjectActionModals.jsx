@@ -1,23 +1,48 @@
 import React, { useState, useEffect } from 'react';
 import './ProjectActionModals.css';
 
-export function RenameProjectModal({ isOpen, onClose, project, onRename }) {
+export function RenameProjectModal({ isOpen, onClose, project, onRename, projects = [] }) {
   const [newName, setNewName] = useState('');
+  const [formError, setFormError] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (isOpen && project) {
       setNewName(project.name || '');
+      setFormError(null);
     }
   }, [isOpen, project]);
 
   if (!isOpen || !project) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (newName.trim() && newName.trim() !== project.name) {
-      onRename(project.id, newName.trim());
+    setFormError(null);
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === project?.name) return;
+
+    const currentIdStr = String(project?.id || '');
+    const isDuplicate = (projects || []).some(p => {
+      if (String(p.id) === currentIdStr) return false;
+      return (p.name || p.nombre || '').toLowerCase().trim() === trimmed.toLowerCase();
+    });
+
+    if (isDuplicate) {
+      setFormError('Ya existe un proyecto con este nombre. Por favor, elige un nombre único.');
+      return;
     }
-    onClose();
+
+    setLoading(true);
+    try {
+      if (onRename) {
+        await onRename(project.id, trimmed);
+      }
+      onClose();
+    } catch (err) {
+      setFormError(err.message || 'Error al renombrar el proyecto');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -42,23 +67,32 @@ export function RenameProjectModal({ isOpen, onClose, project, onRename }) {
               type="text"
               className="project-input"
               value={newName}
-              onChange={(e) => setNewName(e.target.value)}
+              onChange={(e) => {
+                setNewName(e.target.value);
+                setFormError(null);
+              }}
               placeholder="Introduce el nuevo nombre..."
               autoFocus
               required
             />
           </div>
 
+          {formError && (
+            <div style={{ color: '#ff4a4a', fontSize: '0.85rem', marginTop: '0.5rem', fontFamily: 'Rajdhani, sans-serif' }}>
+              ⚠️ {formError}
+            </div>
+          )}
+
           <div className="project-modal-actions">
-            <button type="button" className="project-btn-cancel" onClick={onClose}>
+            <button type="button" className="project-btn-cancel" onClick={onClose} disabled={loading}>
               Cancelar
             </button>
             <button
               type="submit"
               className="project-btn-save"
-              disabled={!newName.trim() || newName.trim() === project.name}
+              disabled={loading || !newName.trim() || newName.trim() === project?.name}
             >
-              Guardar Cambios
+              {loading ? 'Guardando...' : 'Guardar Cambios'}
             </button>
           </div>
         </form>

@@ -200,7 +200,8 @@ export function NodeInspector({
   selectedExploitationPath,
   renameProject,
   deleteProject,
-  fetchEndpointPatchHistory
+  fetchEndpointPatchHistory,
+  nodes = []
 }) {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -764,6 +765,7 @@ export function NodeInspector({
       {showEditModal && (
         <EditNodeModal
           node={selectedNode}
+          allNodes={nodes}
           onClose={() => setShowEditModal(false)}
           updateNode={updateNode}
         />

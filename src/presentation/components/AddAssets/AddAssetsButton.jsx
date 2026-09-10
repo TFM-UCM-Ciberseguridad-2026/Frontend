@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useToast } from '../../context/ToastContext';
+import { validateNetworkForm, validateAssetIps, describeSubnetImpact } from '../../../domain/entities/networkValidation';
+import { validateHardwareForm, ARQUITECTURAS, LIMITES } from '../../../domain/entities/hardwareValidation';
 
 const ASSET_TYPES = [
   { key: 'endpoint', label: 'Endpoint', icon: '💻', description: 'Equipo, servidor o dispositivo de red' },
@@ -69,6 +71,7 @@ export function AddAssetButton({
   projects = [],
   endpoints = [],
   containers = [],
+  networks = [],
   onCreated,
   createEndpoint,
   createContainer,
@@ -89,6 +92,12 @@ export function AddAssetButton({
   }));
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState(null);
+
+  // Aviso (no bloqueante) sobre la jerarquía de subredes en la que cae el CIDR tecleado.
+  const subnetImpact = React.useMemo(
+    () => describeSubnetImpact(forms.network, networks),
+    [forms.network, networks]
+  );
 
   // --- Estados para el flujo en 2 pasos de CPE Software ---
   const [softwareStep, setSoftwareStep] = useState('form'); // 'form' | 'checking' | 'suggestions'
@@ -184,6 +193,22 @@ export function AddAssetButton({
       switch (typeKey) {
         case 'endpoint': {
           const { project_id, ...rest } = data;
+          const newName = (rest.hostname || '').toLowerCase().trim();
+          if (newName) {
+            const existsInEndpoints = (endpoints || []).some(e => (e.hostname || e.name || '').toLowerCase().trim() === newName);
+            const existsInContainers = (containers || []).some(c => (c.name || c.hostname || '').toLowerCase().trim() === newName);
+            if (existsInEndpoints || existsInContainers) {
+              setFormError('Ya existe un activo con este nombre. Por favor, elige un nombre único.');
+              setLoading(false);
+              return;
+            }
+          }
+          const ipError = validateAssetIps(rest.ips, [...(endpoints || []), ...(containers || [])]);
+          if (ipError) {
+            setFormError(ipError);
+            setLoading(false);
+            return;
+          }
           if (createEndpoint) {
             await createEndpoint(project_id, rest);
           }
@@ -191,6 +216,22 @@ export function AddAssetButton({
         }
         case 'container': {
           const { host_id, ...rest } = data;
+          const newName = (rest.name || '').toLowerCase().trim();
+          if (newName) {
+            const existsInEndpoints = (endpoints || []).some(e => (e.hostname || e.name || '').toLowerCase().trim() === newName);
+            const existsInContainers = (containers || []).some(c => (c.name || c.hostname || '').toLowerCase().trim() === newName);
+            if (existsInEndpoints || existsInContainers) {
+              setFormError('Ya existe un activo con este nombre. Por favor, elige un nombre único.');
+              setLoading(false);
+              return;
+            }
+          }
+          const ipError = validateAssetIps(rest.ips, [...(endpoints || []), ...(containers || [])]);
+          if (ipError) {
+            setFormError(ipError);
+            setLoading(false);
+            return;
+          }
           if (createContainer) {
             await createContainer(host_id, rest);
           }
@@ -198,6 +239,12 @@ export function AddAssetButton({
         }
         case 'hardware': {
           const { endpoint_id, ...rest } = data;
+          const hwError = validateHardwareForm(rest);
+          if (hwError) {
+            setFormError(hwError);
+            setLoading(false);
+            return;
+          }
           if (createHardware) {
             await createHardware(endpoint_id, rest);
           }
@@ -219,9 +266,12 @@ export function AddAssetButton({
           break;
         }
         case 'network': {
-          // Ya no depende de un endpoint concreto: se crea la red con su
-          // propio CIDR/gateway/VLAN y el backend enlaza automáticamente
-          // los endpoints cuya IP caiga bajo esa máscara y compartan VLAN.
+          const validationError = validateNetworkForm(data, networks);
+          if (validationError) {
+            setFormError(validationError);
+            setLoading(false);
+            return;
+          }
           if (createNetwork) {
             await createNetwork(data);
           }
@@ -736,19 +786,24 @@ export function AddAssetButton({
                   placeholder="PowerEdge R740"
                   value={forms.hardware.modelo}
                   onChange={(e) => updateField('hardware', 'modelo', e.target.value)}
-                  required
                 />
               </div>
 
               <div>
-                <div className="asset-field-label">Tipo</div>
-                <input
-                  type="text"
+                <div className="asset-field-label">Arquitectura</div>
+                <select
                   className="asset-input"
-                  placeholder="server, router, switch..."
                   value={forms.hardware.tipo}
                   onChange={(e) => updateField('hardware', 'tipo', e.target.value)}
-                />
+                >
+                  <option value="">Sin especificar</option>
+                  {ARQUITECTURAS.map(a => (
+                    <option key={a.value} value={a.value}>{a.label}</option>
+                  ))}
+                </select>
+                <div className="asset-field-help">
+                  El rol del equipo (servidor, router, firewall...) se define en el endpoint, no aquí.
+                </div>
               </div>
 
               <div>
@@ -759,7 +814,6 @@ export function AddAssetButton({
                   placeholder="Dell, HPE, Cisco..."
                   value={forms.hardware.manufacturer}
                   onChange={(e) => updateField('hardware', 'manufacturer', e.target.value)}
-                  required
                 />
               </div>
 
@@ -775,11 +829,13 @@ export function AddAssetButton({
               </div>
 
               <div>
-                <div className="asset-field-label">CPU</div>
+                <div className="asset-field-label">Núcleos de CPU</div>
                 <input
-                  type="text"
+                  type="number"
+                  min="0"
+                  max={LIMITES.cpuCores}
                   className="asset-input"
-                  placeholder="Intel Xeon Platinum 8380"
+                  placeholder="16"
                   value={forms.hardware.cpu}
                   onChange={(e) => updateField('hardware', 'cpu', e.target.value)}
                 />
@@ -1149,9 +1205,21 @@ export function AddAssetButton({
                   onChange={(e) => updateField('network', 'vlan_id', e.target.value)}
                 />
                 <div className="asset-field-help">
-                  Los endpoints con una IP dentro del CIDR y esta misma VLAN se enlazarán automáticamente a la red.
+                  Los endpoints con una IP dentro del CIDR <strong>y exactamente esta VLAN</strong> se enlazarán
+                  automáticamente a la red. La VLAN 0 no es un comodín: es la VLAN nativa, y solo captará las IPs
+                  que tampoco lleven VLAN. Una IP etiquetada en otra VLAN no entrará en esta red aunque su
+                  dirección caiga dentro del rango.
                 </div>
               </div>
+
+              {/* Aviso de jerarquía: al declarar una subred más específica dentro de un rango
+                  que ya tenía activos, esos activos se reasignan. Sin este aviso sería una
+                  regla invisible y el movimiento parecería espontáneo. */}
+              {subnetImpact && (
+                <div className="asset-field-help" style={{ borderLeft: '2px solid var(--c300)', paddingLeft: '8px', color: 'var(--c200)' }}>
+                  {subnetImpact}
+                </div>
+              )}
 
               <div>
                 <div className="asset-field-label">Descripción</div>
