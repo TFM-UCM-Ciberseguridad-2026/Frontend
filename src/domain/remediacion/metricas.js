@@ -317,8 +317,15 @@ export function metricasDeRemediacion(idx, { slaConfig = [], ahora = Date.now(),
   const vencidos = backlog.filter(b => b.slaDias && Number.isFinite(b.edadDias) && b.edadDias > b.slaDias).length;
 
   // ── Disponibilidad y aplicación de parche ───────────────────────────────
-  const totalVulns = idx.de('Vulnerability').length;
-  const conParche = [...cvesConParche].filter(cve => vulnPorCVE.has(cve)).length;
+  // Las CVEs del alcance son las que corresponden a los hallazgos del proyecto,
+  // evitando contar vulnerabilidades huérfanas de hallazgo que viajen en el export.
+  const cvesDelAlcance = new Set(
+    idx.de('Finding')
+      .map(f => cveDeHallazgo(idx, f, vulnPorCVE).cveID)
+      .filter(Boolean)
+  );
+  const totalVulns = cvesDelAlcance.size > 0 ? cvesDelAlcance.size : idx.de('Vulnerability').length;
+  const conParche = [...cvesConParche].filter(cve => (cvesDelAlcance.size > 0 ? cvesDelAlcance.has(cve) : vulnPorCVE.has(cve))).length;
   const abiertos = abiertosConParche + abiertosSinParche;
 
   const porNivel = {};

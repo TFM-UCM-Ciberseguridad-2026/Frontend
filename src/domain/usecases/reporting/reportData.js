@@ -152,7 +152,32 @@ export async function recopilarDatos(repositorio, projectId, ventanaDias) {
     : 0;
 
   // ── Vulnerabilidades ──────────────────────────────────────────────────
-  const vulnNodos = nodos.filter(n => esLabel(n, 'Vulnerability'));
+  // Solo se computan como vulnerabilidades del alcance aquellas asociadas a los
+  // hallazgos del proyecto. Si en el export viajan nodos :Vulnerability colgados
+  // de parches globales pero sin Finding en los activos locales, pertenecen al
+  // catálogo de parcheo y no a la superficie de ataque del parque.
+  const findingNodos = nodos.filter(n => esLabel(n, 'Finding'));
+  const findingIds = new Set(findingNodos.map(n => n.id));
+  const cveIdsDelAlcance = new Set();
+  findingNodos.forEach(f => {
+    const key = f.properties?.finding_key || f.properties?.unique_ref || '';
+    const m = /(CVE-\d{4}-\d+)/i.exec(String(key));
+    if (m) cveIdsDelAlcance.add(m[1].toUpperCase());
+  });
+
+  const vulnIdsDelAlcance = new Set();
+  (grafo.relationships || []).forEach(r => {
+    if ((r.type === 'OF_VULNERABILITY' || r.type === 'HAS_VULNERABILITY') && findingIds.has(r.source)) {
+      vulnIdsDelAlcance.add(r.target);
+    }
+  });
+
+  const vulnNodos = nodos.filter(n => {
+    if (!esLabel(n, 'Vulnerability')) return false;
+    if (vulnIdsDelAlcance.has(n.id)) return true;
+    const cve = n.properties?.cve_id;
+    return cve && cveIdsDelAlcance.has(cve.toUpperCase());
+  });
   const vulns = { total: 0, Critical: 0, High: 0, Medium: 0, Low: 0 };
   let conKEV = 0, conExploit = 0, conEPSS = 0;
   vulnNodos.forEach(n => {
@@ -175,7 +200,6 @@ export async function recopilarDatos(repositorio, projectId, ventanaDias) {
   };
 
   // ── Hallazgos, deltas del periodo y envejecimiento ────────────────────
-  const findingNodos = nodos.filter(n => esLabel(n, 'Finding'));
   const CERRADOS = ['RESOLVED', 'FIXED', 'PATCHED', 'CLOSED'];
 
   let abiertos = 0, cerrados = 0, nuevosPeriodo = 0, cerradosPeriodo = 0;

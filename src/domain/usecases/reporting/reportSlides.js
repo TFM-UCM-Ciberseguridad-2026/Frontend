@@ -423,9 +423,15 @@ export function panoramaVulnerabilidades(ctx, D) {
     });
   });
 
+  const notaVulns = D.findings.total > D.vulns.total
+    ? `Las ${D.vulns.total} CVE únicas generan ${D.findings.total} hallazgos: varias vulnerabilidades afectan a más de un activo y cada instancia se remedia por separado.`
+    : D.findings.total === D.vulns.total
+      ? `Las ${D.vulns.total} CVE únicas corresponden exactamente a ${D.findings.total} hallazgos: cada vulnerabilidad detectada afecta a una única instancia de activo.`
+      : `Las ${D.vulns.total} CVE identificadas generan ${D.findings.total} hallazgos en el parque.`;
+
   ctx.nota(s, {
     x: PAGE.M, y: 5.62, w: 6.1,
-    text: `Las ${D.vulns.total} CVE únicas generan ${D.findings.total} hallazgos: una misma vulnerabilidad afecta a varios activos y cada instancia se remedia por separado.`,
+    text: notaVulns,
   });
 
   ctx.footer(s);
