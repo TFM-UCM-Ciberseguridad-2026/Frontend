@@ -1225,7 +1225,7 @@ export function parches(ctx, D, { etiquetaPeriodo }) {
     x: PAGE.M, y: 3.24, w: 8, h: 0.24, fontSize: 8, fontFace: F.MONO, color: C.MUTE, charSpacing: 1.2,
   });
 
-  const filas = A.ultimas.slice(0, 7);
+  const filas = A.ultimas.slice(0, 5);
   const header = [
     ctx.th('CVE'), ctx.th('NIVEL'), ctx.th('ACTIVO'), ctx.th('SOFTWARE'),
     ctx.th('APLICADO', { align: 'center' }), ctx.th('POR'), ctx.th('VERIFICACIÓN', { align: 'center' }),
@@ -1248,15 +1248,18 @@ export function parches(ctx, D, { etiquetaPeriodo }) {
     ];
   });
 
+  const tableY = 3.48;
+  const rowH = 0.30;
   s.addTable([header, ...rows], {
-    x: PAGE.M, y: 3.54, w: CW,
+    x: PAGE.M, y: tableY, w: CW,
     colW: [1.9, 1.85, 2.3, 1.9, 1.3, 1.35, 1.63].map(v => v * (CW / 12.23)),
-    rowH: 0.33,
+    rowH,
     border: { type: 'solid', pt: 0.4, color: C.RULE },
     autoPage: false,
   });
 
-  const y = Math.min(3.54 + (filas.length + 1) * 0.33 + 0.24, 6.02);
+  const tableH = (filas.length + 1) * rowH;
+  const calloutY = tableY + tableH + 0.18;
   const runs = [];
   const una = A.total === 1;
   if (A.mitigaciones > 0) {
@@ -1288,7 +1291,7 @@ export function parches(ctx, D, { etiquetaPeriodo }) {
     runs.push({ text: 'Todas las declaraciones se han podido verificar contra la versión instalada del componente.', options: { color: C.TEXT_2 } });
   }
 
-  ctx.callout(s, { x: PAGE.M, y, w: CW, h: 0.86, titulo: null, runs });
+  ctx.callout(s, { x: PAGE.M, y: calloutY, w: CW, h: 0.88, titulo: null, runs });
 
   ctx.footer(s);
 }

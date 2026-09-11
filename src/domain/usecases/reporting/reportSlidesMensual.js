@@ -252,32 +252,35 @@ export function concentracionPorTactica(ctx, D) {
   const orden = [...D.ttp.tacticas].sort((a, b) => b.cves - a.cves);
   const maxC = Math.max(orden[0]?.cves || 0, 1);
 
-  // 14 filas por debajo de 8,5 in, que es donde arranca el panel de la cadena.
+  // 15 tácticas (MITRE ATT&CK v19 añade TA0112 Defense Impairment).
+  // Se distribuyen en la mitad izquierda con margen holgado para la nota al pie.
+  const y0 = 1.68;
+  const stepY = orden.length > 14 ? 0.30 : 0.32;
   orden.forEach((t, i) => {
-    const y = 1.70 + i * 0.325;
+    const y = y0 + i * stepY;
     s.addText(t.n, {
-      x: PAGE.M, y, w: 2.15, h: 0.3, fontSize: 8.5, fontFace: F.SANS, color: t.cves ? C.TEXT_2 : C.MUTE, valign: 'middle',
+      x: PAGE.M, y, w: 2.15, h: 0.26, fontSize: 8.2, fontFace: F.SANS, color: t.cves ? C.TEXT_2 : C.MUTE, valign: 'middle',
     });
     s.addText(t.id, {
-      x: PAGE.M + 2.18, y, w: 0.66, h: 0.3, fontSize: 7.5, fontFace: F.MONO, color: C.MUTE, valign: 'middle', wrap: false,
+      x: PAGE.M + 2.18, y, w: 0.66, h: 0.26, fontSize: 7.5, fontFace: F.MONO, color: C.MUTE, valign: 'middle', wrap: false,
     });
     const bx = PAGE.M + 2.90, bw = 3.50;
     const frac = t.cves / maxC;
     ctx.bar(s, {
-      x: bx, y: y + 0.07, w: bw, h: 0.16, value: t.cves, max: maxC,
+      x: bx, y: y + 0.055, w: bw, h: 0.15, value: t.cves, max: maxC,
       color: frac >= 0.6 ? C.CRIT : frac >= 0.3 ? C.HIGH : frac >= 0.1 ? C.MED : C.ACCENT,
     });
     s.addText(String(t.cves), {
-      x: bx + bw + 0.1, y, w: 0.5, h: 0.3, fontSize: 9, fontFace: F.MONO, bold: true,
+      x: bx + bw + 0.1, y, w: 0.5, h: 0.26, fontSize: 8.5, fontFace: F.MONO, bold: true,
       color: t.cves ? C.TEXT : C.MUTE, align: 'right', valign: 'middle',
     });
     s.addText(`${t.tec} téc.`, {
-      x: bx + bw + 0.65, y, w: 0.68, h: 0.3, fontSize: 7.5, fontFace: F.MONO, color: C.MUTE, valign: 'middle',
+      x: bx + bw + 0.65, y, w: 0.68, h: 0.26, fontSize: 7.5, fontFace: F.MONO, color: C.MUTE, valign: 'middle',
     });
   });
 
   // La cadena se arma con las cinco tácticas de mayor peso, en orden de secuencia real
-  const SECUENCIA = ['ia', 'exec', 'pe', 'de', 'ca', 'disc', 'lm', 'coll', 'c2', 'exfil', 'impact', 'pers', 'reco', 'resdev'];
+  const SECUENCIA = ['ia', 'exec', 'pe', 'de', 'di', 'ca', 'disc', 'lm', 'coll', 'c2', 'exfil', 'impact', 'pers', 'reco', 'resdev'];
   const top5 = [...orden].slice(0, 5)
     .sort((a, b) => SECUENCIA.indexOf(a.k) - SECUENCIA.indexOf(b.k));
 
@@ -307,7 +310,7 @@ export function concentracionPorTactica(ctx, D) {
   });
 
   ctx.nota(s, {
-    x: PAGE.M, y: 6.32, w: 7.9,
+    x: PAGE.M, y: 6.38, w: 7.6,
     text: 'Una misma CVE alimenta varias tácticas, así que la suma de la columna supera el total de vulnerabilidades. La cifra mide soporte de la táctica en el inventario, no incidentes observados.',
   });
 
@@ -349,6 +352,16 @@ export function gobiernoDocumental(ctx, D, gob) {
   const RACI_COL = { R: C.OK, A: C.CRIT, C: C.MED, I: C.MUTE };
 
   if (roles.length && actividades.length) {
+    const anchosRoles = {
+      'CISO': 0.90,
+      'Equipo SOC': 1.15,
+      'Equipo Infraestructura': 1.75,
+      'Dueño del Activo': 1.25,
+    };
+    const colRoles = roles.map(r => anchosRoles[r.name] || 1.10);
+    const anchoActividad = Math.max(2.0, 7.5 - colRoles.reduce((a, b) => a + b, 0));
+    const colW = [anchoActividad, ...colRoles];
+
     const header = [ctx.th('ACTIVIDAD'), ...roles.map(r => ctx.th(r.name, { align: 'center' }))];
     const rows = actividades.map((a, i) => {
       const bg = i % 2 === 0 ? C.PANEL : C.PANEL_2;
@@ -361,14 +374,14 @@ export function gobiernoDocumental(ctx, D, gob) {
       ];
     });
     s.addTable([header, ...rows], {
-      x: PAGE.M, y: 3.48, w: 7.5,
-      colW: [3.3, 1.05, 1.05, 1.05, 1.05].slice(0, roles.length + 1),
-      rowH: 0.325,
+      x: PAGE.M, y: 3.46, w: 7.5,
+      colW,
+      rowH: 0.29,
       border: { type: 'solid', pt: 0.4, color: C.RULE },
       autoPage: false,
     });
     s.addText('R responsable de ejecutar   ·   A rinde cuentas   ·   C consultado   ·   I informado', {
-      x: PAGE.M, y: 6.42, w: 7.5, h: 0.24, fontSize: 8, fontFace: F.MONO, color: C.MUTE,
+      x: PAGE.M, y: 6.48, w: 7.5, h: 0.22, fontSize: 8, fontFace: F.MONO, color: C.MUTE,
     });
   } else {
     s.addText('Matriz RACI no definida para este proyecto.', {
@@ -552,8 +565,8 @@ export function trazabilidad(ctx) {
     ['CM-8', 'Inventario de componentes del sistema', 'Inventario y grupos de mantenimiento', '1'],
     ['RA-5', 'Escaneo de vulnerabilidades', 'Cobertura del análisis y calidad del dato', '1'],
     ['RA-3', 'Evaluación de riesgos', 'Panorama por severidad · Matriz de decisión · Concentración por táctica', '2'],
-    ['SI-2', 'Corrección de errores (flaw remediation)', 'Cumplimiento de SLA · Cola priorizada · Envejecimiento · Vencimientos · Parches aplicados', '3'],
-    ['CM-3', 'Control de cambios de configuración', 'Procedimiento de despliegue por anillos · Declaración y verificación de parches', '3'],
+    ['SI-2', 'Corrección de errores (flaw remediation)', 'Cumplimiento de SLA · Cola priorizada · Parches de software · Remediación de contenedores (NIST SP 800-190)', '3'],
+    ['CM-3', 'Control de cambios de configuración', 'Procedimiento de despliegue por anillos · Declaración y verificación de parches en software y runtime', '3'],
     ['CA-7', 'Monitorización continua', 'Cadencia semanal y mensual del informe · Recálculo periódico de riesgo · Ritmo de remediación (MTTR)', '4'],
     ['SI-5', 'Alertas y avisos de seguridad', 'Inteligencia de amenazas · Matriz ATT&CK · Actores correlacionados', '4'],
     ['PM-1', 'Programa de seguridad de la información', 'Gobierno documental y matriz RACI', '4'],
