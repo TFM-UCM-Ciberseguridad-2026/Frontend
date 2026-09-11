@@ -703,28 +703,81 @@ export function NodeInspector({
                           ) : (
                             sortedHistoryFindings.map((f, fIdx) => (
                               <div key={fIdx} className="endpoint-applied-patch-row">
+                                {/* 1. CVE y Badge de nivel de remediación */}
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                   <span className="patch-cve-badge">{f.cve_id}</span>
                                   <span className={`patch-level-tag ${String(f.remediation_level || 'OFFICIAL_FIX').toLowerCase()}`}>
                                     {f.remediation_level || 'OFFICIAL_FIX'}
                                   </span>
                                 </div>
-                                <div style={{ fontSize: '11px', color: 'var(--c200)', marginTop: '4px' }}>
-                                  {f.patch_description || 'Finding solucionado mediante parche'}
+
+                                {/* 2. Definición del parche CLICABLE (lleva a la URL oficial/referencia) */}
+                                <div style={{ fontSize: '11px', marginTop: '4px' }}>
+                                  {f.patch_url ? (
+                                    <a
+                                      href={f.patch_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      style={{
+                                        color: '#60a5fa',
+                                        textDecoration: 'none',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '5px',
+                                        fontWeight: '600'
+                                      }}
+                                      onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}
+                                      onMouseLeave={(e) => (e.currentTarget.style.textDecoration = 'none')}
+                                      title={`Abrir referencia oficial: ${f.patch_url}`}
+                                    >
+                                      {f.patch_description || 'Parche oficial'}
+                                      <svg
+                                        width="11"
+                                        height="11"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="2.5"
+                                        style={{ flexShrink: 0 }}
+                                      >
+                                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                                        <polyline points="15 3 21 3 21 9" />
+                                        <line x1="10" y1="14" x2="21" y2="3" />
+                                      </svg>
+                                    </a>
+                                  ) : (
+                                    <span style={{ color: 'var(--c200)' }}>
+                                      {f.patch_description || 'Parche oficial aplicado'}
+                                    </span>
+                                  )}
                                 </div>
+
+                                {/* 3. Versión objetivo */}
                                 {(f.expected_version || f.verification?.expected_version) && (
-                                  <div style={{ fontSize: '10px', color: '#4ade80', marginTop: '2px' }}>
+                                  <div style={{ fontSize: '10px', color: '#4ade80', marginTop: '3px' }}>
                                     Versión objetivo: {f.expected_version || f.verification?.expected_version}
                                   </div>
                                 )}
+
+                                {/* 4. Operador y Fecha de aplicación */}
                                 <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '4px' }}>
                                   Aplicado por: <strong>{f.applied_by || 'operator'}</strong> · {f.applied_at ? new Date(f.applied_at).toLocaleDateString() : 'N/A'} {f.applied_at ? new Date(f.applied_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                                 </div>
-                                {f.notes && (
-                                  <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px', fontStyle: 'italic' }}>
-                                    {f.notes}
-                                  </div>
-                                )}
+
+                                {/* 5. Notas técnicas limpias (se oculta el volcado de texto duplicado de la URL) */}
+                                {(() => {
+                                  if (!f.notes) return null;
+                                  const cleanNotes = f.notes.trim();
+                                  // Si la nota era el volcado automático anterior con 'Referencia:', se omite
+                                  if (cleanNotes.includes('Referencia:') || cleanNotes.includes('Patch seleccionado:') || cleanNotes === 'Declarado desde Patch Queue') {
+                                    return null;
+                                  }
+                                  return (
+                                    <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px', fontStyle: 'italic' }}>
+                                      {cleanNotes}
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             ))
                           )}
