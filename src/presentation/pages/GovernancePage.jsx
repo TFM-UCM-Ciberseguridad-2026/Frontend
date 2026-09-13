@@ -241,7 +241,7 @@ export function GovernancePage({ selectedProjectId }) {
     } else if (item) {
       setFormData({ ...item });
     } else {
-      setFormData({});
+      setFormData(type === 'procedure' ? { stepList: [''] } : {});
     }
     setActiveModal(type);
   };
@@ -254,6 +254,27 @@ export function GovernancePage({ selectedProjectId }) {
   const handleFormChange = (e) => {
     const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     setFormData(prev => ({ ...prev, [e.target.name]: value }));
+  };
+
+  // Pasos del procedimiento como campos individuales (tipo "Añadir IP" del modal de
+  // endpoints), en vez de un textarea separado por comas que rompía cuando un paso
+  // llevaba una coma y descuadraba el conteo.
+  const updateStep = (idx, value) => {
+    setFormData(prev => {
+      const list = [...(prev.stepList || [''])];
+      list[idx] = value;
+      return { ...prev, stepList: list };
+    });
+  };
+  const addStep = () => {
+    setFormData(prev => ({ ...prev, stepList: [...(prev.stepList || ['']), ''] }));
+  };
+  const removeStep = (idx) => {
+    setFormData(prev => {
+      const list = [...(prev.stepList || [''])];
+      list.splice(idx, 1);
+      return { ...prev, stepList: list.length ? list : [''] };
+    });
   };
 
   const submitPolicy = async (e) => {
@@ -320,12 +341,12 @@ export function GovernancePage({ selectedProjectId }) {
     e.preventDefault();
     if (!formData.name) return;
     try {
-      const stepsStr = formData.steps || "";
+      const steps = (formData.stepList || []).map(s => (s || '').trim()).filter(s => s);
       const newProc = {
         id: 'PROC-' + Math.floor(Math.random() * 1000),
         name: formData.name,
-        meta: "0 pasos · recién creado",
-        steps: stepsStr.split(',').map(s => s.trim()).filter(s => s)
+        meta: `${steps.length} paso${steps.length === 1 ? '' : 's'} · recién creado`,
+        steps
       };
       await fetch(`${API_BASE}/procedures?project_id=${selectedProjectId}`, { method: 'POST', body: JSON.stringify(newProc) });
       toast.success('Procedimiento operativo registrado', 'Procedimiento');
@@ -668,7 +689,7 @@ export function GovernancePage({ selectedProjectId }) {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ color: 'var(--c400)', fontFamily: 'Orbitron, sans-serif', fontSize: '11px', letterSpacing: '1px', marginBottom: '4px' }}>{proc.id}</div>
                         <div style={{ color: 'var(--c50)', fontWeight: '600', fontSize: '14px', marginBottom: '4px' }}>{proc.name}</div>
-                        <div style={{ color: 'var(--c300)', fontSize: '12px' }}>{proc.meta}</div>
+                        <div style={{ color: 'var(--c300)', fontSize: '12px' }}>{(proc.steps?.length || 0)} paso{(proc.steps?.length || 0) === 1 ? '' : 's'}</div>
                       </div>
 
                       {/* Icono de eliminar centrado verticalmente al lado del desplegable */}
@@ -1162,15 +1183,37 @@ export function GovernancePage({ selectedProjectId }) {
 
               {activeModal === 'procedure' && (
                 <div>
-                  <div className="asset-field-label">Pasos operativos (separados por comas)</div>
-                  <textarea
-                    name="steps"
-                    className="asset-input asset-textarea"
-                    rows={4}
-                    value={formData.steps || ''}
-                    onChange={handleFormChange}
-                    placeholder="Paso 1: Notificar equipo, Paso 2: Aislar entorno, Paso 3: Aplicar parche..."
-                  />
+                  <div className="asset-field-label">Pasos operativos</div>
+                  <div className="ip-rows">
+                    {(formData.stepList || ['']).map((step, idx) => (
+                      <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ color: 'var(--c400)', fontFamily: 'Orbitron, sans-serif', fontSize: '11px', whiteSpace: 'nowrap', flexShrink: 0, minWidth: '56px' }}>
+                          Paso {idx + 1}
+                        </span>
+                        <input
+                          type="text"
+                          className="asset-input"
+                          style={{ flex: 1, minWidth: 0 }}
+                          placeholder={`Describe el paso ${idx + 1}...`}
+                          value={step}
+                          onChange={(e) => updateStep(idx, e.target.value)}
+                        />
+                        {(formData.stepList || ['']).length > 1 && (
+                          <button
+                            type="button"
+                            className="ip-row-remove-btn"
+                            onClick={() => removeStep(idx)}
+                            title="Quitar paso"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <button type="button" className="btn btn-secondary asset-add-ip-btn" onClick={addStep}>
+                    + Añadir un paso
+                  </button>
                 </div>
               )}
 
