@@ -795,17 +795,43 @@ export function NetworkGraph({
       return { pathEdgeIdSet: edgeIdSet, pathConnectorNodeIdSet: connectorNodeIdSet, pathNodeStepMap: nodeStepMap };
     }
 
-    const findNodeForHostOrId = (hostName, endpointId) => {
+    const nodeIsProject = (n) => (n?.primaryLabel === 'Project') || (n?.labels || []).includes('Project');
+    const nodeMatchesKind = (n, kind) => {
+      if (!kind) return true;
+      return n?.primaryLabel === kind || (n?.labels || []).includes(kind);
+    };
+
+    // Resuelve el nodo de un salto. El Project NUNCA es un salto válido, y como el id de
+    // dominio se repite entre tipos (Project/Network/Endpoint pueden compartir id=1) se
+    // filtra por el tipo esperado del salto. Las redes guardan su nombre en `nombre`.
+    const findNodeForHostOrId = (hostName, endpointId, expectedKind = '') => {
       const hLower = (hostName || '').toLowerCase();
       const idStr = String(endpointId || '');
 
-      return graphData.nodes.find(n => {
-        const nHost = (n.properties?.hostname || n.name || '').toLowerCase();
+      const candidates = graphData.nodes.filter(n => {
+        if (nodeIsProject(n)) return false;
+        const nHost = (n.properties?.hostname || n.properties?.nombre || n.name || '').toLowerCase();
         const nIdStr = String(n.id);
         const nPropIdStr = String(n.properties?.id || '');
-
         return (hLower && nHost === hLower) || (idStr && (nIdStr === idStr || nPropIdStr === idStr));
       });
+
+      if (candidates.length === 0) return undefined;
+      // Ante varios candidatos con el mismo id, gana el que coincide con el tipo esperado.
+      return candidates.find(n => nodeMatchesKind(n, expectedKind)) || candidates[0];
+    };
+
+    // Resuelve el nodo destino de un paso priorizando el elementId estable que emite el
+    // backend (identidad única, inmune a la colisión de ids de dominio con el Project).
+    const findStepNode = (step) => {
+      if (step?.targetElementId) {
+        const byEid = graphData.nodes.find(n => String(n.id) === String(step.targetElementId));
+        if (byEid && !nodeIsProject(byEid)) return byEid;
+      }
+      const expectedKind = step?.targetKind || (step?.is_container ? 'Container' : '');
+      const tId = step?.is_container ? step?.container_id : step?.targetEndpointId;
+      const tName = step?.is_container ? step?.container_name : step?.targetEndpoint;
+      return findNodeForHostOrId(tName, tId, expectedKind);
     };
 
     const getStepFindingRefs = (step) => {
@@ -863,9 +889,7 @@ export function NetworkGraph({
     }
 
     (selectedExploitationPath.steps || []).forEach((step) => {
-      const tId = step.is_container ? step.container_id : step.targetEndpointId;
-      const tName = step.is_container ? step.container_name : step.targetEndpoint;
-      const stepNode = findNodeForHostOrId(tName, tId);
+      const stepNode = findStepNode(step);
       if (stepNode) {
         if (!orderedPathNodes.some(n => String(n.id) === String(stepNode.id))) {
           orderedPathNodes.push(stepNode);
@@ -1219,8 +1243,7 @@ export function NetworkGraph({
             else if (depth === 1) targetRadius = 105; // REDES Y SEGMENTOS
             else if (depth === 2) targetRadius = 240; // ENDPOINTS
             else if (depth >= 3 && depth < 4) targetRadius = 380; // INSTALACIONES Y CONTENEDORES
-            else if (depth >= 4 && depth < 5) targetRadius = 510; // SOFTWARE, HALLAZGOS Y HARDWARE
-            else targetRadius = 630;                  // VULNERABILIDADES Y REMEDIACIONES
+            else targetRadius = 510;                  // SOFTWARE, HALLAZGOS Y HARDWARE (última capa; el nivel 5 de vulns/remediaciones nunca se renderiza)
 
             const dx = node.x - WORLD_CENTER_X;
             const dy = node.y - WORLD_CENTER_Y;
@@ -1337,8 +1360,7 @@ export function NetworkGraph({
           { radius: 105, label: 'NIVEL 1 · REDES Y SEGMENTOS',                color: 'rgba(121, 115, 255, 0.06)', stroke: 'rgba(121, 115, 255, 0.25)' },
           { radius: 240, label: 'NIVEL 2 · ENDPOINTS',                        color: 'rgba(255, 255, 255, 0.04)', stroke: 'rgba(255, 255, 255, 0.2)' },
           { radius: 380, label: 'NIVEL 3 · INSTALACIONES Y CONTENEDORES',      color: 'rgba(13, 183, 237, 0.05)',  stroke: 'rgba(13, 183, 237, 0.25)' },
-          { radius: 510, label: 'NIVEL 4 · SOFTWARE, HALLAZGOS Y HARDWARE',    color: 'rgba(245, 158, 11, 0.05)',  stroke: 'rgba(245, 158, 11, 0.25)' },
-          { radius: 630, label: 'NIVEL 5 · VULNERABILIDADES Y REMEDIACIONES',  color: 'rgba(239, 68, 68, 0.06)',   stroke: 'rgba(239, 68, 68, 0.3)' }
+          { radius: 510, label: 'NIVEL 4 · SOFTWARE, HALLAZGOS Y HARDWARE',    color: 'rgba(245, 158, 11, 0.05)',  stroke: 'rgba(245, 158, 11, 0.25)' }
         ];
 
         ctx.save();
