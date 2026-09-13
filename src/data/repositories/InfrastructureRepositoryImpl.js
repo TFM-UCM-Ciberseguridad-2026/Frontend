@@ -30,6 +30,10 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
     return await this.apiDataSource.fetchTTPMatrix(projectId);
   }
 
+  async getMitreCatalogInfo() {
+    return await this.apiDataSource.fetchMitreCatalogInfo();
+  }
+
   async getExploitationPaths(projectId) {
     const rawData = await this.apiDataSource.fetchExploitationPaths(projectId);
     const paths = (rawData.paths || []).map(path => new ExploitationPath(path));
@@ -116,6 +120,10 @@ export class InfrastructureRepositoryImpl extends InfrastructureRepository {
 
   async getPatchesForVulnerability(cveId) {
     return await this.apiDataSource.fetchPatchesForVulnerability(cveId);
+  }
+
+  async getPatchesForProject(projectId) {
+    return await this.apiDataSource.fetchPatchesForProject(projectId);
   }
 
   async declarePatchApplied(assetId, payload) {

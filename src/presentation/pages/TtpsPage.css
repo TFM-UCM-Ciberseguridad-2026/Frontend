@@ -147,9 +147,11 @@ main.ttps {
   color: var(--c50);
 }
 
+/* La matriz va arriba y el listado debajo: con las dos columnas en paralelo las 15
+   tácticas no caben a lo ancho y la matriz quedaba cortada por la derecha. */
 .ttps .workspace {
   display: grid;
-  grid-template-columns: 330px 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 20px;
   margin-top: 22px;
   align-items: start;
@@ -162,9 +164,7 @@ main.ttps {
   border-radius: 14px;
   background: linear-gradient(180deg, rgba(122, 115, 255, 0.06), rgba(5, 6, 30, 0.4));
   padding: 18px 16px 16px;
-  position: sticky;
-  top: 0;
-  max-height: calc(100vh - 220px);
+  max-height: 520px;
   display: flex;
   flex-direction: column;
 }
@@ -197,6 +197,8 @@ main.ttps {
   flex-direction: column;
   gap: 8px;
   margin-bottom: 12px;
+  /* El panel ocupa todo el ancho, pero el buscador no gana nada estirándose. */
+  max-width: 360px;
 }
 
 .ttps .search-input-box,
@@ -243,10 +245,13 @@ main.ttps {
   box-shadow: 0 0 0 3px rgba(122, 115, 255, 0.15);
 }
 
+/* En horizontal el listado dispone de todo el ancho: en una sola columna serían
+   cientos de filas, así que las tarjetas se reparten en tantas columnas como quepan. */
 .ttps .ttp-list {
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  align-content: start;
   gap: 6px;
   padding-right: 2px;
 }
@@ -400,9 +405,13 @@ main.ttps {
   width: 100%;
 }
 
+/* Una columna por táctica, sin fijar cuántas son: con el número escrito a mano la
+   última táctica se salía de la rejilla al añadir una nueva. Por debajo de 100px por
+   columna la matriz deja de encoger y `.matrix-scroll` la desplaza en horizontal. */
 .ttps .matrix {
   display: grid;
-  grid-template-columns: repeat(14, minmax(0, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(100px, 1fr);
   gap: 5px;
   width: 100%;
   box-sizing: border-box;
@@ -737,51 +746,145 @@ main.ttps {
   margin: 0;
 }
 
-.ttp-modal .remed-list {
+/* ---------- PARCHES DE LA TÉCNICA ---------- */
+.ttp-modal .patch-banner-resuelta {
+  margin: 0 0 12px 0;
+  padding: 9px 12px;
+  border: 1px solid var(--ok);
+  border-radius: 8px;
+  background: rgba(51, 224, 138, 0.08);
+  color: var(--ok);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.ttp-modal .patch-vacio,
+.ttp-modal .patch-sin-parche {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  font-style: italic;
+  line-height: 1.5;
+}
+
+.ttp-modal .patch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ttp-modal .patch-cve-group {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(122, 115, 255, 0.04);
+}
+
+.ttp-modal .patch-cve-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ttp-modal .patch-cve-id {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--c50);
+}
+
+.ttp-modal .patch-cve-estado {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid currentColor;
+}
+
+.ttp-modal .patch-cve-estado.estado-open { color: var(--error, #ef4444); }
+.ttp-modal .patch-cve-estado.estado-mitigada { color: #ffaa00; }
+.ttp-modal .patch-cve-estado.estado-parcheada { color: var(--ok); }
+.ttp-modal .patch-cve-estado.estado-desconocido { color: var(--muted); }
+
+.ttp-modal .patch-cve-activos {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.ttp-modal .patch-items {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 6px;
 }
 
-.ttp-modal .remed-list li {
+.ttp-modal .patch-item {
+  width: 100%;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
+  text-align: left;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 10px 12px;
-  background: rgba(122, 115, 255, 0.04);
-  font-size: 13.5px;
+  border-radius: 7px;
+  padding: 8px 11px;
+  background: rgba(5, 6, 30, 0.35);
   color: var(--c100);
-  line-height: 1.5;
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.45;
+  cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 
-.ttp-modal .remed-list li:hover {
-  border-color: var(--c700);
-  background: rgba(122, 115, 255, 0.09);
+.ttp-modal .patch-item:hover {
+  border-color: var(--c400);
+  background: rgba(122, 115, 255, 0.1);
 }
 
-.ttp-modal .remed-list li .chk {
+.ttp-modal .patch-item-desc {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ttp-modal .patch-item-url {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10.5px;
+  color: var(--muted);
   flex-shrink: 0;
-  width: 18px;
-  height: 18px;
-  border-radius: 5px;
-  margin-top: 1px;
-  border: 1px solid var(--ok);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--ok);
-  background: rgba(51, 224, 138, 0.1);
 }
 
-.ttp-modal .remed-list li .chk svg {
-  width: 11px;
-  height: 11px;
+.ttp-modal .patch-item-accion {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  color: var(--c400);
+  flex-shrink: 0;
+}
+
+.ttp-modal .patch-historial {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ttp-modal .patch-historial-fila {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: var(--c300);
 }
 
 .ttp-modal .modal-actions {
@@ -838,12 +941,7 @@ main.ttps {
 }
 
 @media (max-width: 980px) {
-  .ttps .workspace {
-    grid-template-columns: 1fr;
-  }
   .ttps .list-panel {
-    position: relative;
-    top: 0;
     max-height: 420px;
   }
 }
@@ -1008,4 +1106,37 @@ main.ttps {
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+/* ---------- TÉCNICAS RESUELTAS ---------- */
+/* No desaparecen de la matriz: se apagan y se van al final de su columna, para que
+   sigan siendo auditables sin competir visualmente con lo que queda por cerrar. */
+.ttps .cell--resuelta,
+.ttps .ttp-item--resuelta {
+  opacity: 0.45;
+  filter: grayscale(1);
+}
+
+.ttps .cell--resuelta .cid,
+.ttps .cell--resuelta .cname,
+.ttps .ttp-item--resuelta .tid,
+.ttps .ttp-item--resuelta .tname {
+  text-decoration: line-through;
+}
+
+.ttps .cell--resuelta:hover,
+.ttps .ttp-item--resuelta:hover {
+  opacity: 0.75;
+}
+
+.ttps .ttp-list-separador {
+  grid-column: 1 / -1;
+  margin: 6px 0 2px;
+  padding: 6px 2px;
+  border-top: 1px dashed var(--line);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--muted);
 }

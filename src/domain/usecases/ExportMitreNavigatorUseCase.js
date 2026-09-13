@@ -1,60 +1,89 @@
 export class ExportMitreNavigatorUseCase {
   /**
-   * Genera el JSON de capa compatible con MITRE ATT&CK Navigator v4.5.
-   * @param {Object} graphData - Grafo de infraestructura
-   * @param {Array} aptData - Lista opcional de datos de APTs / TTPs correlacionadas
-   * @param {string|number} selectedProjectId - ID del proyecto seleccionado
-   * @returns {Object} { filename, content }
+   * @param {Object} repository - InfrastructureRepository (fuente autorizada de la matriz TTP)
    */
-  execute(graphData, aptData = [], selectedProjectId) {
-    // Buscar el nodo del proyecto para obtener su nombre
-    const projectNode = graphData?.nodes?.find(
-      n => (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
-          String(n.properties?.id ?? n.id) === String(selectedProjectId)
-    ) || graphData?.nodes?.find(n => n.labels?.includes('Project') || n.primaryLabel === 'Project');
+  constructor(repository) {
+    this.repository = repository;
+  }
 
-    const projectName = projectNode?.properties?.nombre || projectNode?.properties?.name || 'Proyecto';
+  /**
+   * Genera el JSON de capa compatible con MITRE ATT&CK Navigator v4.5.
+   *
+   * La capa se construye EXCLUSIVAMENTE con la matriz TTP que devuelve el backend
+   * para el proyecto (el mismo endpoint que pinta la pantalla de TTPs). No hay
+   * respaldo de técnicas de demostración: un fichero que se abre en el Navigator
+   * oficial no puede contener técnicas que nadie ha detectado, así que si no hay
+   * datos se lanza un error en lugar de exportar una capa inventada.
+   *
+   * @param {string|number} projectId - ID del proyecto a exportar
+   * @param {string} projectName - Nombre del proyecto (para el título de la capa)
+   * @returns {Promise<Object>} { filename, content }
+   */
+  /**
+   * Versión de ATT&CK que se declara si el backend no sabe decir cuál tiene
+   * cargada (grafo poblado antes de que la versión se registrara). Es la mínima
+   * que reconoce las tácticas actuales, incluida TA0112.
+   */
+  static VERSION_ATTACK_POR_DEFECTO = '19';
 
-    // 1. Extraer TTPs directamente de los nodos del grafo si existen
-    const ttpNodes = (graphData?.nodes || []).filter(
-      n => n.labels?.includes('TTP') || n.primaryLabel === 'TTP'
-    );
+  /**
+   * Lee del backend la versión del catálogo realmente cargado y devuelve su
+   * componente mayor, que es lo que espera versions.attack.
+   *
+   * Estaba fijada a mano en '14' mientras el catálogo iba por la 19.2, así que el
+   * Navigator interpretaba las técnicas con un mapa de cinco versiones de
+   * antigüedad. Consultarla evita que se vuelva a desfasar en silencio.
+   */
+  async _versionATTACK() {
+    try {
+      const info = await this.repository.getMitreCatalogInfo();
+      const version = String(info?.attack_version || '').trim();
+      if (version) {
+        const mayor = version.split('.')[0];
+        if (mayor) return mayor;
+      }
+    } catch {
+      // La versión es un dato accesorio: si no se puede consultar, la capa se
+      // exporta igual con el valor por defecto en lugar de fallar la descarga.
+    }
+    return ExportMitreNavigatorUseCase.VERSION_ATTACK_POR_DEFECTO;
+  }
 
-    // 2. Extraer TTPs vinculadas a las vulnerabilidades (propiedad ttp_related)
-    const vulnTtps = (graphData?.nodes || [])
-      .filter(n => n.labels?.includes('Vulnerability') || n.primaryLabel === 'Vulnerability')
-      .map(n => n.properties?.ttp_related || n.properties?.ttp_id)
-      .filter(Boolean);
+  async execute(projectId, projectName = 'Proyecto') {
+    const raw = await this.repository.getTTPMatrix(projectId);
+    const matriz = Array.isArray(raw) ? raw : (raw?.data || raw?.ttps || []);
 
-    // 3. Extraer TTPs correlacionadas de aptData si están disponibles
-    const aptTtps = (aptData || []).flatMap(apt => apt.matchedTTPIDs || apt.matched_ttp_ids || []);
+    const techniques = matriz
+      .map(t => {
+        const id = String(t.id || t.ID || '').trim().toUpperCase();
+        const cves = t.cves || t.CVEs || [];
+        return { id, cves };
+      })
+      .filter(t => /^T\d{4}(\.\d{3})?$/.test(t.id))
+      .map(t => ({
+        techniqueID: t.id,
+        // La intensidad es el número real de CVE asociadas, no un 1 fijo:
+        // así el degradado del Navigator refleja dónde se concentra el riesgo.
+        score: t.cves.length,
+        color: '#e63946',
+        comment: `${t.cves.length} CVE asociadas en el proyecto "${projectName}"`,
+        enabled: true,
+      }));
 
-    // Consolidar todos los IDs de TTPs únicos
-    const rawTtps = [
-      ...ttpNodes.map(n => n.properties?.id || n.properties?.ttp_id || n.id),
-      ...vulnTtps,
-      ...aptTtps
-    ];
+    if (techniques.length === 0) {
+      throw new Error(
+        'No hay TTPs correlacionadas en este proyecto. Ejecuta el mapeo de TTPs antes de exportar la capa de MITRE ATT&CK Navigator.'
+      );
+    }
 
-    const uniqueTtpIds = Array.from(new Set(rawTtps)).filter(id => typeof id === 'string' && id.trim().length > 0);
-
-    // Si no hay TTPs explícitas, añadir TTPs de demostración comunes
-    const finalTtpIds = uniqueTtpIds.length > 0 ? uniqueTtpIds : ['T1059', 'T1190', 'T1068', 'T1210', 'T1078'];
-
-    // Mapear cada TTP al formato de técnica de MITRE ATT&CK Navigator
-    const techniques = finalTtpIds.map(ttpId => ({
-      techniqueID: ttpId.startsWith('T') ? ttpId : `T${ttpId}`,
-      score: 1,
-      color: '#e63946',
-      comment: `Asociada a la infraestructura del proyecto "${projectName}"`,
-      enabled: true
-    }));
+    const maxScore = techniques.reduce((max, t) => (t.score > max ? t.score : max), 0);
+    const versionATTACK = await this._versionATTACK();
 
     // Construir la capa oficial de MITRE ATT&CK Navigator (v4.5 / Navigator 4.9.1)
     const layer = {
       name: `Capa MITRE ATT&CK - ${projectName}`,
       versions: {
-        attack: '14',
+        attack: versionATTACK,
         navigator: '4.9.1',
         layer: '4.5'
       },
@@ -76,7 +105,7 @@ export class ExportMitreNavigatorUseCase {
       gradient: {
         colors: ['#ffeae6', '#e63946'],
         minValue: 0,
-        maxValue: 1
+        maxValue: maxScore > 0 ? maxScore : 1
       },
       legendItems: [
         {

@@ -9,44 +9,16 @@
  * correspondiente lo dice, en lugar de tumbar la generación entera del informe.
  */
 
+import { TACTICS, normalizeTacticKeys } from '../../mitre/tactics';
+import { indexarGrafo } from '../../excel/grafo';
+import { metricasDeRemediacion } from '../../remediacion/metricas';
+
 const DIA_MS = 24 * 60 * 60 * 1000;
 
-const TACTICAS = [
-  { id: 'TA0043', k: 'reco', n: 'Reconnaissance' },
-  { id: 'TA0042', k: 'resdev', n: 'Resource Development' },
-  { id: 'TA0001', k: 'ia', n: 'Initial Access' },
-  { id: 'TA0002', k: 'exec', n: 'Execution' },
-  { id: 'TA0003', k: 'pers', n: 'Persistence' },
-  { id: 'TA0004', k: 'pe', n: 'Privilege Escalation' },
-  { id: 'TA0005', k: 'de', n: 'Defense Evasion' },
-  { id: 'TA0006', k: 'ca', n: 'Credential Access' },
-  { id: 'TA0007', k: 'disc', n: 'Discovery' },
-  { id: 'TA0008', k: 'lm', n: 'Lateral Movement' },
-  { id: 'TA0009', k: 'coll', n: 'Collection' },
-  { id: 'TA0011', k: 'c2', n: 'Command and Control' },
-  { id: 'TA0010', k: 'exfil', n: 'Exfiltration' },
-  { id: 'TA0040', k: 'impact', n: 'Impact' },
-];
-
-/** Normaliza la táctica al mismo esquema que usa TtpsPage, para no tener dos criterios. */
-function normalizarTactica(raw = '') {
-  const s = String(raw).toLowerCase();
-  if (s.includes('recon')) return 'reco';
-  if (s.includes('resource')) return 'resdev';
-  if (s.includes('initial')) return 'ia';
-  if (s.includes('execution')) return 'exec';
-  if (s.includes('persist')) return 'pers';
-  if (s.includes('privilege') || s.includes('escalat')) return 'pe';
-  if (s.includes('defense') || s.includes('evasion') || s.includes('stealth')) return 'de';
-  if (s.includes('credential')) return 'ca';
-  if (s.includes('discovery')) return 'disc';
-  if (s.includes('lateral') || s.includes('movement')) return 'lm';
-  if (s.includes('collection')) return 'coll';
-  if (s.includes('command') || s.includes('control')) return 'c2';
-  if (s.includes('exfil')) return 'exfil';
-  if (s.includes('impact')) return 'impact';
-  return 'de';
-}
+// Catálogo y traducción de tácticas: una sola fuente compartida con la matriz de
+// la interfaz. Antes había aquí una copia propia que ya había divergido de la de
+// TtpsPage (la de aquí no reconocía los identificadores TAxxxx, por ejemplo).
+const TACTICAS = TACTICS.map(t => ({ id: t.id, k: t.key, n: t.label }));
 
 /** Mismo corte que domain.ScoreToSeverity en el backend. */
 export function severidadDeScore(score) {
@@ -93,21 +65,63 @@ async function pedirJSON(url) {
  * @param {number} ventanaDias  Días del periodo cubierto: 7 en el semanal, 30 en el mensual.
  *                              Determina qué cuenta como alta o cierre "del periodo".
  */
-export async function recopilarDatos(repositorio, projectId, ventanaDias) {
+/**
+ * Recolector crudo compartido: el grafo del proyecto y las respuestas de los
+ * endpoints que lo complementan, sin agregar ni recortar nada.
+ *
+ * Lo consumen los dos informes PPTX —a través de recopilarDatos, que agrega— y el
+ * informe técnico en Excel, que necesita las filas enteras. Tener un solo
+ * recolector es lo que impide que dos entregables del mismo proyecto acaben dando
+ * cifras distintas por leer de sitios distintos.
+ *
+ * @param {object} opciones
+ *   limiteCola   cuántos elementos de la cola de parcheo pedir (el PPTX enseña 15,
+ *                el Excel los quiere todos).
+ *   incluirRutas si pedir también las rutas de explotación, que solo usa el Excel.
+ */
+export async function recopilarCrudos(repositorio, projectId, opciones = {}) {
+  const { limiteCola = 200, incluirRutas = false } = opciones;
+
   const grafo = await repositorio.exportProject(projectId);
   if (!grafo || !grafo.nodes) {
     throw new Error('El backend devolvió un grafo vacío o con formato inválido.');
   }
-  const nodos = grafo.nodes;
 
-  const [statsTTP, matrizCruda, aptsCrudos, slaConfig, slaBreaches, cola] = await Promise.all([
+  const [statsTTP, matrizCruda, aptsCrudos, slaConfig, slaBreaches, cola, rutas] = await Promise.all([
     pedirJSON(`/api/infrastructure/ttp-stats?project_id=${projectId}`),
     pedirJSON(`/api/infrastructure/ttps?project_id=${projectId}`),
     pedirJSON(`/api/infrastructure/top-apts?project_id=${projectId}`),
     pedirJSON(`/api/governance/sla?project_id=${projectId}`),
     pedirJSON(`/api/governance/sla/breaches?project_id=${projectId}`),
-    pedirJSON(`/api/patch-queue?project_id=${projectId}&limit=200`),
+    pedirJSON(`/api/patch-queue?project_id=${projectId}&limit=${limiteCola}`),
+    incluirRutas
+      ? pedirJSON(`/api/infrastructure/exploitation-paths?project_id=${projectId}`)
+      : Promise.resolve(null),
   ]);
+
+  return {
+    grafo,
+    statsTTP,
+    matriz: Array.isArray(matrizCruda) ? matrizCruda : (matrizCruda?.data || matrizCruda?.ttps || []),
+    apts: Array.isArray(aptsCrudos) ? aptsCrudos : [],
+    slaConfig: Array.isArray(slaConfig) ? slaConfig : [],
+    breaches: Array.isArray(slaBreaches) ? slaBreaches : [],
+    cola: cola || { queue: [], total: 0 },
+    rutas: Array.isArray(rutas) ? rutas : [],
+  };
+}
+
+export async function recopilarDatos(repositorio, projectId, ventanaDias) {
+  const crudos = await recopilarCrudos(repositorio, projectId);
+
+  const grafo = crudos.grafo;
+  const nodos = grafo.nodes;
+  const statsTTP = crudos.statsTTP;
+  const matrizCruda = crudos.matriz;
+  const aptsCrudos = crudos.apts;
+  const slaConfig = crudos.slaConfig;
+  const slaBreaches = crudos.breaches;
+  const cola = crudos.cola;
 
   const ahora = Date.now();
   const desde = ahora - ventanaDias * DIA_MS;
@@ -138,7 +152,32 @@ export async function recopilarDatos(repositorio, projectId, ventanaDias) {
     : 0;
 
   // ── Vulnerabilidades ──────────────────────────────────────────────────
-  const vulnNodos = nodos.filter(n => esLabel(n, 'Vulnerability'));
+  // Solo se computan como vulnerabilidades del alcance aquellas asociadas a los
+  // hallazgos del proyecto. Si en el export viajan nodos :Vulnerability colgados
+  // de parches globales pero sin Finding en los activos locales, pertenecen al
+  // catálogo de parcheo y no a la superficie de ataque del parque.
+  const findingNodos = nodos.filter(n => esLabel(n, 'Finding'));
+  const findingIds = new Set(findingNodos.map(n => n.id));
+  const cveIdsDelAlcance = new Set();
+  findingNodos.forEach(f => {
+    const key = f.properties?.finding_key || f.properties?.unique_ref || '';
+    const m = /(CVE-\d{4}-\d+)/i.exec(String(key));
+    if (m) cveIdsDelAlcance.add(m[1].toUpperCase());
+  });
+
+  const vulnIdsDelAlcance = new Set();
+  (grafo.relationships || []).forEach(r => {
+    if ((r.type === 'OF_VULNERABILITY' || r.type === 'HAS_VULNERABILITY') && findingIds.has(r.source)) {
+      vulnIdsDelAlcance.add(r.target);
+    }
+  });
+
+  const vulnNodos = nodos.filter(n => {
+    if (!esLabel(n, 'Vulnerability')) return false;
+    if (vulnIdsDelAlcance.has(n.id)) return true;
+    const cve = n.properties?.cve_id;
+    return cve && cveIdsDelAlcance.has(cve.toUpperCase());
+  });
   const vulns = { total: 0, Critical: 0, High: 0, Medium: 0, Low: 0 };
   let conKEV = 0, conExploit = 0, conEPSS = 0;
   vulnNodos.forEach(n => {
@@ -161,7 +200,6 @@ export async function recopilarDatos(repositorio, projectId, ventanaDias) {
   };
 
   // ── Hallazgos, deltas del periodo y envejecimiento ────────────────────
-  const findingNodos = nodos.filter(n => esLabel(n, 'Finding'));
   const CERRADOS = ['RESOLVED', 'FIXED', 'PATCHED', 'CLOSED'];
 
   let abiertos = 0, cerrados = 0, nuevosPeriodo = 0, cerradosPeriodo = 0;
@@ -255,6 +293,14 @@ export async function recopilarDatos(repositorio, projectId, ventanaDias) {
     parche: Boolean(i.patch_available),
   }));
 
+  // ── Parcheo y tiempo de remediación ───────────────────────────────────
+  // El cálculo es el mismo que publica el informe técnico en Excel: recorre el grafo
+  // entero, no la muestra de la cola, porque el MTTR se mide sobre hallazgos cerrados
+  // y esos ya no están en la cola de parcheo.
+  const remediacion = metricasDeRemediacion(indexarGrafo(grafo), {
+    slaConfig, ahora, ventanaDias,
+  });
+
   // ── Inteligencia de amenazas ──────────────────────────────────────────
   const matrizArr = Array.isArray(matrizCruda) ? matrizCruda : (matrizCruda?.data || matrizCruda?.ttps || []);
   const porTactica = {};
@@ -263,13 +309,17 @@ export async function recopilarDatos(repositorio, projectId, ventanaDias) {
   matrizArr.forEach(t => {
     const id = t.id || t.ID || '';
     if (!id) return;
-    const k = normalizarTactica(t.tactic || t.Tactic || '');
     const cves = (t.cves || t.CVEs || []).length;
-    const b = porTactica[k];
-    if (!b) return;
-    b.tec += 1;
-    b.cves += cves;
-    b.top.push({ id, name: t.name || t.Name || '', n: cves });
+    // Una técnica cuenta en TODAS sus tácticas, igual que en la matriz oficial de
+    // MITRE. La suma de `tec` por táctica es por tanto mayor que el número de
+    // técnicas distintas, que se publica aparte como `tecnicasDistintas`.
+    normalizeTacticKeys(t.tactic || t.Tactic || '').forEach(k => {
+      const b = porTactica[k];
+      if (!b) return;
+      b.tec += 1;
+      b.cves += cves;
+      b.top.push({ id, name: t.name || t.Name || '', n: cves });
+    });
   });
   Object.values(porTactica).forEach(b => {
     b.top.sort((x, y) => y.n - x.n);
@@ -282,6 +332,7 @@ export async function recopilarDatos(repositorio, projectId, ventanaDias) {
     sinMapear: statsTTP?.unmapped_cves ?? 0,
     capec: statsTTP?.capec_static ?? 0,
     llm: statsTTP?.llm_enriched ?? 0,
+    capecPendiente: statsTTP?.capec_pending_cves ?? 0,
     tecnicasDistintas: matrizArr.length,
     top: (statsTTP?.top_ttps || []).slice(0, 8).map(t => ({
       id: t.id, name: t.name, tactic: t.tactic, n: t.count,
@@ -301,7 +352,7 @@ export async function recopilarDatos(repositorio, projectId, ventanaDias) {
   // ── Proyecto ──────────────────────────────────────────────────────────
   const projNodo = nodos.find(n => esLabel(n, 'Project'));
   const proyecto = {
-    nombre: projNodo?.properties?.nombre || projNodo?.properties?.name || 'Proyecto',
+    nombre: projNodo?.properties?.name || projNodo?.properties?.nombre || 'Proyecto',
     riskTier: projNodo?.properties?.risk_tier || '—',
     riskScore: Number(projNodo?.properties?.risk_score || 0),
     endpointsEnRiesgo: Number(projNodo?.properties?.risky_endpoint_count || 0),
@@ -313,7 +364,10 @@ export async function recopilarDatos(repositorio, projectId, ventanaDias) {
   return {
     proyecto, inventario, vulns, enriquecimiento, findings, aging,
     sla, cumplimiento, sinSLA, vencenPronto, porGrupo,
-    cola: colaItems, colaTotal: cola?.count ?? colaItems.length,
+    // El endpoint devuelve `total`, no `count`: con la clave equivocada el informe
+    // enseñaba como total de la cola las 15 filas que él mismo recorta.
+    cola: colaItems, colaTotal: cola?.total ?? colaItems.length,
+    remediacion,
     ttp, apts,
     ventanaDias, generadoEn: new Date(ahora),
     // Marcas de disponibilidad, para que las láminas puedan decir "sin dato" con criterio.
@@ -324,6 +378,10 @@ export async function recopilarDatos(repositorio, projectId, ventanaDias) {
       sla: Array.isArray(slaConfig) && slaConfig.length > 0,
       breaches: breaches.length > 0,
       cola: Boolean(cola),
+      // El MTTR necesita hallazgos ya cerrados: en un proyecto recién inventariado no
+      // hay ninguno y la lámina tiene que decirlo en vez de enseñar un cero.
+      mttr: remediacion.mttr.n > 0,
+      parchesAplicados: remediacion.aplicados.total > 0,
     },
   };
 }

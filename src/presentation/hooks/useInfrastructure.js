@@ -31,6 +31,7 @@ import { GetPatchQueueUseCase } from '../../domain/usecases/GetPatchQueueUseCase
 import { RefreshPatchesForVulnerabilityUseCase } from '../../domain/usecases/RefreshPatchesForVulnerabilityUseCase';
 import { DeclarePatchAppliedUseCase } from '../../domain/usecases/DeclarePatchAppliedUseCase';
 import { GetPatchesForVulnerabilityUseCase } from '../../domain/usecases/GetPatchesForVulnerabilityUseCase';
+import { GetPatchesForProjectUseCase } from '../../domain/usecases/GetPatchesForProjectUseCase';
 import { ExportWeeklyReportUseCase } from '../../domain/usecases/ExportWeeklyReportUseCase';
 import { ExportMonthlyReportUseCase } from '../../domain/usecases/ExportMonthlyReportUseCase';
 import { GetAppliedPatchHistoryUseCase } from '../../domain/usecases/GetAppliedPatchHistoryUseCase';
@@ -145,6 +146,10 @@ export function useInfrastructure() {
   const [patchApplyingKey, setPatchApplyingKey] = useState(null);
   const [patchApplyError, setPatchApplyError] = useState(null);
   const [patchesByCVE, setPatchesByCVE] = useState({});
+  // Parches de todo el proyecto, indexados por CVE. Los usa la ficha de una técnica
+  // ATT&CK, que los necesita para muchas CVE a la vez.
+  const [projectPatchesByCVE, setProjectPatchesByCVE] = useState(new Map());
+  const [projectPatchesLoading, setProjectPatchesLoading] = useState(false);
   const [patchDetailsLoading, setPatchDetailsLoading] = useState(false);
   const [patchDetailsError, setPatchDetailsError] = useState(null);
   const [patchProjectRefreshLoading, setPatchProjectRefreshLoading] = useState(false);
@@ -177,7 +182,7 @@ export function useInfrastructure() {
   const deleteNodeUseCase = useMemo(() => new DeleteNodeUseCase(repository), [repository]);
 
   const exportProjectUseCase = useMemo(() => new ExportProjectUseCase(repository), [repository]);
-  const exportMitreNavigatorUseCase = useMemo(() => new ExportMitreNavigatorUseCase(), []);
+  const exportMitreNavigatorUseCase = useMemo(() => new ExportMitreNavigatorUseCase(repository), [repository]);
   const exportInventoryUseCase = useMemo(() => new ExportInventoryUseCase(repository), [repository]);
   const exportWeeklyReportUseCase = useMemo(() => new ExportWeeklyReportUseCase(repository), [repository]);
   const exportMonthlyReportUseCase = useMemo(() => new ExportMonthlyReportUseCase(repository), [repository]);
@@ -193,11 +198,17 @@ export function useInfrastructure() {
   const refreshPatchesForVulnerabilityUseCase = useMemo(() => new RefreshPatchesForVulnerabilityUseCase(repository), [repository]);
   const declarePatchAppliedUseCase = useMemo(() => new DeclarePatchAppliedUseCase(repository), [repository]);
   const getPatchesForVulnerabilityUseCase = useMemo(() => new GetPatchesForVulnerabilityUseCase(repository), [repository]);
+  const getPatchesForProjectUseCase = useMemo(() => new GetPatchesForProjectUseCase(repository), [repository]);
   const getAppliedPatchHistoryUseCase = useMemo(() => new GetAppliedPatchHistoryUseCase(repository), [repository]);
 
-  const showToast = (msg, type = 'info', title = null) => {
-    toast.showToast(msg, type, title);
-  };
+  // Memoizado sobre la función estable del contexto (no sobre el objeto `toast`,
+  // que se recrea en cada render). showToast viaja como prop a páginas que lo
+  // usan en dependencias de efectos, y una identidad nueva por render provocaba
+  // recargas completas de datos pesados (matriz TTP) en cada repintado del padre.
+  const showToastFn = toast.showToast;
+  const showToast = useCallback((msg, type = 'info', title = null) => {
+    showToastFn(msg, type, title);
+  }, [showToastFn]);
 
   const fetchProjects = useCallback(async () => {
     try {
@@ -297,9 +308,10 @@ export function useInfrastructure() {
     }
   };
 
-  const fetchTTPMatrix = async (projectId) => {
+  // Memoizado: TtpsPage lo usa como dependencia del efecto que carga la matriz.
+  const fetchTTPMatrix = useCallback(async (projectId) => {
     return await getTTPMatrixUseCase.execute(projectId);
-  };
+  }, [getTTPMatrixUseCase]);
 
   const fetchTopAPTs = async () => {
     setShowAPTPanel(true);
@@ -618,6 +630,32 @@ export function useInfrastructure() {
     }
   };
 
+  // Se pide una vez por proyecto y queda cacheado: la ficha de una técnica lo consulta
+  // para cada una de sus CVE, y volver a la red en cada apertura sería absurdo.
+  //
+  // useCallback no es cosmético aquí: la pestaña de TTPs la invoca desde un efecto que la
+  // lleva en su lista de dependencias, y una función nueva en cada render encadenaría una
+  // petición por render.
+  const fetchProjectPatches = useCallback(async (projectId) => {
+    if (!projectId) {
+      setProjectPatchesByCVE(new Map());
+      return new Map();
+    }
+    setProjectPatchesLoading(true);
+    try {
+      const mapa = await getPatchesForProjectUseCase.execute(projectId);
+      setProjectPatchesByCVE(mapa);
+      return mapa;
+    } catch (err) {
+      // Un fallo aquí deja la ficha sin parches, pero no debe tumbar la pestaña de TTPs.
+      console.warn('[parches del proyecto] no se pudieron cargar:', err);
+      setProjectPatchesByCVE(new Map());
+      return new Map();
+    } finally {
+      setProjectPatchesLoading(false);
+    }
+  }, [getPatchesForProjectUseCase]);
+
   const focusPatchQueueItem = (item) => {
     const findingNode = (graphData?.nodes || []).find(n =>
       (n.primaryLabel === 'Finding' || n.labels?.includes('Finding')) &&
@@ -697,7 +735,7 @@ export function useInfrastructure() {
         n => (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
             String(n.properties?.id ?? n.id) === String(projId)
       );
-      const projectName = projectNode?.properties?.nombre || projectNode?.properties?.name || 'Proyecto';
+      const projectName = projectNode?.properties?.name || projectNode?.properties?.nombre || 'Proyecto';
 
       const { filename, content } = await exportProjectUseCase.execute(projId, projectName);
       _triggerDownload(filename, content);
@@ -708,14 +746,24 @@ export function useInfrastructure() {
     }
   };
 
-  const exportMitreNavigator = (targetProjectId) => {
+  const exportMitreNavigator = async (targetProjectId) => {
     try {
-      const { filename, content } = exportMitreNavigatorUseCase.execute(filteredGraphData, aptData, targetProjectId || selectedProjectId);
+      // La capa se genera desde la matriz TTP del backend (fuente autorizada),
+      // no desde el grafo filtrado en pantalla: el resultado no puede depender
+      // del filtro visual activo ni contener técnicas de demostración.
+      const projId = targetProjectId || selectedProjectId;
+      const projectNode = graphData?.nodes?.find(
+        n => (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
+            String(n.properties?.id ?? n.id) === String(projId)
+      );
+      const projectName = projectNode?.properties?.name || projectNode?.properties?.nombre || 'Proyecto';
+
+      const { filename, content } = await exportMitreNavigatorUseCase.execute(projId, projectName);
       _triggerDownload(filename, content);
       showToast('¡Capa de MITRE ATT&CK Navigator exportada!');
     } catch (err) {
       console.error(err);
-      showToast(`Error al exportar capa MITRE: ${err.message}`);
+      showToast(`Error al exportar capa MITRE: ${err.message}`, 'error');
     }
   };
 
@@ -727,7 +775,7 @@ export function useInfrastructure() {
         n => (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
             String(n.properties?.id ?? n.id) === String(projId)
       );
-      const projectName = projectNode?.properties?.nombre || projectNode?.properties?.name || 'Proyecto';
+      const projectName = projectNode?.properties?.name || projectNode?.properties?.nombre || 'Proyecto';
 
       const { filename, blob } = await exportInventoryUseCase.execute(projId, projectName);
       const url = URL.createObjectURL(blob);
@@ -752,7 +800,7 @@ export function useInfrastructure() {
       n => (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
            String(n.properties?.id ?? n.id) === String(projId)
     );
-    return nodo?.properties?.nombre || nodo?.properties?.name || 'Proyecto';
+    return nodo?.properties?.name || nodo?.properties?.nombre || 'Proyecto';
   };
 
   // Informe SEMANAL: operativo, para el equipo. Qué hay que cerrar esta semana.
@@ -1781,6 +1829,9 @@ export function useInfrastructure() {
     patchDetailsLoading,
     patchDetailsError,
     fetchPatchesForCVE,
+    projectPatchesByCVE,
+    projectPatchesLoading,
+    fetchProjectPatches,
     refreshPatchesForProject,
     patchProjectRefreshLoading,
     patchProjectRefreshError,

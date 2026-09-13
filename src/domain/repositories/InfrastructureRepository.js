@@ -81,6 +81,10 @@ export class InfrastructureRepository {
     throw new Error('Method getPatchesForVulnerability not implemented');
   }
 
+  async getPatchesForProject(projectId) {
+    throw new Error('Method getPatchesForProject not implemented');
+  }
+
   async declarePatchApplied(assetId, payload) {
     throw new Error('Method declarePatchApplied not implemented');
   }

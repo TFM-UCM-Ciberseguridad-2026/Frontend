@@ -28,6 +28,15 @@ export class InfrastructureApiDataSource {
     return await this._handleResponse(res);
   }
 
+  /**
+   * Recuento y versión del catálogo MITRE ATT&CK efectivamente cargado.
+   * Devuelve { count, attack_version, attack_spec_version, catalog_updated_at }.
+   */
+  async fetchMitreCatalogInfo() {
+    const res = await fetch('/api/infrastructure/mitre-ttp-count');
+    return await this._handleResponse(res);
+  }
+
   async fetchExploitationPaths(projectId) {
     const url = projectId
       ? `/api/infrastructure/exploitation-paths?project_id=${projectId}`
@@ -374,6 +383,14 @@ export class InfrastructureApiDataSource {
 
   async fetchPatchesForVulnerability(cveId) {
     const res = await fetch(`/api/vulnerabilities/${encodeURIComponent(cveId)}/patches`);
+    return await this._handleResponse(res);
+  }
+
+  // Parches de todas las CVE del proyecto en una sola llamada. Los consume la ficha de
+  // una técnica ATT&CK, que reúne hasta un centenar de CVE: pedirlos uno a uno sería un
+  // aluvión de peticiones cada vez que se abre una técnica.
+  async fetchPatchesForProject(projectId) {
+    const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/cve-patches`);
     return await this._handleResponse(res);
   }
 
