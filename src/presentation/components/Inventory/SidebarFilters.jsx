@@ -38,6 +38,7 @@ export function SidebarFilters({
     filters.environment && filters.environment !== 'ALL' ? filters.environment : null,
     filters.internetExposed && filters.internetExposed !== 'ALL' ? filters.internetExposed : null,
     filters.status && filters.status !== 'ALL' ? filters.status : null,
+    filters.execState && filters.execState !== 'ALL' ? filters.execState : null,
     filters.riskTier && filters.riskTier !== 'ALL' ? filters.riskTier : null
   ].filter(Boolean).length;
 
@@ -204,7 +205,7 @@ export function SidebarFilters({
                   >
                     <option value="ALL">Todos los entornos</option>
                     <option value="production">Production</option>
-                    <option value="development">Development</option>
+                    <option value="dev">Development</option>
                     <option value="staging">Staging</option>
                   </select>
                 </div>
@@ -253,7 +254,7 @@ export function SidebarFilters({
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
-                    Estado de Ejecución:
+                    Estado (Endpoint):
                   </label>
                   <select
                     className="sidebar-filter-control"
@@ -261,9 +262,22 @@ export function SidebarFilters({
                     onChange={(e) => updateFilter('status', e.target.value)}
                   >
                     <option value="ALL">Todos los estados</option>
+                    <option value="active">Active</option>
+                  </select>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
+                    Estado de Ejecución (Contenedor):
+                  </label>
+                  <select
+                    className="sidebar-filter-control"
+                    value={filters.execState || 'ALL'}
+                    onChange={(e) => updateFilter('execState', e.target.value)}
+                  >
+                    <option value="ALL">Todos los estados</option>
                     <option value="running">Running</option>
                     <option value="stopped">Stopped</option>
-                    <option value="active">Active</option>
                   </select>
                 </div>
 

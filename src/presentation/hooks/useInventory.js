@@ -14,6 +14,7 @@ export function useInventory(selectedProjectId) {
   const [environment, setEnvironment] = useState('ALL');
   const [internetExposed, setInternetExposed] = useState('ALL');
   const [status, setStatus] = useState('ALL');
+  const [execState, setExecState] = useState('ALL');
   const [riskTier, setRiskTier] = useState('ALL');
 
   const [sortField, setSortField] = useState('name');
@@ -73,6 +74,9 @@ export function useInventory(selectedProjectId) {
       case 'status':
         setStatus(val);
         break;
+      case 'execState':
+        setExecState(val);
+        break;
       case 'riskTier':
         setRiskTier(val);
         break;
@@ -102,6 +106,7 @@ export function useInventory(selectedProjectId) {
     setEnvironment('ALL');
     setInternetExposed('ALL');
     setStatus('ALL');
+    setExecState('ALL');
     setRiskTier('ALL');
   };
 
@@ -133,6 +138,7 @@ export function useInventory(selectedProjectId) {
         environment,
         internetExposed,
         status,
+        execState,
         riskTier,
         sortField,
         sortDirection
@@ -161,6 +167,7 @@ export function useInventory(selectedProjectId) {
     environment,
     internetExposed,
     status,
+    execState,
     riskTier,
     sortField,
     sortDirection
@@ -197,6 +204,7 @@ export function useInventory(selectedProjectId) {
       environment,
       internetExposed,
       status,
+      execState,
       riskTier
     },
     updateFilter,

@@ -232,7 +232,7 @@ const categories = [
 
         {activeNav === 'inventario' && (
           <InventoryPage
-            categories={categories.filter(c => !['Finding', 'Remediation', 'Vulnerability', 'CWE', 'CVE'].includes(c.key))}
+            categories={categories.filter(c => !['Finding', 'Remediation', 'Vulnerability', 'CWE', 'CVE', 'Software', 'Project'].includes(c.key))}
             selectedProjectId={selectedProjectId}
             updateNode={updateNode}
             deleteNode={deleteNode}

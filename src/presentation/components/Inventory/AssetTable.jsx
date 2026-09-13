@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React from 'react';
 import { getNodeColor } from '../../utils/nodeColors';
 import { ActiveFilterChips } from './ActiveFilterChips';
 
@@ -23,24 +23,6 @@ export function AssetTable({
   firstPage,
   lastPage
 }) {
-  const [activePopover, setActivePopover] = useState(null); // 'name', 'category', 'attributes', 'status'
-  const popoverRef = useRef(null);
-
-  // Cerrar popover al hacer clic fuera
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target)) {
-        setActivePopover(null);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const togglePopover = (columnKey) => {
-    setActivePopover(prev => (prev === columnKey ? null : columnKey));
-  };
-
   // Formateador de Atributos Clave según Categoría
   const renderAssetAttributes = (node) => {
     const props = node.properties || {};
@@ -272,8 +254,6 @@ export function AssetTable({
     );
   };
 
-  const availableCategories = categoriesList.filter(c => c.key !== 'ALL');
-
   return (
     <main className="graph-stage" style={{ padding: '24px', display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box' }}>
       
@@ -294,8 +274,7 @@ export function AssetTable({
           borderRadius: '8px',
           border: '1px solid var(--line)',
           overflowX: 'auto'
-        }} 
-        ref={popoverRef}
+        }}
       >
         {loading && (
           <div style={{
@@ -324,302 +303,53 @@ export function AssetTable({
               
               {/* 1. CABECERA ACTIVO */}
               <th style={{ padding: '12px 16px', color: 'var(--c300)', fontWeight: 'normal', fontFamily: 'Orbitron, sans-serif', userSelect: 'none', width: '25%', position: 'relative' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span onClick={() => handleSort('name')} style={{ cursor: 'pointer' }}>
-                    ACTIVO {sortField === 'name' ? (sortDirection === 'asc' ? ' ⏶' : ' ⏷') : ''}
-                  </span>
-                  <button
-                    onClick={() => togglePopover('name')}
-                    style={{
-                      background: filters.search ? 'rgba(79, 58, 255, 0.3)' : 'transparent',
-                      border: 'none',
-                      color: filters.search ? 'var(--c100)' : 'var(--muted)',
-                      cursor: 'pointer',
-                      fontSize: '12px',
-                      padding: '2px 4px',
-                      borderRadius: '3px'
-                    }}
-                    title="Filtrar por nombre"
-                  >
-                    🔍
-                  </button>
-                </div>
-
-                {/* Popover Filtro Nombre */}
-                {activePopover === 'name' && (
-                  <div style={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    zIndex: 20,
-                    background: '#121224',
-                    border: '1px solid var(--c400)',
-                    padding: '12px',
-                    borderRadius: '6px',
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                    width: '220px'
-                  }}>
-                    <label style={{ fontSize: '11px', color: 'var(--c400)', display: 'block', marginBottom: '6px' }}>Buscar por nombre/hostname:</label>
-                    <input
-                      type="text"
-                      value={filters.search || ''}
-                      onChange={(e) => updateFilter('search', e.target.value)}
-                      placeholder="Ej. srv-web-01..."
-                      style={{
-                        width: '100%',
-                        background: '#0a0a14',
-                        border: '1px solid var(--line)',
-                        color: 'var(--c100)',
-                        padding: '6px',
-                        borderRadius: '4px',
-                        fontSize: '12px',
-                        boxSizing: 'border-box'
-                      }}
-                    />
-                  </div>
-                )}
+                <span onClick={() => handleSort('name')} style={{ cursor: 'pointer' }}>
+                  ACTIVO {sortField === 'name' ? (sortDirection === 'asc' ? ' ⏶' : ' ⏷') : ''}
+                </span>
               </th>
 
               {/* 2. CABECERA CATEGORÍA */}
               <th style={{ padding: '12px 16px', color: 'var(--c300)', fontWeight: 'normal', fontFamily: 'Orbitron, sans-serif', userSelect: 'none', width: '20%', position: 'relative' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span onClick={() => handleSort('category')} style={{ cursor: 'pointer' }}>
-                    CATEGORÍA {sortField === 'category' ? (sortDirection === 'asc' ? ' ⏶' : ' ⏷') : ''}
-                  </span>
-                  <button
-                    onClick={() => togglePopover('category')}
-                    style={{
-                      background: (filters.categories && filters.categories.length > 0) ? 'rgba(79, 58, 255, 0.3)' : 'transparent',
-                      border: 'none',
-                      color: (filters.categories && filters.categories.length > 0) ? 'var(--c100)' : 'var(--muted)',
-                      cursor: 'pointer',
-                      fontSize: '12px',
-                      padding: '2px 4px',
-                      borderRadius: '3px'
-                    }}
-                    title="Filtrar categorías"
-                  >
-                    ⚙
-                  </button>
-                </div>
-
-                {/* Popover Filtro Categorías */}
-                {activePopover === 'category' && (
-                  <div style={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    zIndex: 20,
-                    background: '#121224',
-                    border: '1px solid var(--c400)',
-                    padding: '12px',
-                    borderRadius: '6px',
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                    width: '210px',
-                    maxHeight: '250px',
-                    overflowY: 'auto'
-                  }}>
-                    <label style={{ fontSize: '11px', color: 'var(--c400)', display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>Filtrar Categorías:</label>
-                    {availableCategories.map(cat => {
-                      const isChecked = (filters.categories || []).includes(cat.key);
-                      return (
-                        <label key={cat.key} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', margin: '4px 0', cursor: 'pointer', color: 'var(--c100)' }}>
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={(e) => {
-                              const curr = filters.categories || [];
-                              if (e.target.checked) {
-                                updateFilter('categories', [...curr, cat.key]);
-                              } else {
-                                updateFilter('categories', curr.filter(c => c !== cat.key));
-                              }
-                            }}
-                          />
-                          <span style={{ color: cat.color }}>{cat.label}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
+                <span onClick={() => handleSort('category')} style={{ cursor: 'pointer' }}>
+                  CATEGORÍA {sortField === 'category' ? (sortDirection === 'asc' ? ' ⏶' : ' ⏷') : ''}
+                </span>
               </th>
 
               {/* 3. CABECERA ATRIBUTOS CLAVE */}
               <th style={{ padding: '12px 16px', color: 'var(--c300)', fontWeight: 'normal', fontFamily: 'Orbitron, sans-serif', userSelect: 'none', width: '35%', position: 'relative' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span onClick={() => handleSort('properties')} style={{ cursor: 'pointer' }}>
-                    ATRIBUTOS CLAVE {sortField === 'properties' ? (sortDirection === 'asc' ? ' ⏶' : ' ⏷') : ''}
-                  </span>
-                  <button
-                    onClick={() => togglePopover('attributes')}
-                    style={{
-                      background: (filters.ipSearch || filters.vendorSearch) ? 'rgba(79, 58, 255, 0.3)' : 'transparent',
-                      border: 'none',
-                      color: (filters.ipSearch || filters.vendorSearch) ? 'var(--c100)' : 'var(--muted)',
-                      cursor: 'pointer',
-                      fontSize: '12px',
-                      padding: '2px 4px',
-                      borderRadius: '3px'
-                    }}
-                    title="Filtrar por IP o Proveedor"
-                  >
-                    🔍
-                  </button>
-                </div>
-
-                {/* Popover Filtro Atributos */}
-                {activePopover === 'attributes' && (
-                  <div style={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    zIndex: 20,
-                    background: '#121224',
-                    border: '1px solid var(--c400)',
-                    padding: '12px',
-                    borderRadius: '6px',
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                    width: '240px'
-                  }}>
-                    <div style={{ marginBottom: '10px' }}>
-                      <label style={{ fontSize: '11px', color: 'var(--c400)', display: 'block', marginBottom: '4px' }}>IP / Subred (CIDR):</label>
-                      <input
-                        type="text"
-                        value={filters.ipSearch || ''}
-                        onChange={(e) => updateFilter('ipSearch', e.target.value)}
-                        placeholder="Ej. 192.168.1..."
-                        style={{
-                          width: '100%',
-                          background: '#0a0a14',
-                          border: '1px solid var(--line)',
-                          color: 'var(--c100)',
-                          padding: '6px',
-                          borderRadius: '4px',
-                          fontSize: '12px',
-                          boxSizing: 'border-box'
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: '11px', color: 'var(--c400)', display: 'block', marginBottom: '4px' }}>Proveedor / Vendor:</label>
-                      <input
-                        type="text"
-                        value={filters.vendorSearch || ''}
-                        onChange={(e) => updateFilter('vendorSearch', e.target.value)}
-                        placeholder="Ej. Apache, Dell..."
-                        style={{
-                          width: '100%',
-                          background: '#0a0a14',
-                          border: '1px solid var(--line)',
-                          color: 'var(--c100)',
-                          padding: '6px',
-                          borderRadius: '4px',
-                          fontSize: '12px',
-                          boxSizing: 'border-box'
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
+                <span onClick={() => handleSort('properties')} style={{ cursor: 'pointer' }}>
+                  ATRIBUTOS CLAVE {sortField === 'properties' ? (sortDirection === 'asc' ? ' ⏶' : ' ⏷') : ''}
+                </span>
               </th>
 
               {/* 4. CABECERA ESTADO / RIESGO */}
               <th style={{ padding: '12px 16px', color: 'var(--c300)', fontWeight: 'normal', fontFamily: 'Orbitron, sans-serif', userSelect: 'none', width: '20%', position: 'relative' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span>ESTADO / RIESGO</span>
-                  <button
-                    onClick={() => togglePopover('status')}
-                    style={{
-                      background: (filters.internetExposed !== 'ALL' || filters.riskTier !== 'ALL') ? 'rgba(79, 58, 255, 0.3)' : 'transparent',
-                      border: 'none',
-                      color: (filters.internetExposed !== 'ALL' || filters.riskTier !== 'ALL') ? 'var(--c100)' : 'var(--muted)',
-                      cursor: 'pointer',
-                      fontSize: '12px',
-                      padding: '2px 4px',
-                      borderRadius: '3px'
-                    }}
-                    title="Filtrar por exposición o riesgo"
-                  >
-                    ⚙
-                  </button>
-                </div>
-
-                {/* Popover Filtro Estado/Exposición/Riesgo */}
-                {activePopover === 'status' && (
-                  <div style={{
-                    position: 'absolute',
-                    top: '100%',
-                    right: 0,
-                    zIndex: 20,
-                    background: '#121224',
-                    border: '1px solid var(--c400)',
-                    padding: '12px',
-                    borderRadius: '6px',
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                    width: '220px'
-                  }}>
-                    <div style={{ marginBottom: '10px' }}>
-                      <label style={{ fontSize: '11px', color: 'var(--c400)', display: 'block', marginBottom: '4px' }}>Exposición Internet:</label>
-                      <select
-                        value={filters.internetExposed || 'ALL'}
-                        onChange={(e) => updateFilter('internetExposed', e.target.value)}
-                        style={{
-                          width: '100%',
-                          background: '#0a0a14',
-                          border: '1px solid var(--line)',
-                          color: 'var(--c100)',
-                          padding: '6px',
-                          borderRadius: '4px',
-                          fontSize: '12px'
-                        }}
-                      >
-                        <option value="ALL">Todos los activos</option>
-                        <option value="TRUE">☁ Solo Expuestos</option>
-                        <option value="FALSE">🔒 Solo Internos</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label style={{ fontSize: '11px', color: 'var(--c400)', display: 'block', marginBottom: '4px' }}>Nivel de Riesgo:</label>
-                      <select
-                        value={filters.riskTier || 'ALL'}
-                        onChange={(e) => updateFilter('riskTier', e.target.value)}
-                        style={{
-                          width: '100%',
-                          background: '#0a0a14',
-                          border: '1px solid var(--line)',
-                          color: 'var(--c100)',
-                          padding: '6px',
-                          borderRadius: '4px',
-                          fontSize: '12px'
-                        }}
-                      >
-                        <option value="ALL">Todos los niveles</option>
-                        <option value="CRITICAL">Critical</option>
-                        <option value="HIGH">High</option>
-                        <option value="MEDIUM">Medium</option>
-                        <option value="LOW">Low</option>
-                      </select>
-                    </div>
-                  </div>
-                )}
+                <span>ESTADO / RIESGO</span>
               </th>
             </tr>
           </thead>
           <tbody>
             {processedNodes.map(node => {
               const catColor = getNodeColor(node);
+              // El `id` de dominio se repite entre tipos distintos (un Project, un
+              // Software, una Network y un Endpoint pueden compartir id=1), así que la
+              // identidad de fila es el par (categoría, id): sin esto React colisiona las
+              // keys y al seleccionar uno se resaltaban todos los que comparten id.
+              const nodeKey = `${node.primaryLabel}:${node.id}`;
+              const isSelected = selectedNode
+                && selectedNode.id === node.id
+                && selectedNode.primaryLabel === node.primaryLabel;
               return (
                 <tr
-                  key={node.id}
+                  key={nodeKey}
                   onClick={() => setSelectedNode(node)}
                   style={{
                     borderBottom: '1px solid rgba(255,255,255,0.05)',
                     cursor: 'pointer',
-                    background: selectedNode && selectedNode.id === node.id ? 'rgba(79, 58, 255, 0.12)' : 'transparent'
+                    background: isSelected ? 'rgba(79, 58, 255, 0.12)' : 'transparent'
                   }}
                   onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(122, 115, 255, 0.05)' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = selectedNode && selectedNode.id === node.id ? 'rgba(79, 58, 255, 0.12)' : 'transparent' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = isSelected ? 'rgba(79, 58, 255, 0.12)' : 'transparent' }}
                 >
                   {/* 1. NOMBRE / ACTIVO */}
                   <td style={{ padding: '12px 16px', fontWeight: 'bold', fontSize: '13px', color: 'var(--c100)' }}>

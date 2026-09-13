@@ -438,6 +438,7 @@ export class InfrastructureApiDataSource {
     environment = '',
     internetExposed = '',
     status = '',
+    execState = '',
     riskTier = '',
     sortField = 'name',
     sortDirection = 'asc'
@@ -456,6 +457,7 @@ export class InfrastructureApiDataSource {
     if (environment) params.set('environment', environment);
     if (internetExposed) params.set('internet_exposed', internetExposed);
     if (status) params.set('status', status);
+    if (execState) params.set('exec_state', execState);
     if (riskTier) params.set('risk_tier', riskTier);
     if (sortField) params.set('sort_by', sortField);
     if (sortDirection) params.set('order', sortDirection);
