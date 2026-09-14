@@ -4,8 +4,7 @@ export class CreateProjectUseCase {
   }
 
   async execute(projectData) {
-    const nombre = projectData.nombre || projectData.name;
-    if (!nombre) {
+    if (!projectData?.name) {
       throw new Error('El nombre del proyecto es obligatorio.');
     }
 

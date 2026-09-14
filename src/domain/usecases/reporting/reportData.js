@@ -352,7 +352,7 @@ export async function recopilarDatos(repositorio, projectId, ventanaDias) {
   // ── Proyecto ──────────────────────────────────────────────────────────
   const projNodo = nodos.find(n => esLabel(n, 'Project'));
   const proyecto = {
-    nombre: projNodo?.properties?.name || projNodo?.properties?.nombre || 'Proyecto',
+    nombre: projNodo?.properties?.name || 'Proyecto',
     riskTier: projNodo?.properties?.risk_tier || '—',
     riskScore: Number(projNodo?.properties?.risk_score || 0),
     endpointsEnRiesgo: Number(projNodo?.properties?.risky_endpoint_count || 0),

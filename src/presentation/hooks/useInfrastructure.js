@@ -218,7 +218,7 @@ export function useInfrastructure() {
           .filter(n => n.labels?.includes('Project') || n.primaryLabel === 'Project')
           .map(n => ({
             id: String(n.properties?.id ?? n.id),
-            name: n.properties?.name || n.properties?.nombre || n.name || `Proyecto #${n.properties?.id ?? n.id}`
+            name: n.properties?.name || n.name || `Proyecto #${n.properties?.id ?? n.id}`
           }));
         setProjects(foundProjects);
         return foundProjects;
@@ -735,7 +735,7 @@ export function useInfrastructure() {
         n => (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
             String(n.properties?.id ?? n.id) === String(projId)
       );
-      const projectName = projectNode?.properties?.name || projectNode?.properties?.nombre || 'Proyecto';
+      const projectName = projectNode?.properties?.name || 'Proyecto';
 
       const { filename, content } = await exportProjectUseCase.execute(projId, projectName);
       _triggerDownload(filename, content);
@@ -756,7 +756,7 @@ export function useInfrastructure() {
         n => (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
             String(n.properties?.id ?? n.id) === String(projId)
       );
-      const projectName = projectNode?.properties?.name || projectNode?.properties?.nombre || 'Proyecto';
+      const projectName = projectNode?.properties?.name || 'Proyecto';
 
       const { filename, content } = await exportMitreNavigatorUseCase.execute(projId, projectName);
       _triggerDownload(filename, content);
@@ -775,7 +775,7 @@ export function useInfrastructure() {
         n => (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
             String(n.properties?.id ?? n.id) === String(projId)
       );
-      const projectName = projectNode?.properties?.name || projectNode?.properties?.nombre || 'Proyecto';
+      const projectName = projectNode?.properties?.name || 'Proyecto';
 
       const { filename, blob } = await exportInventoryUseCase.execute(projId, projectName);
       const url = URL.createObjectURL(blob);
@@ -800,7 +800,7 @@ export function useInfrastructure() {
       n => (n.labels?.includes('Project') || n.primaryLabel === 'Project') &&
            String(n.properties?.id ?? n.id) === String(projId)
     );
-    return nodo?.properties?.name || nodo?.properties?.nombre || 'Proyecto';
+    return nodo?.properties?.name || 'Proyecto';
   };
 
   // Informe SEMANAL: operativo, para el equipo. Qué hay que cerrar esta semana.
@@ -852,19 +852,38 @@ export function useInfrastructure() {
         const rels = dataToImport.relationships || dataToImport.graphData?.relationships || [];
 
         const idMapping = {};
-        const globalLabels = ['Vulnerability', 'ThreatActor', 'TTP', 'Mitigation', 'Software', 'ContainerImage'];
+        // Referencias antiguas que corresponden a más de un nodo (un id de propiedad
+        // compartido por nodos de tipos distintos). No se pueden remapear sin arriesgarse
+        // a enganchar relaciones al nodo equivocado.
+        const ambiguousRefs = new Set();
+        const mapRef = (oldRef, newId) => {
+          if (idMapping[oldRef] !== undefined && idMapping[oldRef] !== newId) {
+            ambiguousRefs.add(oldRef);
+          } else {
+            idMapping[oldRef] = newId;
+          }
+        };
+        // Catálogos compartidos entre proyectos: conservan su identidad al copiar. CAPEC y CWE
+        // se identifican por capec_id/cwe_id; darles un id nuevo no aportaba nada y era una
+        // fuente más de colisiones.
+        const globalLabels = ['Vulnerability', 'ThreatActor', 'TTP', 'Mitigation', 'Software', 'ContainerImage', 'CAPEC', 'CWE'];
 
-        nodes.forEach((n, idx) => {
+        // Ids nuevos consecutivos a partir de una base común: con Date.now() + idx + un
+        // aleatorio, dos nodos podían recibir el mismo id y la importación los fusionaba.
+        const baseId = newProjId + 1;
+        let nextOffset = 0;
+
+        nodes.forEach((n) => {
           const isGlobal = n.labels?.some(l => globalLabels.includes(l));
 
           if (!isGlobal) {
-            const newId = n.labels?.includes('Project') ? String(newProjId) : String(Date.now() + idx + Math.floor(Math.random() * 10000));
+            const newId = n.labels?.includes('Project') ? String(newProjId) : String(baseId + nextOffset++);
             const oldNodeId = String(n.id);
-            idMapping[oldNodeId] = newId;
+            mapRef(oldNodeId, newId);
 
             if (n.properties?.id !== undefined && n.properties?.id !== null) {
               const oldPropId = String(n.properties.id);
-              idMapping[oldPropId] = newId;
+              mapRef(oldPropId, newId);
               if (typeof n.properties.id === 'number') {
                 n.properties.id = parseInt(newId, 10);
               } else {
@@ -876,23 +895,58 @@ export function useInfrastructure() {
 
             if (n.labels?.includes('Project')) {
               if (n.properties) {
-                n.properties.nombre = options.renameTo;
+                delete n.properties.nombre; // los ficheros antiguos lo traen; el esquema usa `name`
                 n.properties.name = options.renameTo;
               }
             }
           }
         });
 
+        // Un finding se identifica por finding_key (activo|CVE). Si la copia conservara la
+        // clave del activo original, la importación la fusionaría con el finding del
+        // proyecto de origen. Se reescribe el activo con su id nuevo; si no se puede
+        // remapear, se quita la clave para que la copia no pise al original.
+        nodes.forEach((n) => {
+          if (!n.labels?.includes('Finding') || !n.properties) return;
+          const p = n.properties;
+
+          if (p.container_id !== undefined && p.container_id !== null) {
+            const oldContainer = String(p.container_id);
+            if (idMapping[oldContainer] && !ambiguousRefs.has(oldContainer)) {
+              p.container_id = idMapping[oldContainer];
+            }
+          }
+
+          if (typeof p.finding_key === 'string' && p.finding_key.includes('|')) {
+            const parts = p.finding_key.split('|');
+            const oldOwner = parts[0];
+            if (idMapping[oldOwner] && !ambiguousRefs.has(oldOwner)) {
+              parts[0] = idMapping[oldOwner];
+              p.finding_key = parts.join('|');
+            } else {
+              delete p.finding_key;
+            }
+          }
+        });
+
+        const remappedRels = [];
         rels.forEach(rel => {
           const sStr = String(rel.source);
           const tStr = String(rel.target);
+          if (ambiguousRefs.has(sStr) || ambiguousRefs.has(tStr)) {
+            console.warn('Relación omitida en la importación por referencia ambigua:', rel);
+            return;
+          }
           if (idMapping[sStr]) {
             rel.source = idMapping[sStr];
           }
           if (idMapping[tStr]) {
             rel.target = idMapping[tStr];
           }
+          remappedRels.push(rel);
         });
+        rels.length = 0;
+        rels.push(...remappedRels);
       }
 
       await importInfrastructureUseCase.execute(dataToImport);
@@ -927,7 +981,7 @@ export function useInfrastructure() {
         .filter(n => n.labels?.includes('Project') || n.primaryLabel === 'Project')
         .map(n => ({
           id: String(n.properties?.id ?? n.id),
-          name: n.properties?.name || n.properties?.nombre || n.name || `Proyecto #${n.properties?.id ?? n.id}`
+          name: n.properties?.name || n.name || `Proyecto #${n.properties?.id ?? n.id}`
         }));
 
       if (foundProjects.length > 0) {

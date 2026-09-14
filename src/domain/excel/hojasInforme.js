@@ -40,7 +40,7 @@ function hojaPortada(d, idx) {
   return libre('Portada', [
     ['INFORME TÉCNICO DE INFRAESTRUCTURA'],
     [],
-    ['Proyecto', p.name || p.nombre || d.nombreProyecto || ''],
+    ['Proyecto', p.name || d.nombreProyecto || ''],
     ['ID de proyecto', d.projectId ?? p.id ?? ''],
     ['Generado', d.generadoEn || new Date()],
     [],
@@ -452,9 +452,8 @@ function hojaSoftware(d, idx) {
 // 7 · VULNERABILIDADES
 // ═════════════════════════════════════════════════════════════════════════
 function hojaVulnerabilidades(d, idx) {
-  // Las técnicas se toman de la matriz del backend, que es la fuente autorizada.
-  // La propiedad `ttp_related` del nodo existe pero está vacía en la práctica, y
-  // era lo que el export anterior leía (con el nombre equivocado, además).
+  // Las técnicas se toman de la matriz del backend, que es la fuente autorizada: el
+  // mapeo CVE→TTP vive en relaciones del grafo, no en propiedades del nodo Vulnerability.
   const tecnicasPorCVE = new Map();
   for (const t of d.matriz || []) {
     const idT = t.id || t.ID;

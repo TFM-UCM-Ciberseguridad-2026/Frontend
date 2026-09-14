@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './ProjectActionModals.css';
+import { findProjectByName } from '../../../domain/entities/projectName';
 
 export function RenameProjectModal({ isOpen, onClose, project, onRename, projects = [] }) {
   const [newName, setNewName] = useState('');
@@ -21,13 +22,7 @@ export function RenameProjectModal({ isOpen, onClose, project, onRename, project
     const trimmed = newName.trim();
     if (!trimmed || trimmed === project?.name) return;
 
-    const currentIdStr = String(project?.id || '');
-    const isDuplicate = (projects || []).some(p => {
-      if (String(p.id) === currentIdStr) return false;
-      return (p.name || p.nombre || '').toLowerCase().trim() === trimmed.toLowerCase();
-    });
-
-    if (isDuplicate) {
+    if (findProjectByName(projects, trimmed, project?.id ?? '')) {
       setFormError('Ya existe un proyecto con este nombre. Por favor, elige un nombre único.');
       return;
     }

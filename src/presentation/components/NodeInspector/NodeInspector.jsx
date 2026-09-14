@@ -162,7 +162,7 @@ const getVisibleAssetAttributes = (node) => {
       break;
 
     case 'Project':
-      if (props.nombre || props.name || node.name) fields.push({ key: 'Nombre del Proyecto', value: props.nombre || props.name || node.name });
+      if (props.name || node.name) fields.push({ key: 'Nombre del Proyecto', value: props.name || node.name });
       if (props.descripcion || props.description) fields.push({ key: 'Descripción', value: props.descripcion || props.description });
       if (props.type || props.tipo) fields.push({ key: 'Tipo de Proyecto', value: props.type || props.tipo });
       break;

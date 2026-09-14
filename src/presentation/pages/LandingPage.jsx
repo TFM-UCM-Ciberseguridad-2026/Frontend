@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './LandingPage.css';
 import { ImportModal } from '../components/Archive/ImportModal';
 import { RenameProjectModal, DeleteProjectModal } from '../components/HudHeader/ProjectActionModals';
+import { findProjectByName } from '../../domain/entities/projectName';
 
 const REPO_URL = 'https://github.com/TFM-UCM-Ciberseguridad-2026/Orquestador';
 
@@ -50,8 +51,7 @@ export function LandingPage({
     const trimmedName = cName.trim();
     if (!trimmedName) return;
 
-    const isDuplicate = (projects || []).some(p => (p.name || p.nombre || '').toLowerCase().trim() === trimmedName.toLowerCase());
-    if (isDuplicate) {
+    if (findProjectByName(projects, trimmedName)) {
       setCreateError('Ya existe un proyecto con este nombre. Por favor, elige un nombre único.');
       return;
     }
@@ -61,7 +61,7 @@ export function LandingPage({
 
     try {
       if (createProject) {
-        await createProject({ nombre: trimmedName });
+        await createProject({ name: trimmedName });
       }
       setCName('');
       setActiveModal(null);

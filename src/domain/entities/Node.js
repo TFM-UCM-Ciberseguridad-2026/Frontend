@@ -58,7 +58,7 @@ export class Node {
 
     switch (label) {
       case 'Project':
-        return props.nombre || props.name || `Proyecto #${props.id}`;
+        return props.name || `Proyecto #${props.id}`;
       case 'Network':
         return `${props.nombre || props.name || 'Red'} (${props.cidr || ''})`;
       case 'Endpoint':

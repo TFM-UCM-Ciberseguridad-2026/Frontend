@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './ArchiveModal.css';
 import { MAX_IMPORT_MB, MAX_IMPORT_BYTES } from '../../../data/datasources/InfrastructureApiDataSource';
+import { findProjectByName, projectNameFromExport } from '../../../domain/entities/projectName';
 
 export function ImportModal({
   isOpen,
@@ -35,6 +36,9 @@ export function ImportModal({
 
   if (!isOpen) return null;
 
+  // Se recalcula en cada render, es decir, con cada tecla del campo de renombrado.
+  const renameTaken = renamingMode && Boolean(findProjectByName(projects, newNameInput));
+
   const handleFileSelect = (file) => {
     setErrorMsg(null);
     setConflictState(null);
@@ -61,11 +65,8 @@ export function ImportModal({
         const text = e.target.result;
         const parsed = JSON.parse(text);
 
-        const projName = parsed?.project?.name ||
-          parsed?.nodes?.find(n => n.labels?.includes('Project') || n.primaryLabel === 'Project')?.properties?.nombre ||
-          parsed?.nodes?.find(n => n.labels?.includes('Project') || n.primaryLabel === 'Project')?.properties?.name;
-
-        const existingByName = (projects || []).find(p => projName && p.name?.toLowerCase().trim() === projName.toLowerCase().trim());
+        const projName = projectNameFromExport(parsed);
+        const existingByName = findProjectByName(projects, projName);
 
         setFileContent(text);
 
@@ -100,15 +101,27 @@ export function ImportModal({
     setErrorMsg(null);
     try {
       let finalOptions = { ...options };
-      
+      const parsed = JSON.parse(fileContent);
+      const fileProjectName = projectNameFromExport(parsed);
+
       if (!conflictState && !finalOptions.renameTo && !finalOptions.overwrite) {
-        const parsed = JSON.parse(fileContent);
-        const projName = parsed?.project?.name || parsed?.nodes?.find(n => n.labels?.includes('Project') || n.primaryLabel === 'Project')?.properties?.nombre || parsed?.nodes?.find(n => n.labels?.includes('Project') || n.primaryLabel === 'Project')?.properties?.name || 'Proyecto Importado';
         const projId = parsed?.project?.id || parsed?.nodes?.find(n => n.labels?.includes('Project') || n.primaryLabel === 'Project')?.properties?.id;
-        
+
         const existingById = (projects || []).find(p => projId !== undefined && projId !== null && String(p.id) === String(projId));
         if (existingById) {
-          finalOptions.renameTo = projName;
+          finalOptions.renameTo = fileProjectName || 'Proyecto Importado';
+        }
+      }
+
+      // El nombre con el que va a quedar el proyecto se valida aquí, justo antes de
+      // importar y sea cual sea el camino que ha traído hasta este punto. La comprobación al
+      // elegir el fichero se hace una sola vez y no ve lo que se escribe después en el campo
+      // de renombrado. Sobrescribir sustituye al proyecto existente, así que no aplica.
+      if (!finalOptions.overwrite) {
+        const targetName = finalOptions.renameTo || fileProjectName;
+        if (findProjectByName(projects, targetName)) {
+          setErrorMsg(`Ya existe un proyecto con el nombre "${targetName.trim()}". Por favor, elige un nombre único.`);
+          return;
         }
       }
 
@@ -225,6 +238,9 @@ export function ImportModal({
                   placeholder="Ej. Proyecto Auditoría Copia"
                   autoFocus
                 />
+                {renameTaken && (
+                  <p className="asset-error-text">⚠️ Ya existe un proyecto con este nombre. Por favor, elige un nombre único.</p>
+                )}
               </div>
             )}
 
@@ -281,7 +297,7 @@ export function ImportModal({
                   type="button"
                   className="btn btn-accent asset-submit-btn"
                   onClick={handleRenameConfirm}
-                  disabled={!newNameInput.trim() || importing}
+                  disabled={!newNameInput.trim() || renameTaken || importing}
                 >
                   {importing ? 'Importando...' : 'Confirmar e Importar'}
                 </button>
