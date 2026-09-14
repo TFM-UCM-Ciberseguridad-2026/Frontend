@@ -260,7 +260,10 @@ main.ttps {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  justify-content: center;
+  gap: 4px;
+  min-height: 62px;
+  box-sizing: border-box;
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 9px 12px;
@@ -283,6 +286,7 @@ main.ttps {
   justify-content: space-between;
   gap: 8px;
   min-width: 0;
+  flex-shrink: 0;
 }
 
 .ttps .ttp-item .tid {
@@ -309,6 +313,7 @@ main.ttps {
   max-width: 155px;
   min-width: 0;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .ttps .ttp-item .tactic-tag-label {
@@ -332,6 +337,8 @@ main.ttps {
   font-weight: 600;
   color: var(--c100);
   line-height: 1.3;
+  flex-shrink: 0;
+  word-break: break-word;
 }
 
 .ttps .ttp-item .hint {
