@@ -113,15 +113,17 @@ export function NetworksView({ graphData, setSelectedNode }) {
                     onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(122, 115, 255, 0.05)'; }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '14px' }}>{isContainer ? '🐳' : '💻'}</span>
                       <span style={{ color: 'var(--c100)', fontWeight: 'bold' }}>{asset.name}</span>
                       <span style={{
-                        fontSize: '9px',
-                        padding: '1px 5px',
-                        borderRadius: '3px',
-                        background: 'rgba(122, 115, 255, 0.15)',
-                        border: '1px solid rgba(122, 115, 255, 0.3)',
-                        color: 'var(--c200)'
+                        fontSize: '9.5px',
+                        padding: '2px 7px',
+                        borderRadius: '4px',
+                        fontWeight: 'bold',
+                        letterSpacing: '0.5px',
+                        background: isContainer ? 'rgba(0, 240, 255, 0.1)' : 'rgba(255, 255, 255, 0.08)',
+                        border: `1px solid ${isContainer ? 'rgba(0, 240, 255, 0.45)' : 'rgba(255, 255, 255, 0.35)'}`,
+                        color: isContainer ? '#00f0ff' : '#ffffff',
+                        boxShadow: isContainer ? '0 0 8px rgba(0, 240, 255, 0.2)' : '0 0 8px rgba(255, 255, 255, 0.15)'
                       }}>
                         {isContainer ? 'CONTAINER' : 'ENDPOINT'}
                       </span>

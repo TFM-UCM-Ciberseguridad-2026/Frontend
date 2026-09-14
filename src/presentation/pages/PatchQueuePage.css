@@ -6,7 +6,8 @@
 }
 
 .patch-queue-header {
-  max-width: 1400px;
+  width: 100%;
+  max-width: 1800px;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;

@@ -385,13 +385,21 @@ export function EditNodeModal({ node, onClose, updateNode, allNodes = [] }) {
 
                 <div>
                   <div className="asset-field-label">Entorno</div>
-                  <input
-                    type="text"
+                  <select
                     className="asset-input"
-                    placeholder="production, staging, dev..."
-                    value={formData.environment || ''}
+                    value={(() => {
+                      const env = (formData.environment || '').toLowerCase().trim();
+                      if (env === 'production' || env === 'prod') return 'production';
+                      if (env === 'development' || env === 'dev') return 'development';
+                      if (env === 'staging') return 'staging';
+                      return 'production';
+                    })()}
                     onChange={(e) => updateField('environment', e.target.value)}
-                  />
+                  >
+                    <option value="production">Production</option>
+                    <option value="development">Development</option>
+                    <option value="staging">Staging</option>
+                  </select>
                 </div>
 
                 <div className="asset-checkbox-row">
@@ -780,12 +788,16 @@ export function EditNodeModal({ node, onClose, updateNode, allNodes = [] }) {
 
                 <div>
                   <div className="asset-field-label">Estado</div>
-                  <input
-                    type="text"
+                  <select
                     className="asset-input"
-                    value={formData.status || ''}
+                    value={formData.status || 'active'}
                     onChange={(e) => updateField('status', e.target.value)}
-                  />
+                  >
+                    <option value="active">active</option>
+                    <option value="inactive">inactive</option>
+                    <option value="deprecated">deprecated</option>
+                    <option value="decommissioned">decommissioned</option>
+                  </select>
                 </div>
               </>
             )}

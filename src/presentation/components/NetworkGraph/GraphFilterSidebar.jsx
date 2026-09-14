@@ -349,8 +349,8 @@ export function GraphFilterSidebar({
                   onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('internetExposed', e.target.value)}
                 >
                   <option value="ALL">Todos los activos</option>
-                  <option value="TRUE">☁ Solo Expuestos</option>
-                  <option value="FALSE">🔒 Solo Internos</option>
+                  <option value="TRUE">Solo Expuestos</option>
+                  <option value="FALSE">Solo Internos</option>
                 </select>
               </div>
 
@@ -414,7 +414,7 @@ export function GraphFilterSidebar({
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
-                  Estado de Ejecución:
+                  Estado:
                 </label>
                 <select
                   className="sidebar-filter-control"
@@ -422,9 +422,13 @@ export function GraphFilterSidebar({
                   onChange={(e) => updateGraphAdvancedFilter && updateGraphAdvancedFilter('status', e.target.value)}
                 >
                   <option value="ALL">Todos los estados</option>
-                  <option value="running">Running</option>
-                  <option value="stopped">Stopped</option>
-                  <option value="active">Active</option>
+                  <option value="active">Active (Endpoint, Instalación)</option>
+                  <option value="inactive">Inactive (Endpoint, Instalación)</option>
+                  <option value="decommissioned">Decommissioned (Endpoint, Instalación)</option>
+                  <option value="deprecated">Deprecated (Instalación)</option>
+                  <option value="running">Running (Contenedor)</option>
+                  <option value="stopped">Stopped (Contenedor)</option>
+                  <option value="paused">Paused (Contenedor)</option>
                 </select>
               </div>
 

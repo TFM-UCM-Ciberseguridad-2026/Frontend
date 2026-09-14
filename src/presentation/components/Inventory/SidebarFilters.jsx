@@ -37,8 +37,7 @@ export function SidebarFilters({
     filters.vendorSearch?.trim(),
     filters.environment && filters.environment !== 'ALL' ? filters.environment : null,
     filters.internetExposed && filters.internetExposed !== 'ALL' ? filters.internetExposed : null,
-    filters.status && filters.status !== 'ALL' ? filters.status : null,
-    filters.execState && filters.execState !== 'ALL' ? filters.execState : null,
+    (filters.status && filters.status !== 'ALL') || (filters.execState && filters.execState !== 'ALL') ? (filters.status !== 'ALL' ? filters.status : filters.execState) : null,
     filters.riskTier && filters.riskTier !== 'ALL' ? filters.riskTier : null
   ].filter(Boolean).length;
 
@@ -189,8 +188,8 @@ export function SidebarFilters({
                     onChange={(e) => updateFilter('internetExposed', e.target.value)}
                   >
                     <option value="ALL">Todos los activos</option>
-                    <option value="TRUE">☁ Solo Expuestos</option>
-                    <option value="FALSE">🔒 Solo Internos</option>
+                    <option value="TRUE">Solo Expuestos</option>
+                    <option value="FALSE">Solo Internos</option>
                   </select>
                 </div>
 
@@ -205,7 +204,7 @@ export function SidebarFilters({
                   >
                     <option value="ALL">Todos los entornos</option>
                     <option value="production">Production</option>
-                    <option value="dev">Development</option>
+                    <option value="development">Development</option>
                     <option value="staging">Staging</option>
                   </select>
                 </div>
@@ -254,30 +253,24 @@ export function SidebarFilters({
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
-                    Estado (Endpoint):
+                    Estado:
                   </label>
                   <select
                     className="sidebar-filter-control"
-                    value={filters.status || 'ALL'}
-                    onChange={(e) => updateFilter('status', e.target.value)}
+                    value={filters.status && filters.status !== 'ALL' ? filters.status : (filters.execState || 'ALL')}
+                    onChange={(e) => {
+                      updateFilter('status', e.target.value);
+                      updateFilter('execState', e.target.value);
+                    }}
                   >
                     <option value="ALL">Todos los estados</option>
-                    <option value="active">Active</option>
-                  </select>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '11px', color: 'var(--c400)', fontWeight: 'bold' }}>
-                    Estado de Ejecución (Contenedor):
-                  </label>
-                  <select
-                    className="sidebar-filter-control"
-                    value={filters.execState || 'ALL'}
-                    onChange={(e) => updateFilter('execState', e.target.value)}
-                  >
-                    <option value="ALL">Todos los estados</option>
-                    <option value="running">Running</option>
-                    <option value="stopped">Stopped</option>
+                    <option value="active">Active (Endpoint, Instalación)</option>
+                    <option value="inactive">Inactive (Endpoint, Instalación)</option>
+                    <option value="decommissioned">Decommissioned (Endpoint, Instalación)</option>
+                    <option value="deprecated">Deprecated (Instalación)</option>
+                    <option value="running">Running (Contenedor)</option>
+                    <option value="stopped">Stopped (Contenedor)</option>
+                    <option value="paused">Paused (Contenedor)</option>
                   </select>
                 </div>
 

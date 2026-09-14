@@ -44,8 +44,9 @@ export class Node {
       case 'Hardware':
         return 'hardware';
       case 'Container':
-      case 'ContainerImage':
         return 'container';
+      case 'ContainerImage':
+        return 'containerimage';
       default:
         return 'todos';
     }

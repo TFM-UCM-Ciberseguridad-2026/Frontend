@@ -4,11 +4,71 @@ import { validateNetworkForm, validateAssetIps, describeSubnetImpact } from '../
 import { validateHardwareForm, ARQUITECTURAS, LIMITES } from '../../../domain/entities/hardwareValidation';
 
 const ASSET_TYPES = [
-  { key: 'endpoint', label: 'Endpoint', icon: '💻', description: 'Equipo, servidor o dispositivo de red' },
-  { key: 'container', label: 'Contenedor', icon: '🐳', description: 'Contenedor alojado en un Endpoint' },
-  { key: 'hardware', label: 'Hardware', icon: '🖥️', description: 'Componente físico asociado a un endpoint' },
-  { key: 'software', label: 'Software', icon: '📦', description: 'Aplicación o sistema instalado' },
-  { key: 'network', label: 'Red', icon: '🌐', description: 'Subred o segmento de red' }
+  {
+    key: 'endpoint',
+    label: 'Endpoint',
+    icon: (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--c400)" strokeWidth="1.8">
+        <rect x="2" y="3" width="20" height="14" rx="2" />
+        <line x1="8" y1="21" x2="16" y2="21" />
+        <line x1="12" y1="17" x2="12" y2="21" />
+      </svg>
+    ),
+    description: 'Equipo, servidor o dispositivo de red'
+  },
+  {
+    key: 'container',
+    label: 'Contenedor',
+    icon: (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#00f0ff" strokeWidth="1.8">
+        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+        <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+        <line x1="12" y1="22.08" x2="12" y2="12" />
+      </svg>
+    ),
+    description: 'Contenedor alojado en un Endpoint'
+  },
+  {
+    key: 'hardware',
+    label: 'Hardware',
+    icon: (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--c300)" strokeWidth="1.8">
+        <rect x="4" y="4" width="16" height="16" rx="2" />
+        <rect x="9" y="9" width="6" height="6" />
+        <line x1="9" y1="1" x2="9" y2="4" />
+        <line x1="15" y1="1" x2="15" y2="4" />
+        <line x1="9" y1="20" x2="9" y2="23" />
+        <line x1="15" y1="20" x2="15" y2="23" />
+        <line x1="20" y1="9" x2="23" y2="9" />
+        <line x1="20" y1="15" x2="23" y2="15" />
+        <line x1="1" y1="9" x2="4" y2="9" />
+        <line x1="1" y1="15" x2="4" y2="15" />
+      </svg>
+    ),
+    description: 'Componente físico asociado a un endpoint'
+  },
+  {
+    key: 'software',
+    label: 'Software',
+    icon: (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="1.8">
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+      </svg>
+    ),
+    description: 'Aplicación o sistema instalado'
+  },
+  {
+    key: 'network',
+    label: 'Red',
+    icon: (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#00f0ff" strokeWidth="1.8">
+        <circle cx="12" cy="12" r="10" />
+        <line x1="2" y1="12" x2="22" y2="12" />
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+      </svg>
+    ),
+    description: 'Subred o segmento de red'
+  }
 ];
 
 const INITIAL_FORMS = {
@@ -18,7 +78,7 @@ const INITIAL_FORMS = {
     tipo: 'Server',
     status: 'active',
     internet_exposed: false,
-    environment: '',
+    environment: 'production',
     confidentiality_req: 'MEDIUM',
     integrity_req: 'MEDIUM',
     availability_req: 'MEDIUM',
@@ -401,7 +461,7 @@ export function AddAssetButton({
           <div className="asset-modal asset-modal--narrow">
             <div className="asset-modal-header">
               <div>
-                <h2>➕ Añadir Activo</h2>
+                <h2>Añadir Activo</h2>
                 <div className="asset-modal-subtitle">Selecciona el tipo de activo que quieres registrar</div>
               </div>
               <button className="asset-modal-close" onClick={closeAll}>✕</button>
@@ -411,8 +471,10 @@ export function AddAssetButton({
               {ASSET_TYPES.map(t => (
                 <button key={t.key} className="asset-type-card" onClick={() => chooseType(t.key)}>
                   <span className="asset-type-icon">{t.icon}</span>
-                  <span className="asset-type-label">{t.label}</span>
-                  <span className="asset-type-desc">{t.description}</span>
+                  <div className="asset-type-info">
+                    <span className="asset-type-label">{t.label}</span>
+                    <span className="asset-type-desc">{t.description}</span>
+                  </div>
                 </button>
               ))}
             </div>
@@ -426,7 +488,7 @@ export function AddAssetButton({
           <div className="asset-modal">
             <div className="asset-modal-header">
               <div>
-                <h2>💻 Nuevo Endpoint</h2>
+                <h2>Nuevo Endpoint</h2>
                 <div className="asset-modal-subtitle">Registra un equipo dentro de un proyecto existente</div>
               </div>
               <button className="asset-modal-close" onClick={closeAll}>✕</button>
@@ -490,13 +552,15 @@ export function AddAssetButton({
 
               <div>
                 <div className="asset-field-label">Entorno</div>
-                <input
-                  type="text"
+                <select
                   className="asset-input"
-                  placeholder="production, staging, dev..."
-                  value={forms.endpoint.environment}
+                  value={forms.endpoint.environment || 'production'}
                   onChange={(e) => updateField('endpoint', 'environment', e.target.value)}
-                />
+                >
+                  <option value="production">Production</option>
+                  <option value="development">Development</option>
+                  <option value="staging">Staging</option>
+                </select>
               </div>
 
               <div className="asset-checkbox-row">
@@ -615,7 +679,7 @@ export function AddAssetButton({
           <div className="asset-modal">
             <div className="asset-modal-header">
               <div>
-                <h2>🐳 Nuevo Contenedor</h2>
+                <h2>Nuevo Contenedor</h2>
                 <div className="asset-modal-subtitle">Despliega un contenedor en un endpoint host</div>
               </div>
               <button className="asset-modal-close" onClick={closeAll}>✕</button>
@@ -756,7 +820,7 @@ export function AddAssetButton({
           <div className="asset-modal">
             <div className="asset-modal-header">
               <div>
-                <h2>🖥️ Nuevo Hardware</h2>
+                <h2>Nuevo Hardware</h2>
                 <div className="asset-modal-subtitle">Asocia un componente físico a un endpoint existente</div>
               </div>
               <button className="asset-modal-close" onClick={closeAll}>✕</button>
@@ -885,7 +949,7 @@ export function AddAssetButton({
           <div className="asset-modal">
             <div className="asset-modal-header">
               <div>
-                <h2>📦 Nuevo Software</h2>
+                <h2>Nuevo Software</h2>
                 <div className="asset-modal-subtitle">
                   {softwareStep === 'form' && 'Paso 1: Registra los datos de la aplicación e instalación'}
                   {softwareStep === 'checking' && 'Comprobando CPE...'}
@@ -1020,6 +1084,7 @@ export function AddAssetButton({
                     <option value="active">active</option>
                     <option value="inactive">inactive</option>
                     <option value="deprecated">deprecated</option>
+                    <option value="decommissioned">decommissioned</option>
                   </select>
                 </div>
 
@@ -1030,7 +1095,7 @@ export function AddAssetButton({
                     ← Cambiar tipo
                   </button>
                   <button type="submit" className="btn btn-accent asset-submit-btn">
-                    🔍 Comprobar Software
+                    Comprobar Software
                   </button>
                 </div>
               </form>
@@ -1079,7 +1144,7 @@ export function AddAssetButton({
                                 className="cpe-card-url-link"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                🌐 Sitio Web / Referencia
+                                Sitio Web / Referencia
                               </a>
                             )}
                           </div>
@@ -1109,7 +1174,7 @@ export function AddAssetButton({
                               checked={isSelected}
                               onChange={() => setSelectedCpe(customCPE)}
                             />
-                            <span className="cpe-card-title">🛠️ Software Interno / Personalizado</span>
+                            <span className="cpe-card-title">Software Interno / Personalizado</span>
                             <span className="cpe-badge cpe-badge--custom">CUSTOM</span>
                           </div>
                           <div className="cpe-card-cpe"><code>{customCPE}</code></div>
@@ -1146,7 +1211,7 @@ export function AddAssetButton({
           <div className="asset-modal">
             <div className="asset-modal-header">
               <div>
-                <h2>🌐 Nueva Red</h2>
+                <h2>Nueva Red</h2>
                 <div className="asset-modal-subtitle">
                   Define una subred; los endpoints cuya IP caiga en su rango CIDR y compartan VLAN se enlazarán automáticamente
                 </div>

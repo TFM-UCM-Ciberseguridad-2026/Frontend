@@ -1232,12 +1232,15 @@ aside {
    DETAIL PANEL & GAUGES
    ========================================== */
 .detail-empty {
-  color: var(--c900);
+  color: var(--c300);
   font-family: 'Share Tech Mono', monospace;
-  font-size: 12.5px;
+  font-size: 13px;
+  letter-spacing: 1px;
   margin-top: 60px;
   text-align: center;
-  line-height: 1.6;
+  line-height: 1.8;
+  opacity: 0.85;
+  text-shadow: 0 0 10px rgba(165, 165, 255, 0.2);
 }
 
 .badge {

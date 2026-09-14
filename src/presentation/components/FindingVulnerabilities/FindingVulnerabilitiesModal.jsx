@@ -51,7 +51,7 @@ export function FindingVulnerabilitiesModal({
       <div className="apt-panel finding-vulns-panel">
         <div className="apt-panel-header">
           <div>
-            <h2>🛡️ CVEs del Hallazgo</h2>
+            <h2>CVEs del Hallazgo</h2>
             <div className="apt-panel-subtitle">
               Vulnerabilidades asociadas a: <strong>{findingLabel}</strong>
             </div>

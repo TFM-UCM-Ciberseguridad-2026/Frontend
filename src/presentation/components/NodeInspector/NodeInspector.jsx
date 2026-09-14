@@ -369,9 +369,8 @@ export function NodeInspector({
         <p className="eyebrow">Propiedades del activo</p>
         <div className="detail-empty">
           ◌<br />
-          SELECCIONA UN NODO<br />
-          DEL GRAFO PARA VER<br />
-          SUS PROPIEDADES
+          SELECCIONA UN ELEMENTO<br />
+          PARA VER SUS PROPIEDADES
         </div>
       </aside>
     );
@@ -536,7 +535,7 @@ export function NodeInspector({
                       </span>
                       {isPathTarget && (
                         <span className="path-target-badge" title="Vulnerabilidad de la ruta de ataque activa">
-                          🎯 EN RUTA
+                          EN RUTA
                         </span>
                       )}
                     </div>
@@ -648,7 +647,10 @@ export function NodeInspector({
                     gap: '6px'
                   }}
                 >
-                  <span>🛡️</span> HISTÓRICO DE PARCHES POR SOFTWARE
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                  </svg>
+                  HISTÓRICO DE PARCHES POR SOFTWARE
                 </div>
 
                 {historyLoading && (

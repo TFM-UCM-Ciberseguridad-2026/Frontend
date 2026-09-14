@@ -7,8 +7,6 @@ const REPO_URL = 'https://github.com/TFM-UCM-Ciberseguridad-2026/Orquestador';
 
 export function LandingPage({
   setShowDashboard,
-  clicks = 0,
-  setClicks,
   projects = [],
   selectedProjectId,
   setSelectedProjectId,
@@ -16,7 +14,8 @@ export function LandingPage({
   importProject,
   fetchInfrastructure,
   renameProject,
-  deleteProject
+  deleteProject,
+  logoSrc = null
 }) {
   const [activeModal, setActiveModal] = useState(null); // 'projects', 'create', 'import'
   const [actionProject, setActionProject] = useState(null);
@@ -28,12 +27,6 @@ export function LandingPage({
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState(null);
 
-  const bumpInteraction = () => {
-    if (typeof setClicks === 'function') {
-      setClicks(prev => prev + 1);
-    }
-  };
-
   useEffect(() => {
     if (typeof fetchInfrastructure === 'function') {
       fetchInfrastructure(true);
@@ -41,12 +34,10 @@ export function LandingPage({
   }, []);
 
   const openProjectsModal = () => {
-    bumpInteraction();
     setActiveModal('projects');
   };
 
   const handleSelectProject = (projId) => {
-    bumpInteraction();
     if (setSelectedProjectId) {
       setSelectedProjectId(String(projId));
     }
@@ -65,7 +56,6 @@ export function LandingPage({
       return;
     }
 
-    bumpInteraction();
     setCreateLoading(true);
     setCreateError(null);
 
@@ -85,11 +75,6 @@ export function LandingPage({
     }
   };
 
-  const openRepo = () => {
-    bumpInteraction();
-    window.open(REPO_URL, '_blank', 'noopener');
-  };
-
   return (
     <div className="hud-landing-wrapper">
       <div className="hud-grid-overlay"></div>
@@ -97,15 +82,18 @@ export function LandingPage({
       {/* ---------- CONTENIDO PRINCIPAL CENTRADO ---------- */}
       <main className="hud-home">
         <section className="hud-hero">
-          <div className="hud-emblem"></div>
+          <div className="hud-emblem" title="Orquestador">
+            {logoSrc ? (
+              <img src={logoSrc} alt="Logo" className="hud-emblem-img" />
+            ) : (
+              <div className="hud-emblem-core" />
+            )}
+          </div>
           <p className="eyebrow">Panel principal</p>
           <h2>Bienvenido a tu Orquestador</h2>
-          <p>Todo está configurado y funcionando perfectamente. Elige un proyecto existente o crea uno nuevo para empezar a construir tu infraestructura.</p>
 
           <div className="hud-stats-row">
             <div className="hud-stat-chip mono"><i></i> {projects.length} PROYECTOS ACTIVOS</div>
-            <div className="hud-stat-chip light">INTERACCIONES: <b>{clicks}</b></div>
-            <div className="hud-stat-chip mono"><i></i> BACKEND: <span style={{ color: 'var(--c300)' }}>CONECTADO</span></div>
           </div>
         </section>
 
@@ -119,7 +107,7 @@ export function LandingPage({
               </svg>
             </div>
             <h3>Ver proyectos</h3>
-            <p>Consulta todos los proyectos existentes en el orquestador, su estado y su actividad reciente.</p>
+            <p>Consulta todos los proyectos existentes.</p>
             <button className="hud-btn hud-btn-outline" onClick={openProjectsModal}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z" />
@@ -138,7 +126,7 @@ export function LandingPage({
             </div>
             <h3>Crear proyecto</h3>
             <p>Define un nombre para arrancar un proyecto nuevo desde cero.</p>
-            <button className="hud-btn hud-btn-primary" onClick={() => { bumpInteraction(); setActiveModal('create'); }}>
+            <button className="hud-btn hud-btn-primary" onClick={() => setActiveModal('create')}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M12 5v14M5 12h14" />
               </svg>
@@ -155,8 +143,8 @@ export function LandingPage({
               </svg>
             </div>
             <h3>Importar proyecto</h3>
-            <p>Sube un archivo de configuración o un export existente para reutilizarlo en el orquestador.</p>
-            <button className="hud-btn hud-btn-outline" onClick={() => { bumpInteraction(); setActiveModal('import'); }}>
+            <p>Sube un archivo JSON previamente exportado desde la aplicación para reutilizarlo.</p>
+            <button className="hud-btn hud-btn-outline" onClick={() => setActiveModal('import')}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M12 3v12M7 10l5 5 5-5" />
                 <path d="M4 21h16" />
@@ -164,25 +152,22 @@ export function LandingPage({
               Importar proyecto
             </button>
           </article>
-
-          {/* ABRIR REPOSITORIO */}
-          <article className="hud-action-card">
-            <div className="ic-wrap">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M9 19c-4.5 1.4-4.5-2.4-6-3m12 5v-3.3c0-.9.3-1.5.7-1.8-2.4-.3-5-1.2-5-5.3 0-1.2.4-2.1 1.1-2.9-.1-.3-.5-1.5.1-3 0 0 .9-.3 3 1.1a10.2 10.2 0 0 1 5.4 0c2.1-1.4 3-1.1 3-1.1.6 1.5.2 2.7.1 3 .7.8 1.1 1.7 1.1 2.9 0 4.1-2.6 5-5 5.3.4.3.7.9.7 1.9V19" />
-              </svg>
-            </div>
-            <h3>Abrir repositorio</h3>
-            <p>Ve directamente al código fuente del proyecto en GitHub para revisar commits o issues.</p>
-            <button className="hud-btn hud-btn-outline" onClick={openRepo}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M7 17 17 7M8 7h9v9" />
-              </svg>
-              Ver repositorio
-            </button>
-          </article>
         </section>
       </main>
+
+      {/* ---------- BOTÓN GITHUB ESQUINA INFERIOR DERECHA (OPEN SOURCE) ---------- */}
+      <a
+        href={REPO_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="hud-github-corner"
+        title="Abrir repositorio en GitHub"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
+        </svg>
+        <span>GitHub</span>
+      </a>
 
       {/* ---------- MODAL: VER PROYECTOS ---------- */}
       {activeModal === 'projects' && (
@@ -322,7 +307,7 @@ export function LandingPage({
           }
         }}
       />
-      
+
       <DeleteProjectModal
         isOpen={showDeleteModal}
         onClose={() => setShowDeleteModal(false)}

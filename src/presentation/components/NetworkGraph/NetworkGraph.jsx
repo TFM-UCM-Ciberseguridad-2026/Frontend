@@ -74,10 +74,10 @@ const getNodeRadius = (categoryId, primaryLabel, labels = []) => {
 
 const getTierColor = (tier) => {
   switch ((tier || '').toUpperCase()) {
-    case 'CRITICAL': return '#74050e';
-    case 'HIGH': return '#eb250f';
-    case 'MEDIUM': return '#ea6a08';
-    case 'LOW': return '#e7ee17';
+    case 'CRITICAL': return '#ff0055';
+    case 'HIGH': return '#ff6b00';
+    case 'MEDIUM': return '#ffb700';
+    case 'LOW': return '#10b981';
     default: return null;
   }
 };
@@ -1357,14 +1357,41 @@ export function NetworkGraph({
       // Renderizar Anillos Concéntricos en Modo STIX (Radios idénticos a las físicas)
       if (layoutMode === 'stix') {
         const stixRings = [
-          { radius: 105, label: 'NIVEL 1 · REDES Y SEGMENTOS',                color: 'rgba(121, 115, 255, 0.06)', stroke: 'rgba(121, 115, 255, 0.25)' },
-          { radius: 240, label: 'NIVEL 2 · ENDPOINTS',                        color: 'rgba(255, 255, 255, 0.04)', stroke: 'rgba(255, 255, 255, 0.2)' },
-          { radius: 380, label: 'NIVEL 3 · INSTALACIONES Y CONTENEDORES',      color: 'rgba(13, 183, 237, 0.05)',  stroke: 'rgba(13, 183, 237, 0.25)' },
-          { radius: 510, label: 'NIVEL 4 · SOFTWARE, HALLAZGOS Y HARDWARE',    color: 'rgba(245, 158, 11, 0.05)',  stroke: 'rgba(245, 158, 11, 0.25)' }
+          {
+            radius: 105,
+            label: 'NIVEL 1 · REDES Y SEGMENTOS',
+            color: 'rgba(139, 92, 246, 0.07)',
+            stroke: 'rgba(168, 85, 247, 0.6)',
+            glow: '#a855f7',
+            textColor: '#e9d5ff'
+          },
+          {
+            radius: 240,
+            label: 'NIVEL 2 · ENDPOINTS',
+            color: 'rgba(14, 165, 233, 0.05)',
+            stroke: 'rgba(56, 189, 248, 0.6)',
+            glow: '#38bdf8',
+            textColor: '#bae6fd'
+          },
+          {
+            radius: 380,
+            label: 'NIVEL 3 · INSTALACIONES Y CONTENEDORES',
+            color: 'rgba(20, 184, 166, 0.05)',
+            stroke: 'rgba(45, 212, 191, 0.6)',
+            glow: '#2dd4bf',
+            textColor: '#99f6e4'
+          },
+          {
+            radius: 510,
+            label: 'NIVEL 4 · SOFTWARE, HALLAZGOS Y HARDWARE',
+            color: 'rgba(245, 158, 11, 0.05)',
+            stroke: 'rgba(251, 191, 36, 0.6)',
+            glow: '#fbbf24',
+            textColor: '#fef08a'
+          }
         ];
 
         ctx.save();
-        ctx.font = 'bold 8px Orbitron, monospace';
         stixRings.forEach(ring => {
           // Relleno semitransparente del anillo
           ctx.beginPath();
@@ -1372,19 +1399,28 @@ export function NetworkGraph({
           ctx.fillStyle = ring.color;
           ctx.fill();
 
-          // Borde del anillo
+          // Borde con resplandor neón
+          ctx.save();
           ctx.beginPath();
           ctx.arc(WORLD_CENTER_X, WORLD_CENTER_Y, ring.radius, 0, Math.PI * 2);
           ctx.strokeStyle = ring.stroke;
-          ctx.lineWidth = 1;
-          ctx.setLineDash([4, 4]);
+          ctx.lineWidth = 1.8;
+          ctx.shadowColor = ring.glow;
+          ctx.shadowBlur = 8;
+          ctx.setLineDash([8, 6]);
           ctx.stroke();
-          ctx.setLineDash([]);
+          ctx.restore();
 
           // Etiqueta del nivel radial
-          ctx.fillStyle = ring.stroke;
+          ctx.save();
+          ctx.font = '900 10px Orbitron, monospace, sans-serif';
+          ctx.fillStyle = ring.textColor;
+          ctx.shadowColor = ring.glow;
+          ctx.shadowBlur = 6;
           ctx.textAlign = 'center';
-          ctx.fillText(ring.label, WORLD_CENTER_X, WORLD_CENTER_Y - ring.radius + 10);
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(ring.label, WORLD_CENTER_X, WORLD_CENTER_Y - ring.radius - 4);
+          ctx.restore();
         });
         ctx.restore();
       }
@@ -1500,24 +1536,36 @@ export function NetworkGraph({
           ctx.globalAlpha = 1.0;
         }
 
-        // Anillo de Riesgo Tier
+        // Anillo de Riesgo Tier (primer nivel exterior)
         if (riskTierColor) {
+          ctx.save();
           ctx.beginPath();
           ctx.arc(0, 0, node.r + 9, 0, Math.PI * 2);
           ctx.strokeStyle = riskTierColor;
-          ctx.lineWidth = 2;
+          ctx.lineWidth = 2.2;
+          if (!nodeShouldBeDimmed) {
+            ctx.shadowColor = riskTierColor;
+            ctx.shadowBlur = 8;
+          }
           ctx.stroke();
+          ctx.restore();
         }
 
-        // Anillo de Prioridad Tier
+        // Anillo de Prioridad Tier (segundo nivel exterior punteado)
         if (priorityTierColor) {
+          ctx.save();
           ctx.beginPath();
           ctx.arc(0, 0, node.r + 13, 0, Math.PI * 2);
           ctx.strokeStyle = priorityTierColor;
-          ctx.lineWidth = 1.5;
+          ctx.lineWidth = 1.8;
           ctx.setLineDash([4, 4]);
+          if (!nodeShouldBeDimmed) {
+            ctx.shadowColor = priorityTierColor;
+            ctx.shadowBlur = 6;
+          }
           ctx.stroke();
           ctx.setLineDash([]);
+          ctx.restore();
         }
 
         // Halo exterior
@@ -1629,8 +1677,7 @@ export function NetworkGraph({
 
         // Etiqueta Nombre del Nodo
         const rawName = node.entity.name || node.entity.properties?.nombre || node.entity.properties?.name || node.entity.properties?.hostname || String(node.entity.id);
-        const shouldTruncate = layoutMode === 'tree' && !isSelected && rawName.length > 17;
-        const displayName = shouldTruncate ? rawName.substring(0, 15) + '…' : rawName;
+        const displayName = rawName;
 
         ctx.font = '11px Inter, sans-serif';
         const textMetrics = ctx.measureText(displayName);

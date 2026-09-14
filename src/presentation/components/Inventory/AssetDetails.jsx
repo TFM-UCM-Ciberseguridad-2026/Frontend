@@ -7,9 +7,8 @@ export function AssetDetails({ selectedNode }) {
         <p className="eyebrow">Propiedades del activo</p>
         <div className="detail-empty">
           ◌<br />
-          SELECCIONA UN NODO<br />
-          DE LA TABLA PARA VER<br />
-          SUS PROPIEDADES
+          SELECCIONA UN ELEMENTO<br />
+          PARA VER SUS PROPIEDADES
         </div>
       </aside>
     );

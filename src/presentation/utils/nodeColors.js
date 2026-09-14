@@ -37,9 +37,17 @@ export function getNodeColor(node) {
     case 'Remediation':
       return '#2701D6';
     case 'parche':
-    case 'Patch':
-      return '#2103A9';
     default:
       return '#7973FF';
+  }
+}
+
+export function getTierColor(tier) {
+  switch ((tier || '').toUpperCase()) {
+    case 'CRITICAL': return '#ff0055';
+    case 'HIGH': return '#ff6b00';
+    case 'MEDIUM': return '#ffb700';
+    case 'LOW': return '#10b981';
+    default: return null;
   }
 }

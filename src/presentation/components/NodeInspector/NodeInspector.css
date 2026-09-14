@@ -279,7 +279,7 @@
 }
 
 .finding-accordion-card.is-path-target::before {
-  content: '🎯 EN RUTA DE ATAQUE';
+  content: 'EN RUTA DE ATAQUE';
   display: block;
   padding: 4px 14px;
   font-size: 10px;

@@ -8,7 +8,12 @@ export function PatchQueueFilters({ filters = {}, onUpdateFilter }) {
       <div className="patch-filter-group patch-filter-search">
         <label className="patch-filter-label">BÚSQUEDA GLOBAL</label>
         <div className="patch-input-wrapper">
-          <span className="patch-input-icon">🔍</span>
+          <span className="patch-input-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+          </span>
           <input
             type="text"
             className="patch-filter-input"
@@ -18,11 +23,12 @@ export function PatchQueueFilters({ filters = {}, onUpdateFilter }) {
           />
           {filters.search && (
             <button
+              type="button"
               className="patch-input-clear"
               onClick={() => onUpdateFilter('search', '')}
               title="Limpiar búsqueda"
             >
-              &times;
+              ✕
             </button>
           )}
         </div>
@@ -40,13 +46,13 @@ export function PatchQueueFilters({ filters = {}, onUpdateFilter }) {
         />
       </div>
 
-      {/* Proveedor / Vendor */}
+      {/* Búsqueda por Fabricante / Vendor */}
       <div className="patch-filter-group">
-        <label className="patch-filter-label">PROVEEDOR</label>
+        <label className="patch-filter-label">FABRICANTE (VENDOR)</label>
         <input
           type="text"
           className="patch-filter-input"
-          placeholder="Apache, Linux..."
+          placeholder="Ej: apache, microsoft..."
           value={filters.vendorSearch || ''}
           onChange={(e) => onUpdateFilter('vendorSearch', e.target.value)}
         />
@@ -61,10 +67,10 @@ export function PatchQueueFilters({ filters = {}, onUpdateFilter }) {
           onChange={(e) => onUpdateFilter('priorityTier', e.target.value)}
         >
           <option value="ALL">Todas las prioridades</option>
-          <option value="CRITICAL">🔴 CRITICAL</option>
-          <option value="HIGH">🟠 HIGH</option>
-          <option value="MEDIUM">🟡 MEDIUM</option>
-          <option value="LOW">🔵 LOW</option>
+          <option value="CRITICAL">CRITICAL</option>
+          <option value="HIGH">HIGH</option>
+          <option value="MEDIUM">MEDIUM</option>
+          <option value="LOW">LOW</option>
         </select>
       </div>
 
@@ -77,8 +83,8 @@ export function PatchQueueFilters({ filters = {}, onUpdateFilter }) {
           onChange={(e) => onUpdateFilter('patchAvailable', e.target.value)}
         >
           <option value="ALL">Todos los estados</option>
-          <option value="TRUE">✅ Con Parche Disponible</option>
-          <option value="FALSE">❌ Sin Parche Disponible</option>
+          <option value="TRUE">Con Parche Disponible</option>
+          <option value="FALSE">Sin Parche Disponible</option>
         </select>
       </div>
 
@@ -106,10 +112,9 @@ export function PatchQueueFilters({ filters = {}, onUpdateFilter }) {
           onChange={(e) => onUpdateFilter('environment', e.target.value)}
         >
           <option value="ALL">Todos los entornos</option>
-          <option value="prod">Producción (prod)</option>
+          <option value="production">Production</option>
+          <option value="development">Development</option>
           <option value="staging">Staging</option>
-          <option value="dev">Desarrollo (dev)</option>
-          <option value="test">Testing</option>
         </select>
       </div>
 
@@ -122,8 +127,8 @@ export function PatchQueueFilters({ filters = {}, onUpdateFilter }) {
           onChange={(e) => onUpdateFilter('internetExposed', e.target.value)}
         >
           <option value="ALL">Todas las redes</option>
-          <option value="TRUE">🌐 Expuesto a Internet</option>
-          <option value="FALSE">🔒 Solo Red Interna</option>
+          <option value="TRUE">Expuesto a Internet</option>
+          <option value="FALSE">Solo Red Interna</option>
         </select>
       </div>
 
@@ -136,8 +141,8 @@ export function PatchQueueFilters({ filters = {}, onUpdateFilter }) {
           onChange={(e) => onUpdateFilter('inContainer', e.target.value)}
         >
           <option value="ALL">Hosts y Contenedores</option>
-          <option value="TRUE">📦 Solo Contenedores</option>
-          <option value="FALSE">🖥️ Solo Host Directo</option>
+          <option value="TRUE">Solo Contenedores</option>
+          <option value="FALSE">Solo Host Directo</option>
         </select>
       </div>
     </div>

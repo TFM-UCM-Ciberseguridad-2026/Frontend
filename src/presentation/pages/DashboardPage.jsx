@@ -123,7 +123,7 @@ export function DashboardPage({
     setPatchFocus(null);
   }, [selectedProjectId]);
 
-const categories = [
+  const categories = [
     { key: 'ALL', label: 'Todos', color: '#7973FF' },
     { key: 'Network', label: 'Red / Subred', color: '#7973FF' },
     { key: 'Endpoint', label: 'Endpoint', color: '#FFFFFF' },
@@ -134,8 +134,6 @@ const categories = [
     { key: 'SoftwareInstallation', label: 'Instalación', color: '#3813FF' },
     { key: 'Software', label: 'Software', color: '#CDCFFF' },
     { key: 'Finding', label: 'Hallazgo', color: '#f59e0b' },
-    { key: 'Vulnerability', label: 'Vulnerabilidad (CVE)', color: '#ef4444' },
-    { key: 'Remediation', label: 'Remediación', color: '#2701D6' },
   ];
 
   const endpoints = (graphData?.nodes || [])
@@ -282,7 +280,13 @@ const categories = [
         {activeNav === 'redes' && (
           <NetworksPage
             graphData={graphData}
-            categories={categories}
+            updateNode={updateNode}
+            deleteNode={deleteNode}
+            renameProject={renameProject}
+            deleteProject={deleteProject}
+            fetchFindingVulnerabilities={fetchFindingVulnerabilities}
+            fetchEndpointPatchHistory={fetchEndpointPatchHistory}
+            selectedExploitationPath={selectedExploitationPath}
           />
         )}
 

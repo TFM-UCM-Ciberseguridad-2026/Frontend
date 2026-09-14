@@ -9,9 +9,7 @@ const CATEGORIES = [
   { key: 'Project', label: 'Proyecto' },
   { key: 'SoftwareInstallation', label: 'Instalación' },
   { key: 'Software', label: 'Software' },
-  { key: 'Finding', label: 'Hallazgo' },
-  { key: 'Vulnerability', label: 'Vulnerabilidad (CVE)' },
-  { key: 'Remediation', label: 'Remediación' }
+  { key: 'Finding', label: 'Hallazgo' }
 ];
 
 export function InventoryView({ nodes = [], selectedNode, setSelectedNode }) {

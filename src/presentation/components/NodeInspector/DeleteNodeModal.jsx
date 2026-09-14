@@ -69,7 +69,7 @@ export function DeleteNodeModal({ node, isOpen, onClose, onDelete }) {
               boxShadow: '0 0 15px rgba(239, 68, 68, 0.15)'
             }}>
               <div className="asset-field-label" style={{ color: '#fca5a5', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span>📝</span> JUSTIFICACIÓN DE LA ELIMINACIÓN (OBLIGATORIO)
+                JUSTIFICACIÓN DE LA ELIMINACIÓN (OBLIGATORIO)
               </div>
               <textarea
                 className="asset-input asset-textarea"

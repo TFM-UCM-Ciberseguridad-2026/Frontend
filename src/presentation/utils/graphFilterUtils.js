@@ -99,36 +99,76 @@ export function getGraphFacets(nodes = []) {
 }
 
 /**
- * Función unificada para verificar si un nodo cumple con los filtros activos del grafo:
- * - Categoría (filterType)
- * - Búsqueda de texto (searchQuery)
- * - Filtros Avanzados (graphAdvancedFilters: IP, Vendor, Entorno, Exposición, Estado, Riesgo, Solo Vulnerables, En Ruta Explotación)
+ * Verifica si un nodo pertenece a la categoría especificada por filterType.
  */
-export function isNodeMatchingGraphFilters(node, filterType = 'ALL', searchQuery = '', graphAdvancedFilters = {}) {
+export function matchesCategory(node, filterType = 'ALL') {
+  if (!filterType || filterType === 'ALL') return true;
+
   const entity = node?.entity || node;
   if (!entity) return false;
 
   const primaryLabel = entity.primaryLabel || entity.labels?.[0] || '';
   const labels = entity.labels || [];
-  const catId = (entity.categoryId || '').toLowerCase();
+  const catId = typeof entity.categoryId === 'string'
+    ? entity.categoryId.toLowerCase()
+    : (node.categoryId || '').toLowerCase();
+  const fLower = filterType.toLowerCase();
+
+  if (fLower === 'container') {
+    // Solo Contenedores (excluyendo Imagen Contenedor)
+    return (primaryLabel === 'Container' || labels.includes('Container') || catId === 'container') &&
+      primaryLabel !== 'ContainerImage' && !labels.includes('ContainerImage');
+  }
+  if (fLower === 'containerimage') {
+    // Solo Imágenes de Contenedor
+    return primaryLabel === 'ContainerImage' || labels.includes('ContainerImage') || catId === 'containerimage';
+  }
+  if (fLower === 'software') {
+    // Solo Software (excluyendo SoftwareInstallation)
+    return (primaryLabel === 'Software' || labels.includes('Software') || catId === 'software') &&
+      primaryLabel !== 'SoftwareInstallation' && !labels.includes('SoftwareInstallation');
+  }
+  if (fLower === 'softwareinstallation' || fLower === 'instalacion') {
+    // Solo Instalaciones de Software
+    return primaryLabel === 'SoftwareInstallation' || labels.includes('SoftwareInstallation') || catId === 'instalacion';
+  }
+  if (fLower === 'network' || fLower === 'red') {
+    // Solo Redes
+    return primaryLabel === 'Network' || labels.includes('Network') || catId === 'red';
+  }
+  if (fLower === 'endpoint') {
+    return primaryLabel === 'Endpoint' || labels.includes('Endpoint') || catId === 'endpoint';
+  }
+  if (fLower === 'project' || fLower === 'proyecto') {
+    return primaryLabel === 'Project' || labels.includes('Project') || catId === 'proyecto';
+  }
+  if (fLower === 'finding' || fLower === 'hallazgo') {
+    return primaryLabel === 'Finding' || labels.includes('Finding') || catId === 'hallazgo';
+  }
+  if (fLower === 'hardware') {
+    return primaryLabel === 'Hardware' || labels.includes('Hardware') || catId === 'hardware';
+  }
+
+  return primaryLabel === filterType || labels.includes(filterType) || catId === fLower;
+}
+
+/**
+ * Verifica si un nodo cumple los criterios de búsqueda y filtros avanzados (sin la restricción de categoría).
+ * Si skipNetworkCheck es true, omite la comprobación directa de ipSearch/networkSearch en las propiedades del nodo
+ * (útil al evaluar vecinos conectados a una red que ya ha coincidido por IP/CIDR).
+ */
+export function matchesAdvancedCriteria(node, searchQuery = '', graphAdvancedFilters = {}, skipNetworkCheck = false) {
+  const entity = node?.entity || node;
+  if (!entity) return false;
+
+  const primaryLabel = entity.primaryLabel || entity.labels?.[0] || '';
+  const labels = entity.labels || [];
+  const catId = typeof entity.categoryId === 'string'
+    ? entity.categoryId.toLowerCase()
+    : (node.categoryId || '').toLowerCase();
   const props = entity.properties || {};
 
-  // El nodo Project principal se preserva siempre activo
-  if (primaryLabel === 'Project' || labels.includes('Project') || catId === 'proyecto') {
-    return true;
-  }
-
-  // A) Filtro por Categoría
-  if (filterType && filterType !== 'ALL') {
-    const fLower = filterType.toLowerCase();
-    const matchesCat =
-      primaryLabel === filterType ||
-      labels.includes(filterType) ||
-      catId === fLower;
-    if (!matchesCat) return false;
-  }
-
-  // B) Búsqueda general por Texto
+  // Búsqueda general por Texto
   if (searchQuery && searchQuery.trim() !== '') {
     const q = searchQuery.toLowerCase().trim();
     const name = String(entity.name || props.name || props.nombre || props.hostname || props.title || entity.id || '').toLowerCase();
@@ -143,10 +183,10 @@ export function isNodeMatchingGraphFilters(node, filterType = 'ALL', searchQuery
     if (!matchesSearch) return false;
   }
 
-  // C) Filtros Avanzados
+  // Filtros Avanzados
   if (graphAdvancedFilters) {
     // 1. IP / Subred (CIDR)
-    if (graphAdvancedFilters.ipSearch && graphAdvancedFilters.ipSearch.trim() !== '') {
+    if (!skipNetworkCheck && graphAdvancedFilters.ipSearch && graphAdvancedFilters.ipSearch.trim() !== '') {
       const ipQ = graphAdvancedFilters.ipSearch.toLowerCase().trim();
       const rawIps = props.ips || props.ip_addresses || props.ipAddresses;
       const ips = Array.isArray(rawIps)
@@ -201,8 +241,9 @@ export function isNodeMatchingGraphFilters(node, filterType = 'ALL', searchQuery
       const inPath = props.inExploitationPath === true || props.isPartOfPath === true || entity.inExploitationPath === true;
       if (!inPath) return false;
     }
-    // 8. Red / Segmento de Red
-    if (graphAdvancedFilters.networkSearch && graphAdvancedFilters.networkSearch.trim() !== '') {
+
+    // 9. Red / Segmento de Red (Filtro avanzado)
+    if (!skipNetworkCheck && graphAdvancedFilters.networkSearch && graphAdvancedFilters.networkSearch.trim() !== '') {
       const netQ = graphAdvancedFilters.networkSearch.toLowerCase().trim();
       const isNetwork = primaryLabel === 'Network' || labels.includes('Network') || catId === 'red';
       if (isNetwork) {
@@ -210,11 +251,26 @@ export function isNodeMatchingGraphFilters(node, filterType = 'ALL', searchQuery
         const netCidr = String(props.cidr || props.rango || props.subnet || '').toLowerCase();
         if (!netName.includes(netQ) && !netCidr.includes(netQ)) return false;
       } else {
-        // Para nodos que no son redes: pasar (la propagación se maneja en lineageMaps)
         return false;
       }
     }
   }
+
+  return true;
+}
+
+/**
+ * Función unificada para verificar si un nodo cumple con los filtros activos del grafo:
+ * - Categoría (filterType)
+ * - Búsqueda de texto (searchQuery)
+ * - Filtros Avanzados (graphAdvancedFilters: IP, Vendor, Entorno, Exposición, Estado, Riesgo, Solo Vulnerables, En Ruta Explotación)
+ */
+export function isNodeMatchingGraphFilters(node, filterType = 'ALL', searchQuery = '', graphAdvancedFilters = {}) {
+  // A) Comprobar Filtro de Categoría
+  if (!matchesCategory(node, filterType)) return false;
+
+  // B) Comprobar Criterios de Búsqueda y Filtros Avanzados
+  if (!matchesAdvancedCriteria(node, searchQuery, graphAdvancedFilters)) return false;
 
   return true;
 }
@@ -241,46 +297,58 @@ export function getGraphFilterLineageMaps(nodes = [], relationships = [], filter
     (graphAdvancedFilters && Object.values(graphAdvancedFilters).some(v => v !== 'ALL' && v !== '' && v !== false))
   );
 
-  // Propagación: cuando un nodo Network coincide con el filtro activo (por nombre, CIDR o filterType),
-  // sus vecinos directos (Endpoints, Containers) también se marcan como directMatch para iluminarlos.
-  if (hasActiveFilters && directMatches.size > 0) {
-    const networkFilterActive = Boolean(
-      (filterType && filterType !== 'ALL' && filterType.toLowerCase() === 'network') ||
-      (graphAdvancedFilters?.networkSearch && graphAdvancedFilters.networkSearch.trim() !== '') ||
-      (graphAdvancedFilters?.ipSearch && graphAdvancedFilters.ipSearch.trim() !== '')
-    );
+  // Propagación de Redes en Filtros Avanzados (ipSearch o networkSearch)
+  const advancedNetworkFilterActive = Boolean(
+    (graphAdvancedFilters?.networkSearch && graphAdvancedFilters.networkSearch.trim() !== '') ||
+    (graphAdvancedFilters?.ipSearch && graphAdvancedFilters.ipSearch.trim() !== '')
+  );
 
-    if (networkFilterActive) {
-      // Construir mapa de adyacencia para propagar
-      const adjMap = new Map();
-      relationships.forEach(r => {
-        const sId = String(typeof r.source === 'object' ? r.source.id : r.source);
-        const tId = String(typeof r.target === 'object' ? r.target.id : r.target);
-        if (!adjMap.has(sId)) adjMap.set(sId, []);
-        if (!adjMap.has(tId)) adjMap.set(tId, []);
-        adjMap.get(sId).push(tId);
-        adjMap.get(tId).push(sId);
-      });
+  if (hasActiveFilters && advancedNetworkFilterActive) {
+    const adjMap = new Map();
+    relationships.forEach(r => {
+      const sId = String(typeof r.source === 'object' ? r.source.id : r.source);
+      const tId = String(typeof r.target === 'object' ? r.target.id : r.target);
+      if (!adjMap.has(sId)) adjMap.set(sId, []);
+      if (!adjMap.has(tId)) adjMap.set(tId, []);
+      adjMap.get(sId).push(tId);
+      adjMap.get(tId).push(sId);
+    });
 
-      const toAdd = new Set();
-      directMatches.forEach(nid => {
-        const node = nodeByIdMap.get(nid);
-        if (!node) return;
-        const label = node.primaryLabel || node.labels?.[0] || '';
-        const isNet = label === 'Network' || (node.labels || []).includes('Network') || (node.categoryId || '').toLowerCase() === 'red';
-        if (!isNet) return;
+    nodes.forEach(n => {
+      const nid = String(n.id);
+      const label = n.primaryLabel || n.labels?.[0] || '';
+      const isNet = label === 'Network' || (n.labels || []).includes('Network') || (n.categoryId || '').toLowerCase() === 'red';
+      if (!isNet) return;
 
-        // Añadir todos los vecinos conectados a esta red como directMatch
+      // Verificar si la red coincide con la búsqueda de red/ip (omitiendo filtro de categoría en la red misma)
+      if (matchesAdvancedCriteria(n, searchQuery, graphAdvancedFilters)) {
+        // Si el filtro de categoría es 'ALL' o 'Network'/'red', la red misma es directMatch
+        if (!filterType || filterType === 'ALL' || filterType.toLowerCase() === 'network' || filterType.toLowerCase() === 'red') {
+          directMatches.add(nid);
+        }
+
+        // Propagar a los vecinos conectados
         const neighbors = adjMap.get(nid) || [];
         neighbors.forEach(neighborId => {
-          if (!directMatches.has(neighborId)) {
-            toAdd.add(neighborId);
-          }
-        });
-      });
+          const neighborNode = nodeByIdMap.get(neighborId);
+          if (!neighborNode) return;
 
-      toAdd.forEach(id => directMatches.add(id));
-    }
+          // Excluir nodo Proyecto
+          const nLabel = neighborNode.primaryLabel || neighborNode.labels?.[0] || '';
+          const nCatId = (neighborNode.categoryId || '').toLowerCase();
+          const isProject = nLabel === 'Project' || (neighborNode.labels || []).includes('Project') || nCatId === 'proyecto';
+          if (isProject) return;
+
+          // 1. Debe coincidir con la categoría seleccionada (si hay una activa)
+          if (!matchesCategory(neighborNode, filterType)) return;
+
+          // 2. Debe coincidir con los demás criterios avanzados (vendedores, entornos, vulnerables, etc.), omitiendo la comprobación directa de IP/Red en el vecino ya que le llega vía la Red
+          if (!matchesAdvancedCriteria(neighborNode, searchQuery, graphAdvancedFilters, true)) return;
+
+          directMatches.add(neighborId);
+        });
+      }
+    });
   }
 
   const contextMatches = new Set();
