@@ -23,7 +23,7 @@ export function TopAptsModal({
       <div className="apt-panel">
         <div className="apt-panel-header">
           <div>
-            <h2>🎯 TOP APTs — Correlación por Infraestructura</h2>
+            <h2>TOP APTs — Correlación por Infraestructura</h2>
             <div className="apt-panel-subtitle">
               Actores de amenaza rankeados por cobertura de TTPs vinculadas a las CVEs de tu infraestructura
             </div>

@@ -641,14 +641,15 @@ export function TtpsPage({
                </div>
 
                {syncStatus.processing ? (
-                 <button onClick={() => setIsModalClosed(false)} className="btn btn-outline" style={{ position: 'absolute', right: '20px', display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 16px', fontSize: '12px', border: '1px solid var(--c500)', color: 'var(--c50)' }}>
+                 <button onClick={() => setIsModalClosed(false)} className="btn-ai-action processing">
                     <div className="glow-spinner" style={{ width: '14px', height: '14px', borderWidth: '2px', borderTopColor: 'var(--c50)' }}></div>
                     Ver progreso de IA
                  </button>
                ) : (
-                 <button onClick={handleMapTTPs} className="btn btn-primary" style={{ position: 'absolute', right: '20px', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', fontSize: '12px' }}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: '14px', height: '14px' }}>
-                       <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                 <button onClick={handleMapTTPs} className="btn-ai-action">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                       <path d="M12 3l1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3L12 3z" />
+                       <path d="M19 4v4M17 6h4" />
                     </svg>
                     Calcular TTPs (IA)
                  </button>
@@ -680,6 +681,9 @@ export function TtpsPage({
                 const isSelected = selectedTtpId === ttp.id;
                 // Las resueltas van al final: el separador marca dónde empiezan.
                 const abreResueltas = ttp.resolved && !filteredTtps[idx - 1]?.resolved;
+                const primeraTactica = etiquetas[0]?.label || '';
+                const extraTacticas = etiquetas.length > 1 ? etiquetas.length - 1 : 0;
+                const todasTacticasTexto = etiquetas.map(t => t.label).join(' · ');
 
                 return (
                   <React.Fragment key={ttp.id}>
@@ -695,7 +699,14 @@ export function TtpsPage({
                   >
                     <div className="row1">
                       <span className="tid">{ttp.id}</span>
-                      <span className="tactic-tag">{etiquetas.map(t => t.label).join(' · ')}</span>
+                      {etiquetas.length > 0 && (
+                        <span className="tactic-tag" title={todasTacticasTexto}>
+                          <span className="tactic-tag-label">{primeraTactica}</span>
+                          {extraTacticas > 0 && (
+                            <span className="tactic-tag-count">+{extraTacticas}</span>
+                          )}
+                        </span>
+                      )}
                     </div>
                     <div className="tname">{ttp.name}</div>
                     <div className="hint">
