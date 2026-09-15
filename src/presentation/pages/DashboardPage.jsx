@@ -98,7 +98,6 @@ export function DashboardPage({
   projectPatchesByCVE,
   projectPatchesLoading,
   fetchProjectPatches,
-  isAnalysisPending,
   refreshPatchesForProject,
   patchProjectRefreshLoading,
   patchProjectRefreshError,
@@ -223,7 +222,6 @@ export function DashboardPage({
             analyzeProjectVulnerabilities={analyzeProjectVulnerabilities}
             computeSelectedProjectRisk={computeSelectedProjectRisk}
             fetchFindingVulnerabilities={fetchFindingVulnerabilities}
-            isAnalysisPending={isAnalysisPending}
             fetchEndpointPatchHistory={fetchEndpointPatchHistory}
           />
         )}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { InfrastructureApiDataSource } from '../../data/datasources/InfrastructureApiDataSource';
 import { InfrastructureRepositoryImpl } from '../../data/repositories/InfrastructureRepositoryImpl';
 import { GetInfrastructureUseCase } from '../../domain/usecases/GetInfrastructureUseCase';
@@ -123,10 +123,6 @@ export function useInfrastructure() {
   const [riskComputeLoading, setRiskComputeLoading] = useState(false);
   const [riskActionError, setRiskActionError] = useState(null);
 
-  // Estado de enriquecimiento NVD en background (para polling)
-  const [isAnalysisPending, setIsAnalysisPending] = useState(false);
-  const pendingPollRef = useRef(null);
-
   // Estados del modal de CVEs por Finding
   const [showFindingVulnsModal, setShowFindingVulnsModal] = useState(false);
   const [findingVulnsData, setFindingVulnsData] = useState([]);
@@ -246,51 +242,6 @@ export function useInfrastructure() {
       if (!quiet) setLoading(false);
     }
   };
-
-  /**
-   * Inicia un polling de 5 s hacia /api/infrastructure/analysis-pending.
-   * Cuando el enriquecimiento NVD termina (pending → false) recarga el grafo
-   * y muestra una notificación al usuario.
-   */
-  const startPendingPolling = useCallback((projectId) => {
-    if (pendingPollRef.current) {
-      clearInterval(pendingPollRef.current);
-      pendingPollRef.current = null;
-    }
-    setIsAnalysisPending(true);
-
-    pendingPollRef.current = setInterval(async () => {
-      try {
-        const url = projectId
-          ? `/api/infrastructure/analysis-pending?project_id=${projectId}`
-          : '/api/infrastructure/analysis-pending';
-        const res = await fetch(url);
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!data.pending) {
-          clearInterval(pendingPollRef.current);
-          pendingPollRef.current = null;
-          setIsAnalysisPending(false);
-          await fetchInfrastructure(true);
-          toast.success(
-            'El enriquecimiento NVD ha finalizado. El grafo y el panel derecho se han actualizado con la información completa de las CVEs.',
-            'Análisis Completado'
-          );
-        }
-      } catch (e) {
-        console.warn('[Polling] Error comprobando estado del análisis:', e);
-      }
-    }, 5000);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (pendingPollRef.current) {
-        clearInterval(pendingPollRef.current);
-      }
-    };
-  }, []);
 
   const handleReset = async () => {
     setLoading(true);
@@ -1653,10 +1604,6 @@ export function useInfrastructure() {
         setRiskActionError(errorMsg);
         toast.error(errorMsg, 'Falló el Análisis');
       }
-
-      if (successCount > 0 && containerImages.length > 0) {
-        startPendingPolling(selectedProjectId);
-      }
     } catch (err) {
       console.error(err);
       setRiskActionError(err.message);
@@ -1852,7 +1799,6 @@ export function useInfrastructure() {
     riskComputeLoading,
     riskActionLoading: vulnScanLoading || riskComputeLoading,
     riskActionError,
-    isAnalysisPending,
     analyzeProjectVulnerabilities,
     computeSelectedProjectRisk,
     computeAllProjectRisks,

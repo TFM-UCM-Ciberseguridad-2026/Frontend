@@ -45,7 +45,6 @@ export function GraphPage({
   analyzeProjectVulnerabilities,
   computeSelectedProjectRisk,
   fetchFindingVulnerabilities,
-  isAnalysisPending,
   fetchEndpointPatchHistory
 }) {
   return (
@@ -69,7 +68,6 @@ export function GraphPage({
         riskComputeLoading={riskComputeLoading}
         analyzeProjectVulnerabilities={analyzeProjectVulnerabilities}
         computeSelectedProjectRisk={computeSelectedProjectRisk}
-        isAnalysisPending={isAnalysisPending}
       />
 
       {/* VISTA CENTRAL: GRAFO */}
