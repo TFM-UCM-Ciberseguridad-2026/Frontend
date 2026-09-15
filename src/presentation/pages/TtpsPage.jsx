@@ -1,5 +1,4 @@
 import React, { useState, useRef } from 'react';
-import { useTTPSocket } from '../hooks/useTTPSocket';
 import { TACTICS, normalizeTacticKey, normalizeTacticKeys } from '../../domain/mitre/tactics';
 import { NIVEL_ES } from '../../domain/remediacion/metricas';
 import './TtpsPage.css';
@@ -18,7 +17,7 @@ function dominioDe(url) {
 }
 
 export function TtpsPage({
-  fetchTTPMatrix, selectedProjectId, showToast, fetchInfrastructure, graphData,
+  fetchTTPMatrix, selectedProjectId, showToast, graphData,
   projectPatchesByCVE, projectPatchesLoading, fetchProjectPatches,
   fetchAppliedPatchHistory, onOpenPatchInQueue,
 }) {
@@ -26,22 +25,11 @@ export function TtpsPage({
   const [selectedTtpId, setSelectedTtpId] = useState(null);
   const [modalTtp, setModalTtp] = useState(null);
   const [viewMode, setViewMode] = useState('matrix');
-  const [isModalClosed, setIsModalClosed] = useState(false);
   const [totalMitreTTPs, setTotalMitreTTPs] = useState(0);
   const cellRefs = useRef({});
 
   const nodes = graphData?.nodes || [];
   const vulNodes = nodes.filter(n => n.labels?.includes('Vulnerability') || n.primaryLabel === 'Vulnerability');
-
-  const [syncStatus, setSyncStatus] = useState({
-    processing: false,
-    total_cves: 0,
-    processed_cves: 0,
-    current_cve: '',
-    logs: []
-  });
-
-  const logsEndRef = useRef(null);
 
   React.useEffect(() => {
     fetch('/api/infrastructure/mitre-ttp-count')
@@ -53,41 +41,6 @@ export function TtpsPage({
       })
       .catch(err => console.error("Error fetching MITRE TTP count:", err));
   }, []);
-
-  // Notificaciones en tiempo real del worker de TTPs.
-  // El hook se conecta al WebSocket filtrando por el proyecto activo:
-  //   - onSyncStatus: actualiza el estado completo al conectar/reconectar
-  //   - onEvent: recibe cada CVE_MAPPED en tiempo real sin polling
-  // El servidor (WSHub) garantiza que project_id=X no recibe eventos de project_id=Y.
-  useTTPSocket({
-    projectId: selectedProjectId,
-    onSyncStatus: (data) => {
-      if (data) setSyncStatus(data);
-    },
-    onEvent: (event) => {
-      // Actualizar logs y estado de procesamiento en tiempo real
-      setSyncStatus(prev => ({
-        ...prev,
-        processing: true,
-        current_cve: event.cve_id,
-        logs: [...(prev.logs || []), event.log].slice(-200), // cap a 200 líneas
-      }));
-      // Recargar el grafo en background para que aparezcan las nuevas relaciones
-      if (fetchInfrastructure) fetchInfrastructure();
-    },
-  });
-
-  React.useEffect(() => {
-    if (!syncStatus.processing) {
-      setIsModalClosed(false);
-    }
-  }, [syncStatus.processing]);
-
-  React.useEffect(() => {
-    if (logsEndRef.current) {
-      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [syncStatus.logs]);
 
   const [finalTtps, setFinalTtps] = useState([]);
 
@@ -408,39 +361,6 @@ export function TtpsPage({
     setModalTtp(null);
   };
 
-  const handleMapTTPs = () => {
-    setIsModalClosed(false);
-    
-    // Enviar project_id para que el sweep sea acotado al proyecto activo.
-    // El hub WS entregará los eventos SOLO a los clientes de este proyecto.
-    const pid = Number(selectedProjectId) || 0;
-    fetch('/api/infrastructure/map-ttps', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ project_id: pid }),
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data.enqueued > 0) {
-          // Si realmente se encolaron tareas, activamos el modal
-          setSyncStatus(prev => ({
-            ...prev,
-            processing: true,
-            current_cve: 'Iniciando análisis...',
-            logs: ['Conectando con el motor de IA en segundo plano...']
-          }));
-          if (showToast) showToast(`Mapeo de ${data.enqueued} vulnerabilidades iniciado`, 'success');
-        } else {
-          // Si no hay tareas, avisamos y no bloqueamos la UI
-          if (showToast) showToast('Todas las vulnerabilidades ya han sido mapeadas en este proyecto.', 'info');
-        }
-      })
-      .catch(err => {
-        console.error("Error starting TTP mapping:", err);
-        if (showToast) showToast('Error al iniciar el mapeo de TTPs', 'error');
-      });
-  };
-
   return (
     <main className="ttps">
       <section className="page-head">
@@ -479,77 +399,6 @@ export function TtpsPage({
           Dashboard
         </button>
       </div>
-
-      {/* BOTÓN FLOTANTE PARA REABRIR MODAL (SI ESTÁ CERRADO PERO PROCESANDO) */}
-      {syncStatus.processing && isModalClosed && (
-        <button 
-          onClick={() => setIsModalClosed(false)} 
-          className="btn btn-outline" 
-          style={{ 
-            position: 'fixed', 
-            bottom: '30px', 
-            right: '30px', 
-            zIndex: 9000, 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '10px', 
-            padding: '12px 20px', 
-            fontSize: '13px', 
-            background: 'var(--panel-1)',
-            borderColor: 'var(--c400)', 
-            color: 'var(--c50)',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.5), 0 0 15px rgba(122, 115, 255, 0.3)',
-            borderRadius: '12px'
-          }}
-        >
-          <div className="glow-spinner" style={{ width: '16px', height: '16px', borderWidth: '2px', borderTopColor: 'var(--c50)' }}></div>
-          Ver proceso de IA
-        </button>
-      )}
-
-      {syncStatus.processing && !isModalClosed && (
-        <div className="ttp-modal-backdrop" onClick={() => setIsModalClosed(true)} style={{ zIndex: 9999 }}>
-          <div className="ttp-modal" onClick={(e) => e.stopPropagation()} style={{ width: '90%', maxWidth: '800px', padding: '24px' }}>
-            <div className="modal-head" style={{ marginBottom: '20px' }}>
-              <div>
-                <p className="eyebrow">Progreso de Inteligencia Artificial</p>
-                <h3>Procesando TTPs en segundo plano</h3>
-              </div>
-              <button className="modal-close" onClick={() => setIsModalClosed(true)}>
-                ✕
-              </button>
-            </div>
-
-            <div className="loading-card" style={{ background: 'transparent', border: 'none', padding: 0 }}>
-              <div className="spinner-container" style={{ marginBottom: '20px' }}>
-                <div className="glow-spinner"></div>
-                <span className="spinner-text">Procesando TTPs de vulnerabilidades en segundo plano...</span>
-              </div>
-              
-              <div className="progress-container">
-                <div className="progress-bar-bg">
-                  <div className="progress-bar-fill-indeterminate"></div>
-                </div>
-                {syncStatus.current_cve && (
-                  <div className="current-cve-status">
-                    Mapeando CVE: <strong className="cve-highlight">{syncStatus.current_cve}</strong>
-                  </div>
-                )}
-              </div>
-
-              <div className="logs-container">
-                <h4>Consola de Inferencia (Logs de Ollama)</h4>
-                <div className="logs-terminal" style={{ maxHeight: '300px' }}>
-                  {syncStatus.logs.map((logLine, idx) => (
-                    <div key={idx} className="log-line">{logLine}</div>
-                  ))}
-                  <div ref={logsEndRef} />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {viewMode === 'dashboard' && (
         <div style={{ padding: '0 20px' }}>
@@ -639,21 +488,6 @@ export function TtpsPage({
                      <span style={{ fontSize: '14px', color: 'var(--c50)', fontWeight: '600' }}>TTPs MITRE</span>
                   </div>
                </div>
-
-               {syncStatus.processing ? (
-                 <button onClick={() => setIsModalClosed(false)} className="btn-ai-action processing">
-                    <div className="glow-spinner" style={{ width: '14px', height: '14px', borderWidth: '2px', borderTopColor: 'var(--c50)' }}></div>
-                    Ver progreso de IA
-                 </button>
-               ) : (
-                 <button onClick={handleMapTTPs} className="btn-ai-action">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                       <path d="M12 3l1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3L12 3z" />
-                       <path d="M19 4v4M17 6h4" />
-                    </svg>
-                    Calcular TTPs (IA)
-                 </button>
-               )}
             </div>
           </div>
 
