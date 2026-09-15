@@ -9,6 +9,21 @@ export class GetAppliedPatchHistoryUseCase {
     }
 
     const result = await this.infrastructureRepository.getAppliedPatchHistory(assetId, assetType);
-    return result?.applied_patches || [];
+    if (assetType === 'ENDPOINT') {
+      const groups = result?.software_groups || [];
+      const allPatches = [];
+      groups.forEach(g => {
+        (g.applied_patches || []).forEach(p => {
+          allPatches.push({ ...p, software_name: g.software_name || p.software_name });
+        });
+        (g.resolved_findings || []).forEach(f => {
+          if (!allPatches.some(p => p.cve_id === f.cve_id)) {
+            allPatches.push({ ...f, software_name: g.software_name || f.software_name });
+          }
+        });
+      });
+      return allPatches;
+    }
+    return result?.applied_patches || (Array.isArray(result) ? result : []);
   }
 }

@@ -1260,3 +1260,24 @@ main.ttps {
   letter-spacing: 1.2px;
   color: var(--muted);
 }
+
+/* ---------- GOVERNANCE SLA SORTABLE HEADERS (MATCHING PATCH QUEUE) ---------- */
+.sortable-th {
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s, color 0.2s;
+}
+
+.sortable-th:hover {
+  background: rgba(30, 41, 59, 0.9) !important;
+  color: #f1f5f9 !important;
+}
+
+.patch-sort-icon {
+  margin-left: 5px;
+  font-size: 10px;
+  color: #7a73ff;
+  display: inline-block;
+}
+
+

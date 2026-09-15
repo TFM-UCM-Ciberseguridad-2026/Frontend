@@ -153,6 +153,84 @@ export function matchesCategory(node, filterType = 'ALL') {
 }
 
 /**
+ * Convierte una dirección IPv4 en formato string a un número entero de 32 bits (unsigned).
+ */
+function ipToLong(ip) {
+  if (!ip || typeof ip !== 'string') return null;
+  const parts = ip.trim().split('.');
+  if (parts.length !== 4) return null;
+  let num = 0;
+  for (let i = 0; i < 4; i++) {
+    const n = parseInt(parts[i], 10);
+    if (isNaN(n) || n < 0 || n > 255) return null;
+    num = (num << 8) + n;
+  }
+  return num >>> 0;
+}
+
+/**
+ * Comprueba si una dirección IP cae dentro de una subred CIDR (ej. "10.30.0.4" en "10.30.0.0/24").
+ */
+export function isIpInCidr(ipStr, cidrStr) {
+  if (!ipStr || !cidrStr) return false;
+  const cleanIp = String(ipStr).trim();
+  const cleanCidr = String(cidrStr).trim();
+
+  if (!cleanCidr.includes('/')) return false;
+
+  const [rangeIp, prefixLengthStr] = cleanCidr.split('/');
+  const prefixLength = parseInt(prefixLengthStr, 10);
+  if (isNaN(prefixLength) || prefixLength < 0 || prefixLength > 32) return false;
+
+  const ipNum = ipToLong(cleanIp);
+  const rangeNum = ipToLong(rangeIp);
+  if (ipNum === null || rangeNum === null) return false;
+
+  if (prefixLength === 0) return true;
+  const mask = (0xFFFFFFFF << (32 - prefixLength)) >>> 0;
+  return (ipNum & mask) === (rangeNum & mask);
+}
+
+/**
+ * Extrae todas las direcciones IP en formato string de un objeto de propiedades,
+ * contemplando arrays de strings, arrays de objetos { ip, vlan_id }, y campos escalares.
+ */
+export function extractIpStringsFromProps(props) {
+  if (!props) return [];
+  const result = [];
+
+  const rawIps = props.ips || props.ip_addresses || props.ipAddresses;
+  if (Array.isArray(rawIps)) {
+    rawIps.forEach(item => {
+      if (typeof item === 'string' && item.trim()) {
+        result.push(item.trim());
+      } else if (item && typeof item === 'object') {
+        const str = item.ip || item.address || item.ip_address || item.ipAddress || '';
+        if (typeof str === 'string' && str.trim()) {
+          result.push(str.trim());
+        }
+      }
+    });
+  } else if (typeof rawIps === 'string' && rawIps.trim()) {
+    result.push(rawIps.trim());
+  }
+
+  const scalarFields = [props.ip, props.ip_address, props.ipAddress, props.address, props.public_ip, props.private_ip];
+  scalarFields.forEach(f => {
+    if (typeof f === 'string' && f.trim() && !result.includes(f.trim())) {
+      result.push(f.trim());
+    } else if (f && typeof f === 'object') {
+      const str = f.ip || f.address || f.ip_address || f.ipAddress || '';
+      if (typeof str === 'string' && str.trim() && !result.includes(str.trim())) {
+        result.push(str.trim());
+      }
+    }
+  });
+
+  return result;
+}
+
+/**
  * Verifica si un nodo cumple los criterios de búsqueda y filtros avanzados (sin la restricción de categoría).
  * Si skipNetworkCheck es true, omite la comprobación directa de ipSearch/networkSearch en las propiedades del nodo
  * (útil al evaluar vecinos conectados a una red que ya ha coincidido por IP/CIDR).
@@ -177,9 +255,12 @@ export function matchesAdvancedCriteria(node, searchQuery = '', graphAdvancedFil
     const desc = String(props.description || '').toLowerCase();
     const ttps = Array.isArray(props.ttps) ? props.ttps.join(' ').toLowerCase() : String(props.ttps || '').toLowerCase();
     const nid = String(entity.id || '').toLowerCase();
-    const matchesProps = Object.values(props).some(v => String(v).toLowerCase().includes(q));
 
-    const matchesSearch = name.includes(q) || cve.includes(q) || title.includes(q) || desc.includes(q) || ttps.includes(q) || nid.includes(q) || matchesProps;
+    const extractedIps = extractIpStringsFromProps(props);
+    const matchesIPSearch = extractedIps.some(ip => ip.toLowerCase().includes(q));
+    const matchesProps = Object.values(props).some(v => typeof v === 'string' || typeof v === 'number' ? String(v).toLowerCase().includes(q) : false);
+
+    const matchesSearch = name.includes(q) || cve.includes(q) || title.includes(q) || desc.includes(q) || ttps.includes(q) || nid.includes(q) || matchesIPSearch || matchesProps;
     if (!matchesSearch) return false;
   }
 
@@ -188,12 +269,20 @@ export function matchesAdvancedCriteria(node, searchQuery = '', graphAdvancedFil
     // 1. IP / Subred (CIDR)
     if (!skipNetworkCheck && graphAdvancedFilters.ipSearch && graphAdvancedFilters.ipSearch.trim() !== '') {
       const ipQ = graphAdvancedFilters.ipSearch.toLowerCase().trim();
-      const rawIps = props.ips || props.ip_addresses || props.ipAddresses;
-      const ips = Array.isArray(rawIps)
-        ? rawIps
-        : [props.ip, props.ip_address, props.ipAddress, props.address, props.public_ip, props.private_ip].filter(Boolean);
-      const cidr = props.cidr || props.rango || props.subnet || '';
-      const matchesIP = ips.some(ip => String(ip).toLowerCase().includes(ipQ)) || String(cidr).toLowerCase().includes(ipQ);
+      const extractedIps = extractIpStringsFromProps(props);
+      const cidr = String(props.cidr || props.rango || props.subnet || '').toLowerCase().trim();
+
+      // a) Coincidencia directa o parcial de IP en cualquier dirección del activo (ej. "10.30.0.4" o "10.30.0.")
+      const matchesDirectIP = extractedIps.some(ip => ip.toLowerCase().includes(ipQ));
+
+      // b) Inclusión Inversa: Si ipQ es una subred CIDR (ej. "10.30.0.0/24"), verificar si las IPs del activo caen dentro de ipQ
+      const matchesReverseCIDRContainment = ipQ.includes('/') && extractedIps.some(ip => isIpInCidr(ip, ipQ));
+
+      // c) Si el nodo es un nodo de Red (Network) y se busca su CIDR o una IP contenida en él
+      const isNetwork = primaryLabel === 'Network' || labels.includes('Network') || catId === 'red';
+      const matchesNetworkCIDR = isNetwork && cidr !== '' && (cidr.includes(ipQ) || isIpInCidr(ipQ, cidr));
+
+      const matchesIP = matchesDirectIP || matchesReverseCIDRContainment || matchesNetworkCIDR;
       if (!matchesIP) return false;
     }
 
@@ -297,10 +386,9 @@ export function getGraphFilterLineageMaps(nodes = [], relationships = [], filter
     (graphAdvancedFilters && Object.values(graphAdvancedFilters).some(v => v !== 'ALL' && v !== '' && v !== false))
   );
 
-  // Propagación de Redes en Filtros Avanzados (ipSearch o networkSearch)
+  // Propagación forzada de vecinos de Red únicamente cuando se filtra por Segmento de Red (networkSearch)
   const advancedNetworkFilterActive = Boolean(
-    (graphAdvancedFilters?.networkSearch && graphAdvancedFilters.networkSearch.trim() !== '') ||
-    (graphAdvancedFilters?.ipSearch && graphAdvancedFilters.ipSearch.trim() !== '')
+    graphAdvancedFilters?.networkSearch && graphAdvancedFilters.networkSearch.trim() !== ''
   );
 
   if (hasActiveFilters && advancedNetworkFilterActive) {

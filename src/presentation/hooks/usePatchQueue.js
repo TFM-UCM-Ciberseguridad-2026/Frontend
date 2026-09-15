@@ -29,6 +29,8 @@ export function usePatchQueue(selectedProjectId) {
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [priorityTierCounts, setPriorityTierCounts] = useState({});
+  const [overallPriorityTierCounts, setOverallPriorityTierCounts] = useState({});
+  const [overallTotalItems, setOverallTotalItems] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -47,6 +49,12 @@ export function usePatchQueue(selectedProjectId) {
     }, 300);
     return () => clearTimeout(timer);
   }, [search]);
+
+  // Reset overall metrics on project change
+  useEffect(() => {
+    setOverallPriorityTierCounts({});
+    setOverallTotalItems(0);
+  }, [selectedProjectId]);
 
   // Manejador centralizado para actualizar un filtro y resetear a página 1
   const updateFilter = (key, val) => {
@@ -143,6 +151,34 @@ export function usePatchQueue(selectedProjectId) {
       setTotalItems(data.total || 0);
       setTotalPages(data.totalPages || 0);
       setPriorityTierCounts(data.priorityTierCounts || {});
+
+      if (priorityTier === 'ALL') {
+        setOverallPriorityTierCounts(data.priorityTierCounts || {});
+        setOverallTotalItems(data.total || 0);
+      } else {
+        // Mantener/actualizar métricas globales de prioridades sin colapsar por el filtro de prioridad
+        getPatchQueueUseCase.execute({
+          projectId: selectedProjectId,
+          page: 1,
+          limit: 1,
+          search: debouncedSearch,
+          vendorSearch,
+          hostnameSearch,
+          environment,
+          internetExposed,
+          inContainer,
+          priorityTier: 'ALL',
+          patchAvailable,
+          remediationKind
+        }).then(overallData => {
+          if (overallData) {
+            setOverallPriorityTierCounts(overallData.priorityTierCounts || {});
+            setOverallTotalItems(overallData.total || 0);
+          }
+        }).catch(err => {
+          console.warn('[usePatchQueue] Error al obtener métricas globales:', err);
+        });
+      }
     } catch (err) {
       console.error('[usePatchQueue] Error al cargar la cola de parcheo:', err);
       setError(err.message || 'Error al conectar con el servidor');
@@ -202,6 +238,8 @@ export function usePatchQueue(selectedProjectId) {
     totalPages,
     totalItems,
     priorityTierCounts,
+    overallPriorityTierCounts,
+    overallTotalItems,
     queue,
     loading,
     error,

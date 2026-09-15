@@ -405,6 +405,10 @@ export class InfrastructureApiDataSource {
   }
 
   async fetchAppliedPatchHistory(assetId, assetType = 'SOFTWARE_INSTALLATION') {
+    if (assetType === 'ENDPOINT') {
+      const res = await fetch(`/api/endpoints/${encodeURIComponent(assetId)}/patch-history`);
+      return await this._handleResponse(res);
+    }
     const resource = assetType === 'CONTAINER' ? 'containers' : 'installations';
     const res = await fetch(`/api/${resource}/${encodeURIComponent(assetId)}/applied-patches`);
     return await this._handleResponse(res);

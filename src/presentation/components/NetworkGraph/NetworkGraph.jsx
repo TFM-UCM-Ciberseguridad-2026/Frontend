@@ -368,6 +368,7 @@ export function NetworkGraph({
   clearSelectedExploitationPath
 }) {
   const [layoutMode, setLayoutMode] = useState('tree'); // 'layered', 'tree', 'stix'
+  const [showLegend, setShowLegend] = useState(false); // Modal / panel HUD de leyenda de anillos y símbolos
   const [collapsedNodeIds, setCollapsedNodeIds] = useState(new Set()); // IDs de nodos cuyo subárbol está plegado
   const nodesRef = useRef([]);
   const nodeMapRef = useRef(new Map());
@@ -2136,6 +2137,81 @@ export function NetworkGraph({
         NODOS: <span id="nodeCount">{nodesRef.current.length}</span> &nbsp;|&nbsp; ENLACES: <span id="edgeCount">{graphData.relationships?.length || 0}</span>
       </div>
 
+      {/* PANEL HUD DE LEYENDA (CÍRCULOS CONTINUOS vs DISCONTINUOS Y SÍMBOLOS) */}
+      {showLegend && (
+        <div className="graph-hud-legend-panel">
+          <div className="legend-header">
+            <span className="legend-title">LEYENDA DEL GRAFO</span>
+            <button className="legend-close-btn" onClick={() => setShowLegend(false)} title="Cerrar leyenda">✕</button>
+          </div>
+          <div className="legend-body">
+            <div className="legend-section">
+              <div className="legend-section-title">ANILLOS EXTERIORES DE NODOS</div>
+              
+              <div className="legend-item">
+                <div className="legend-ring-sample solid-ring"></div>
+                <div className="legend-item-text">
+                  <strong>Círculo continuo (Línea sólida)</strong>
+                  <span>Nivel de Riesgo del Activo (Risk Tier)</span>
+                </div>
+              </div>
+
+              <div className="legend-item">
+                <div className="legend-ring-sample dashed-ring"></div>
+                <div className="legend-item-text">
+                  <strong>Círculo discontinuo (Línea punteada)</strong>
+                  <span>Nivel de Prioridad de Atención (Priority Tier)</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="legend-section">
+              <div className="legend-section-title">ESCALA DE SEVERIDAD (COLORES)</div>
+              <div className="legend-colors-row">
+                <span className="color-chip critical">● Crítico</span>
+                <span className="color-chip high">● Alto</span>
+                <span className="color-chip medium">● Medio</span>
+                <span className="color-chip low">● Bajo</span>
+              </div>
+            </div>
+
+            <div className="legend-section">
+              <div className="legend-section-title">SIMBOLOS Y BADGES</div>
+              <div className="legend-item">
+                <div className="legend-icon-sample cloud" title="Expuesto a Internet">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="rgba(56, 189, 248, 0.3)" stroke="#38bdf8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+                  </svg>
+                </div>
+                <div className="legend-item-text">
+                  <strong>Badge Nube Azul</strong>
+                  <span>Activo expuesto a Internet (Perímetro Exterior)</span>
+                </div>
+              </div>
+              <div className="legend-item">
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  <div className="legend-icon-sample tree-toggle collapsed" title="Subárbol Plegado">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="3">
+                      <line x1="12" y1="5" x2="12" y2="19" />
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                  </div>
+                  <div className="legend-icon-sample tree-toggle" title="Subárbol Desplegado">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="3">
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                  </div>
+                </div>
+                <div className="legend-item-text">
+                  <strong>Símbolos + / -</strong>
+                  <span>Subárbol plegado (+) / desplegado (-)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="layout-selector-widget cw-bl">
         <button
           className={`btn-layout ${layoutMode === 'layered' ? 'active' : ''}`}
@@ -2160,15 +2236,38 @@ export function NetworkGraph({
           className="btn-layout"
           title="Desplegar todas las ramas del árbol"
           onClick={expandAllNodes}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
         >
-          ➕ Desplegar
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Desplegar
         </button>
         <button
           className="btn-layout"
           title="Plegar todas las ramas inferiores"
           onClick={collapseAllNodes}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
         >
-          ➖ Plegar
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Plegar
+        </button>
+        <div style={{ width: '1px', height: '16px', background: 'rgba(255, 255, 255, 0.15)', margin: '0 3px' }} />
+        <button
+          className={`btn-layout ${showLegend ? 'active' : ''}`}
+          title="Ver leyenda de círculos continuos/discontinuos y símbolos"
+          onClick={() => setShowLegend(prev => !prev)}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="16" x2="12" y2="12" />
+            <line x1="12" y1="8" x2="12.01" y2="8" />
+          </svg>
+          Leyenda
         </button>
       </div>
 

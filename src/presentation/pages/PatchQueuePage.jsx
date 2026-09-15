@@ -4,6 +4,7 @@ import { AppliedPatchHistoryPanel } from '../components/PatchQueue/AppliedPatchH
 import { PatchQueueFilters } from '../components/PatchQueue/PatchQueueFilters';
 import { ActivePatchQueueFilterChips } from '../components/PatchQueue/ActivePatchQueueFilterChips';
 import { usePatchQueue } from '../hooks/usePatchQueue';
+import { InfrastructureApiDataSource } from '../../data/datasources/InfrastructureApiDataSource';
 import './PatchQueuePage.css';
 import { formatPercent } from '../components/Risk/riskFormat';
 
@@ -25,6 +26,21 @@ function patchAvailability(item) {
     default:
       return { label: 'Sin remediación', className: 'no' };
   }
+}
+
+function isRealContainerItem(item) {
+  if (!item) return false;
+  if (item.primaryLabel === 'Container' || item.labels?.includes('Container')) {
+    return true;
+  }
+  const cid = item.container_id || (item.asset_type === 'CONTAINER' ? item.asset_id : null);
+  if (cid && String(cid).startsWith('container-')) {
+    return true;
+  }
+  if (item.asset_type === 'CONTAINER' && item.container_name && item.container_name !== item.software_name) {
+    return true;
+  }
+  return false;
 }
 
 export function PatchQueuePage({
@@ -64,6 +80,8 @@ export function PatchQueuePage({
     totalPages,
     totalItems,
     priorityTierCounts,
+    overallPriorityTierCounts,
+    overallTotalItems,
     queue,
     loading: patchQueueLoading,
     error: patchQueueError,
@@ -73,10 +91,176 @@ export function PatchQueuePage({
 
   const [selectedPatchItem, setSelectedPatchItem] = useState(null);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState(null);
+  const [allAssets, setAllAssets] = useState([]);
 
   useEffect(() => {
     setSelectedHistoryItem(null);
   }, [selectedProjectId]);
+
+  // Load all assets (Hosts and Containers) for the project to populate the Patch History dropdown
+  useEffect(() => {
+    let isMounted = true;
+    async function loadAssets() {
+      try {
+        const apiDataSource = new InfrastructureApiDataSource();
+        const assetMap = new Map();
+
+        // 1. Fetch project inventory for exact Endpoints & Containers
+        try {
+          const invRes = await apiDataSource.fetchPaginatedInventory({
+            projectId: selectedProjectId,
+            limit: 500
+          });
+          const invItems = invRes?.items || [];
+          invItems.forEach(node => {
+            const label = node.primaryLabel || node.labels?.[0] || '';
+            const props = node.properties || {};
+            const nodeId = props.id ?? node.id;
+            const name = props.name || props.hostname || node.name || `Asset #${nodeId}`;
+
+            if (label === 'Endpoint' || node.labels?.includes('Endpoint')) {
+              const key = `ENDPOINT-${nodeId}`;
+              if (!assetMap.has(key)) {
+                assetMap.set(key, {
+                  key,
+                  asset_id: nodeId,
+                  endpoint_id: nodeId,
+                  asset_type: 'ENDPOINT',
+                  hostname: name,
+                  software_name: name,
+                  label: `[HOST] ${name}`
+                });
+              }
+            } else if (label === 'Container' || node.labels?.includes('Container')) {
+              const key = `CONTAINER-${nodeId}`;
+              if (!assetMap.has(key)) {
+                assetMap.set(key, {
+                  key,
+                  asset_id: nodeId,
+                  container_id: nodeId,
+                  asset_type: 'CONTAINER',
+                  software_name: name,
+                  container_name: name,
+                  label: `[CONTAINER] ${name}`
+                });
+              }
+            }
+          });
+        } catch (invErr) {
+          console.warn('[PatchQueuePage] Error al consultar inventario:', invErr);
+        }
+
+        // 2. Supplement with patch queue items (Hosts and Containers ONLY)
+        const res = await apiDataSource.fetchPatchQueue(selectedProjectId, 1, 500);
+        const rawItems = res?.queue || [];
+
+        rawItems.forEach(item => {
+          // Endpoint Host
+          if (item.endpoint_id) {
+            const hostKey = `ENDPOINT-${item.endpoint_id}`;
+            if (!assetMap.has(hostKey)) {
+              assetMap.set(hostKey, {
+                key: hostKey,
+                asset_id: item.endpoint_id,
+                endpoint_id: item.endpoint_id,
+                asset_type: 'ENDPOINT',
+                hostname: item.hostname || `Host #${item.endpoint_id}`,
+                software_name: item.hostname || `Host #${item.endpoint_id}`,
+                label: `[HOST] ${item.hostname || 'Host'}`
+              });
+            }
+          }
+
+          // Container ONLY if it satisfies isRealContainerItem
+          if (isRealContainerItem(item)) {
+            const containerId = (item.container_id && String(item.container_id).startsWith('container-'))
+              ? item.container_id
+              : (item.asset_type === 'CONTAINER' ? item.asset_id : item.container_id);
+
+            if (containerId && String(containerId).startsWith('container-')) {
+              const containerKey = `CONTAINER-${containerId}`;
+              const containerName = item.container_name || (item.asset_type === 'CONTAINER' ? item.software_name : null) || containerId;
+
+              assetMap.set(containerKey, {
+                key: containerKey,
+                asset_id: containerId,
+                container_id: containerId,
+                endpoint_id: item.endpoint_id,
+                asset_type: 'CONTAINER',
+                hostname: item.hostname,
+                software_name: containerName,
+                container_name: containerName,
+                label: `[CONTAINER] ${containerName}`
+              });
+            }
+          }
+        });
+
+        if (isMounted) {
+          setAllAssets(Array.from(assetMap.values()));
+        }
+      } catch (err) {
+        console.warn('[PatchQueuePage] Error al cargar la lista de activos:', err);
+      }
+    }
+
+    loadAssets();
+
+    return () => { isMounted = false; };
+  }, [selectedProjectId]);
+
+  // Dynamically sync queue items to allAssets list (ONLY Hosts and Containers)
+  useEffect(() => {
+    if (!queue || queue.length === 0) return;
+
+    setAllAssets(prev => {
+      const assetMap = new Map(prev.map(a => [a.key, a]));
+      let added = false;
+
+      queue.forEach(item => {
+        if (item.endpoint_id && !assetMap.has(`ENDPOINT-${item.endpoint_id}`)) {
+          assetMap.set(`ENDPOINT-${item.endpoint_id}`, {
+            key: `ENDPOINT-${item.endpoint_id}`,
+            asset_id: item.endpoint_id,
+            endpoint_id: item.endpoint_id,
+            asset_type: 'ENDPOINT',
+            hostname: item.hostname || `Host #${item.endpoint_id}`,
+            software_name: item.hostname || `Host #${item.endpoint_id}`,
+            label: `[HOST] ${item.hostname || 'Host'}`
+          });
+          added = true;
+        }
+
+        if (isRealContainerItem(item)) {
+          const containerId = (item.container_id && String(item.container_id).startsWith('container-'))
+            ? item.container_id
+            : (item.asset_type === 'CONTAINER' ? item.asset_id : item.container_id);
+
+          if (containerId && String(containerId).startsWith('container-')) {
+            const key = `CONTAINER-${containerId}`;
+            if (!assetMap.has(key)) {
+              const containerName = item.container_name || (item.asset_type === 'CONTAINER' ? item.software_name : null) || containerId;
+
+              assetMap.set(key, {
+                key,
+                asset_id: containerId,
+                container_id: containerId,
+                endpoint_id: item.endpoint_id,
+                asset_type: 'CONTAINER',
+                hostname: item.hostname,
+                software_name: containerName,
+                container_name: containerName,
+                label: `[CONTAINER] ${containerName}`
+              });
+              added = true;
+            }
+          }
+        }
+      });
+
+      return added ? Array.from(assetMap.values()) : prev;
+    });
+  }, [queue]);
 
   useEffect(() => {
     if (!selectedPatchItem?.cve_id) return;
@@ -174,8 +358,42 @@ export function PatchQueuePage({
   };
 
   const selectHistoryItem = async (item) => {
-    setSelectedHistoryItem(item);
-    await fetchAppliedPatchHistory?.(item.asset_id || item.installation_id, item.asset_type);
+    if (!item) {
+      setSelectedHistoryItem(null);
+      await fetchAppliedPatchHistory?.(null);
+      return;
+    }
+
+    const isContainer = isRealContainerItem(item);
+    if (isContainer) {
+      const containerId = (item.container_id && String(item.container_id).startsWith('container-'))
+        ? item.container_id
+        : (item.asset_type === 'CONTAINER' ? item.asset_id : item.container_id);
+
+      const targetItem = {
+        key: `CONTAINER-${containerId}`,
+        asset_id: containerId,
+        container_id: containerId,
+        asset_type: 'CONTAINER',
+        hostname: item.hostname,
+        software_name: item.container_name || item.software_name || 'Contenedor',
+        container_name: item.container_name || item.software_name
+      };
+      setSelectedHistoryItem(targetItem);
+      await fetchAppliedPatchHistory?.(containerId, 'CONTAINER');
+    } else {
+      const endpointId = item.endpoint_id || item.asset_id;
+      const targetItem = {
+        key: `ENDPOINT-${endpointId}`,
+        asset_id: endpointId,
+        endpoint_id: endpointId,
+        asset_type: 'ENDPOINT',
+        hostname: item.hostname || `Host #${endpointId}`,
+        software_name: item.hostname || `Host #${endpointId}`
+      };
+      setSelectedHistoryItem(targetItem);
+      await fetchAppliedPatchHistory?.(endpointId, 'ENDPOINT');
+    }
   };
 
   const handleMetricBadgeClick = (tier) => {
@@ -185,6 +403,12 @@ export function PatchQueuePage({
       updateFilter('priorityTier', tier);
     }
   };
+
+  const displayTierCounts = (overallPriorityTierCounts && Object.keys(overallPriorityTierCounts).length > 0)
+    ? overallPriorityTierCounts
+    : priorityTierCounts;
+
+  const displayTotalCount = overallTotalItems || totalItems;
 
   return (
     <section className="patch-queue-page">
@@ -216,7 +440,7 @@ export function PatchQueuePage({
           title="Filtrar todas las prioridades"
         >
           <span className="patch-metric-label">TOTAL PENDIENTES</span>
-          <span className="patch-metric-count">{totalItems}</span>
+          <span className="patch-metric-count">{displayTotalCount}</span>
         </div>
         <div
           className={`patch-metric-badge patch-metric-critical ${filters.priorityTier === 'CRITICAL' ? 'active' : ''}`}
@@ -224,7 +448,7 @@ export function PatchQueuePage({
           title="Filtrar prioridad CRITICAL"
         >
           <span className="patch-metric-label">🔴 CRITICAL</span>
-          <span className="patch-metric-count">{priorityTierCounts.CRITICAL || 0}</span>
+          <span className="patch-metric-count">{displayTierCounts.CRITICAL || 0}</span>
         </div>
         <div
           className={`patch-metric-badge patch-metric-high ${filters.priorityTier === 'HIGH' ? 'active' : ''}`}
@@ -232,7 +456,7 @@ export function PatchQueuePage({
           title="Filtrar prioridad HIGH"
         >
           <span className="patch-metric-label">🟠 HIGH</span>
-          <span className="patch-metric-count">{priorityTierCounts.HIGH || 0}</span>
+          <span className="patch-metric-count">{displayTierCounts.HIGH || 0}</span>
         </div>
         <div
           className={`patch-metric-badge patch-metric-medium ${filters.priorityTier === 'MEDIUM' ? 'active' : ''}`}
@@ -240,7 +464,7 @@ export function PatchQueuePage({
           title="Filtrar prioridad MEDIUM"
         >
           <span className="patch-metric-label">🟡 MEDIUM</span>
-          <span className="patch-metric-count">{priorityTierCounts.MEDIUM || 0}</span>
+          <span className="patch-metric-count">{displayTierCounts.MEDIUM || 0}</span>
         </div>
         <div
           className={`patch-metric-badge patch-metric-low ${filters.priorityTier === 'LOW' ? 'active' : ''}`}
@@ -248,7 +472,7 @@ export function PatchQueuePage({
           title="Filtrar prioridad LOW"
         >
           <span className="patch-metric-label">🔵 LOW</span>
-          <span className="patch-metric-count">{priorityTierCounts.LOW || 0}</span>
+          <span className="patch-metric-count">{displayTierCounts.LOW || 0}</span>
         </div>
       </div>
 
@@ -441,9 +665,17 @@ export function PatchQueuePage({
 
         <AppliedPatchHistoryPanel
           selectedItem={selectedHistoryItem}
+          onSelectAsset={selectHistoryItem}
+          allAssets={allAssets}
           history={appliedPatchHistory}
           loading={appliedPatchHistoryLoading}
           error={appliedPatchHistoryError}
+          onRefresh={() => {
+            if (selectedHistoryItem) {
+              const assetId = selectedHistoryItem.asset_id || selectedHistoryItem.installation_id || selectedHistoryItem.endpoint_id;
+              fetchAppliedPatchHistory?.(assetId, selectedHistoryItem.asset_type);
+            }
+          }}
         />
       </div>
 

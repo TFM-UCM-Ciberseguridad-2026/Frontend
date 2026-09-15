@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import './AppliedPatchHistoryPanel.css';
 
 function formatDate(value) {
@@ -16,42 +16,134 @@ function levelClass(level) {
 
 export function AppliedPatchHistoryPanel({
   selectedItem,
+  onSelectAsset,
+  allAssets = [],
   history = [],
   loading,
-  error
+  error,
+  onRefresh
 }) {
-  if (!selectedItem) {
-    return (
-      <aside className="applied-history-panel">
-        <p className="eyebrow">Patch History</p>
-        <h3>Histórico</h3>
-        <div className="applied-history-empty">
-          Selecciona una fila de Patch Queue para ver el histórico de remediaciones del activo.
-        </div>
-      </aside>
-    );
-  }
+  // Group assets into Endpoints (Hosts) vs Containers for organized optgroups
+  const { endpointAssets, containerAssets } = useMemo(() => {
+    const endpoints = [];
+    const containers = [];
+
+    allAssets.forEach(asset => {
+      if (asset.asset_type === 'ENDPOINT') {
+        endpoints.push(asset);
+      } else if (asset.asset_type === 'CONTAINER') {
+        containers.push(asset);
+      }
+    });
+
+    return { endpointAssets: endpoints, containerAssets: containers };
+  }, [allAssets]);
+
+  // Key calculation for matching dropdown selection
+  const currentKey = selectedItem
+    ? `${selectedItem.asset_type || 'ENDPOINT'}-${selectedItem.asset_id || selectedItem.container_id || selectedItem.endpoint_id}`
+    : '';
+
+  const handleDropdownChange = (e) => {
+    const val = e.target.value;
+    if (!val) {
+      onSelectAsset?.(null);
+      return;
+    }
+    const found = allAssets.find(a => a.key === val);
+    if (found) {
+      onSelectAsset?.(found);
+    }
+  };
 
   return (
     <aside className="applied-history-panel">
-      <p className="eyebrow">Patch History</p>
-      <h3>{selectedItem.software_name || 'Software'}</h3>
-      <p className="applied-history-subtitle">
-        {selectedItem.asset_type === 'CONTAINER'
-          ? `Container · ${selectedItem.container_id || selectedItem.asset_id}`
-          : `SoftwareInstallation · ${selectedItem.installation_id}`}
-      </p>
+      <div className="applied-history-header">
+        <div>
+          <p className="eyebrow">Blue Team Operations</p>
+          <h3>Patch History</h3>
+        </div>
+        {selectedItem && onRefresh && (
+          <button
+            type="button"
+            className="history-refresh-btn"
+            onClick={onRefresh}
+            title="Refrescar histórico del activo"
+            disabled={loading}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M23 4v6h-6" />
+              <path d="M1 20v-6h6" />
+              <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {/* DESPLEGABLE DE ACTIVOS (HOSTS Y CONTENEDORES) */}
+      <div className="applied-history-selector-box">
+        <label htmlFor="history-asset-select" className="applied-history-select-label">
+          SELECCIONAR ACTIVO / SERVIDOR
+        </label>
+        <select
+          id="history-asset-select"
+          className="applied-history-select"
+          value={currentKey}
+          onChange={handleDropdownChange}
+        >
+          <option value="">-- Elige un host o contenedor para ver histórico --</option>
+          {endpointAssets.length > 0 && (
+            <optgroup label="Hosts / Servidores">
+              {endpointAssets.map(asset => (
+                <option key={asset.key} value={asset.key}>
+                  {asset.label}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {containerAssets.length > 0 && (
+            <optgroup label="Contenedores">
+              {containerAssets.map(asset => (
+                <option key={asset.key} value={asset.key}>
+                  {asset.label}
+                </option>
+              ))}
+            </optgroup>
+          )}
+        </select>
+      </div>
+
+      {selectedItem && (
+        <div className="applied-history-asset-info">
+          <h4 className="applied-history-asset-title">
+            {selectedItem.software_name || selectedItem.hostname || 'Activo'}
+          </h4>
+          <p className="applied-history-subtitle">
+            {selectedItem.asset_type === 'ENDPOINT'
+              ? `Host · ${selectedItem.hostname} (#${selectedItem.endpoint_id || selectedItem.asset_id})`
+              : selectedItem.asset_type === 'CONTAINER'
+              ? `Container · ${selectedItem.container_name || selectedItem.container_id || selectedItem.asset_id}`
+              : `SoftwareInstallation · ${selectedItem.hostname ? selectedItem.hostname + ' · ' : ''}${selectedItem.installation_id || selectedItem.asset_id}`}
+          </p>
+        </div>
+      )}
 
       {loading && <div className="applied-history-empty">Cargando histórico...</div>}
       {error && <div className="applied-history-error">⚠️ {error}</div>}
 
-      {!loading && !error && history.length === 0 && (
+      {!selectedItem && !loading && (
         <div className="applied-history-empty">
-          No hay remediaciones aplicadas en este activo.
+          Elige un activo del desplegable superior o haz clic en una fila de la cola de parches para consultar su histórico.
         </div>
       )}
 
-      {!loading && !error && history.map((entry, index) => (
+      {selectedItem && !loading && !error && history.length === 0 && (
+        <div className="applied-history-empty">
+          No hay remediaciones ni parches aplicados registrados para este activo.
+        </div>
+      )}
+
+      {selectedItem && !loading && !error && history.map((entry, index) => (
         <article className="applied-history-card" key={`${entry.patch_id}-${entry.cve_id}-${entry.applied_at || index}`}>
           <div className="applied-history-card-header">
             <strong>{entry.cve_id}</strong>
@@ -59,6 +151,12 @@ export function AppliedPatchHistoryPanel({
               {entry.remediation_level || 'N/A'}
             </span>
           </div>
+
+          {entry.software_name && selectedItem.asset_type === 'ENDPOINT' && (
+            <div className="applied-history-card-software-badge">
+              Software: {entry.software_name}
+            </div>
+          )}
 
           <p className="applied-history-description">
             {entry.patch_description || 'Remediación sin descripción'}
@@ -85,7 +183,7 @@ export function AppliedPatchHistoryPanel({
             </div>
             <div>
               <dt>Verification</dt>
-              <dd>{entry.verification?.reason || 'N/A'}</dd>
+              <dd>{entry.verification?.reason || entry.verification_reason || 'N/A'}</dd>
             </div>
           </dl>
 
@@ -97,3 +195,4 @@ export function AppliedPatchHistoryPanel({
     </aside>
   );
 }
+

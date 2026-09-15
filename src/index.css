@@ -1182,6 +1182,168 @@ aside {
   left: 16px;
 }
 
+/* ==========================================
+   GRAPH HUD LEGEND PANEL
+   ========================================== */
+.graph-hud-legend-panel {
+  position: absolute;
+  bottom: 60px;
+  left: 16px;
+  z-index: 25;
+  width: 320px;
+  background: rgba(8, 10, 28, 0.94);
+  border: 1px solid var(--c700);
+  border-radius: 10px;
+  padding: 14px 16px;
+  box-shadow: 0 0 25px rgba(0, 0, 0, 0.85), 0 0 12px rgba(122, 115, 255, 0.25);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  animation: itemIn 0.22s ease-out both;
+  font-family: 'Rajdhani', sans-serif;
+  color: var(--c50);
+}
+
+.graph-hud-legend-panel .legend-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid rgba(122, 115, 255, 0.2);
+}
+
+.graph-hud-legend-panel .legend-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--c300);
+  text-transform: uppercase;
+}
+
+.graph-hud-legend-panel .legend-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.graph-hud-legend-panel .legend-close-btn:hover {
+  color: var(--c50);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.graph-hud-legend-panel .legend-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.graph-hud-legend-panel .legend-section-title {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9.5px;
+  color: var(--muted);
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.graph-hud-legend-panel .legend-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.graph-hud-legend-panel .legend-item:last-child {
+  margin-bottom: 0;
+}
+
+.graph-hud-legend-panel .legend-ring-sample {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.graph-hud-legend-panel .legend-ring-sample.solid-ring {
+  border: 2.8px solid #ff6b00;
+  box-shadow: 0 0 10px rgba(255, 107, 0, 0.5);
+  background: rgba(255, 107, 0, 0.1);
+}
+
+.graph-hud-legend-panel .legend-ring-sample.dashed-ring {
+  border: 2.5px dashed #ffb700;
+  box-shadow: 0 0 10px rgba(255, 183, 0, 0.5);
+  background: rgba(255, 183, 0, 0.1);
+}
+
+.graph-hud-legend-panel .legend-item-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.graph-hud-legend-panel .legend-item-text strong {
+  font-size: 12px;
+  color: var(--c50);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.graph-hud-legend-panel .legend-item-text span {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.graph-hud-legend-panel .legend-colors-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  background: rgba(5, 7, 24, 0.6);
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+}
+
+.graph-hud-legend-panel .color-chip.critical { color: #ff0055; }
+.graph-hud-legend-panel .color-chip.high { color: #ff6b00; }
+.graph-hud-legend-panel .color-chip.medium { color: #ffb700; }
+.graph-hud-legend-panel .color-chip.low { color: #10b981; }
+
+.graph-hud-legend-panel .legend-icon-sample {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(14, 165, 233, 0.18);
+  border: 1.5px solid #0ea5e9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 0 10px rgba(14, 165, 233, 0.35);
+}
+
+.graph-hud-legend-panel .legend-icon-sample.tree-toggle {
+  width: 22px;
+  height: 22px;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1.6px solid rgba(148, 163, 184, 0.6);
+  box-shadow: none;
+}
+
+.graph-hud-legend-panel .legend-icon-sample.tree-toggle.collapsed {
+  border-color: #38bdf8;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+}
+
 /* Error de conexión del grafo */
 .graph-error-box {
   padding: 3rem;

@@ -71,14 +71,30 @@ export function GovernancePage({ selectedProjectId }) {
   const [slaBreaches, setSLABreaches] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // SLA Filters state
+  // SLA Filters and Sort state (default sort: mayor a menor CVSS)
   const [slaSearchText, setSlaSearchText] = useState('');
   const [slaSeverityFilter, setSlaSeverityFilter] = useState('Todas');
   const [slaStatusFilter, setSlaStatusFilter] = useState('Todos');
   const [slaCategoryFilter, setSlaCategoryFilter] = useState('Todas');
+  const [slaSortField, setSlaSortField] = useState('base_score');
+  const [slaSortDirection, setSlaSortDirection] = useState('desc');
+
+  const handleSlaSort = (field) => {
+    if (slaSortField === field) {
+      setSlaSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSlaSortField(field);
+      setSlaSortDirection(field === 'base_score' || field === 'severity' ? 'desc' : 'asc');
+    }
+  };
+
+  const renderSlaSortIcon = (field) => {
+    if (slaSortField !== field) return null;
+    return <span className="patch-sort-icon">{slaSortDirection === 'asc' ? '▲' : '▼'}</span>;
+  };
 
   const filteredSLABreaches = useMemo(() => {
-    return slaBreaches.filter(b => {
+    const filtered = slaBreaches.filter(b => {
       if (slaSearchText && !b.cve_id.toLowerCase().includes(slaSearchText.toLowerCase())) return false;
       if (slaSeverityFilter !== 'Todas' && b.severity !== slaSeverityFilter) return false;
       if (slaCategoryFilter !== 'Todas' && (b.category || '') !== slaCategoryFilter) return false;
@@ -87,7 +103,58 @@ export function GovernancePage({ selectedProjectId }) {
       }
       return true;
     });
-  }, [slaBreaches, slaSearchText, slaSeverityFilter, slaStatusFilter, slaCategoryFilter]);
+
+    const severityRank = { Critical: 4, High: 3, Medium: 2, Low: 1 };
+    const statusRank = { 'Excedido': 1, 'Próximo a vencer': 2, 'Dentro de plazo': 3, 'Sin SLA': 4 };
+
+    filtered.sort((a, b) => {
+      let valA, valB;
+      switch (slaSortField) {
+        case 'cve_id':
+          valA = a.cve_id || '';
+          valB = b.cve_id || '';
+          return slaSortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        case 'severity':
+          valA = severityRank[a.severity] || 0;
+          valB = severityRank[b.severity] || 0;
+          break;
+        case 'category':
+          valA = slaCategoryLabel(a.category);
+          valB = slaCategoryLabel(b.category);
+          return slaSortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        case 'base_score':
+          valA = a.base_score ?? 0;
+          valB = b.base_score ?? 0;
+          break;
+        case 'first_detected_at':
+          valA = new Date(a.first_detected_at || 0).getTime();
+          valB = new Date(b.first_detected_at || 0).getTime();
+          break;
+        case 'sla_days':
+          valA = a.sla_days ?? 0;
+          valB = b.sla_days ?? 0;
+          break;
+        case 'status':
+          valA = statusRank[slaStatusOf(a)] || 99;
+          valB = statusRank[slaStatusOf(b)] || 99;
+          if (valA === valB) {
+            valA = a.days_remaining ?? 0;
+            valB = b.days_remaining ?? 0;
+          }
+          break;
+        default:
+          valA = a.base_score ?? 0;
+          valB = b.base_score ?? 0;
+          break;
+      }
+
+      if (valA < valB) return slaSortDirection === 'asc' ? -1 : 1;
+      if (valA > valB) return slaSortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return filtered;
+  }, [slaBreaches, slaSearchText, slaSeverityFilter, slaStatusFilter, slaCategoryFilter, slaSortField, slaSortDirection]);
 
   // Resumen de cumplimiento por categoría, calculado sobre el conjunto completo y no sobre
   // el filtrado: es el estado real del proyecto, no el de la vista que se esté mirando.
@@ -874,8 +941,7 @@ export function GovernancePage({ selectedProjectId }) {
                 inventario para incorporarlas al SLA que les corresponda.
               </p>
             )}
-            
-            <div style={{ marginTop: '40px' }}>
+                <div style={{ marginTop: '40px' }}>
               <h3 style={{ fontFamily: 'Orbitron, sans-serif', color: 'var(--c50)', textTransform: 'uppercase', margin: '0 0 16px 0', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 Monitoreo de SLA (Vulnerabilidades Activas)
                 <span style={{ background: 'rgba(255, 255, 255, 0.1)', padding: '2px 8px', borderRadius: '4px', fontSize: '12px', color: 'var(--c200)' }}>
@@ -967,14 +1033,56 @@ export function GovernancePage({ selectedProjectId }) {
               <div style={{ overflowX: 'auto', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '8px', border: '1px solid var(--line)' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
                   <thead>
-                    <tr style={{ borderBottom: '1px solid var(--line)', background: 'rgba(0,0,0,0.2)' }}>
-                      <th style={{ padding: '12px 16px', color: 'var(--c300)', fontWeight: 'normal', fontFamily: 'Orbitron, sans-serif' }}>CVE ID</th>
-                      <th style={{ padding: '12px 16px', color: 'var(--c300)', fontWeight: 'normal', fontFamily: 'Orbitron, sans-serif' }}>Severidad</th>
-                      <th style={{ padding: '12px 16px', color: 'var(--c300)', fontWeight: 'normal', fontFamily: 'Orbitron, sans-serif' }}>Tipo de activo</th>
-                      <th style={{ padding: '12px 16px', color: 'var(--c300)', fontWeight: 'normal', fontFamily: 'Orbitron, sans-serif' }}>CVSS</th>
-                      <th style={{ padding: '12px 16px', color: 'var(--c300)', fontWeight: 'normal', fontFamily: 'Orbitron, sans-serif' }}>Detectado el</th>
-                      <th style={{ padding: '12px 16px', color: 'var(--c300)', fontWeight: 'normal', fontFamily: 'Orbitron, sans-serif' }}>Días de SLA</th>
-                      <th style={{ padding: '12px 16px', color: 'var(--c300)', fontWeight: 'normal', fontFamily: 'Orbitron, sans-serif' }}>Estado</th>
+                    <tr style={{ borderBottom: '1px solid var(--line)', background: 'rgba(15, 23, 42, 0.75)' }}>
+                      <th
+                        onClick={() => handleSlaSort('cve_id')}
+                        className="sortable-th"
+                        style={{ padding: '0.75rem 1rem', color: slaSortField === 'cve_id' ? '#a78bfa' : 'var(--c200)', fontSize: '0.75rem', fontWeight: '700', fontFamily: 'Orbitron, sans-serif', textTransform: 'uppercase' }}
+                      >
+                        CVE ID {renderSlaSortIcon('cve_id')}
+                      </th>
+                      <th
+                        onClick={() => handleSlaSort('severity')}
+                        className="sortable-th"
+                        style={{ padding: '0.75rem 1rem', color: slaSortField === 'severity' ? '#a78bfa' : 'var(--c200)', fontSize: '0.75rem', fontWeight: '700', fontFamily: 'Orbitron, sans-serif', textTransform: 'uppercase' }}
+                      >
+                        Severidad {renderSlaSortIcon('severity')}
+                      </th>
+                      <th
+                        onClick={() => handleSlaSort('category')}
+                        className="sortable-th"
+                        style={{ padding: '0.75rem 1rem', color: slaSortField === 'category' ? '#a78bfa' : 'var(--c200)', fontSize: '0.75rem', fontWeight: '700', fontFamily: 'Orbitron, sans-serif', textTransform: 'uppercase' }}
+                      >
+                        Tipo de activo {renderSlaSortIcon('category')}
+                      </th>
+                      <th
+                        onClick={() => handleSlaSort('base_score')}
+                        className="sortable-th"
+                        style={{ padding: '0.75rem 1rem', color: slaSortField === 'base_score' ? '#a78bfa' : 'var(--c200)', fontSize: '0.75rem', fontWeight: '700', fontFamily: 'Orbitron, sans-serif', textTransform: 'uppercase' }}
+                      >
+                        CVSS {renderSlaSortIcon('base_score')}
+                      </th>
+                      <th
+                        onClick={() => handleSlaSort('first_detected_at')}
+                        className="sortable-th"
+                        style={{ padding: '0.75rem 1rem', color: slaSortField === 'first_detected_at' ? '#a78bfa' : 'var(--c200)', fontSize: '0.75rem', fontWeight: '700', fontFamily: 'Orbitron, sans-serif', textTransform: 'uppercase' }}
+                      >
+                        Detectado el {renderSlaSortIcon('first_detected_at')}
+                      </th>
+                      <th
+                        onClick={() => handleSlaSort('sla_days')}
+                        className="sortable-th"
+                        style={{ padding: '0.75rem 1rem', color: slaSortField === 'sla_days' ? '#a78bfa' : 'var(--c200)', fontSize: '0.75rem', fontWeight: '700', fontFamily: 'Orbitron, sans-serif', textTransform: 'uppercase' }}
+                      >
+                        Días de SLA {renderSlaSortIcon('sla_days')}
+                      </th>
+                      <th
+                        onClick={() => handleSlaSort('status')}
+                        className="sortable-th"
+                        style={{ padding: '0.75rem 1rem', color: slaSortField === 'status' ? '#a78bfa' : 'var(--c200)', fontSize: '0.75rem', fontWeight: '700', fontFamily: 'Orbitron, sans-serif', textTransform: 'uppercase' }}
+                      >
+                        Estado {renderSlaSortIcon('status')}
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
