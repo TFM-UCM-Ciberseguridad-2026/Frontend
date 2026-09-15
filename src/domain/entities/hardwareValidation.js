@@ -34,7 +34,7 @@ function aEntero(valor) {
 function validarMagnitud(etiqueta, valor, maximo) {
   const n = aEntero(valor);
   if (n === null) return `${etiqueta} debe ser un número entero.`;
-  if (n < 0) return `${etiqueta} no puede ser negativo.`;
+  if (n <= 0) return `${etiqueta} debe ser mayor que 0.`;
   if (n > maximo) return `${etiqueta} no puede superar ${maximo.toLocaleString('es-ES')}.`;
   return null;
 }
@@ -49,9 +49,11 @@ export function validateHardwareForm(data) {
   const fabricante = (data?.manufacturer || '').trim();
   const modelo = (data?.modelo || '').trim();
 
-  // Un componente sin fabricante ni modelo no se puede reconocer después en el inventario.
-  if (!fabricante && !modelo) {
-    return 'Indica al menos el fabricante o el modelo del componente.';
+  if (!fabricante) {
+    return 'El fabricante del componente de hardware es obligatorio.';
+  }
+  if (!modelo) {
+    return 'El modelo del componente de hardware es obligatorio.';
   }
   if (fabricante.length > LIMITES.texto) {
     return `El fabricante no puede superar los ${LIMITES.texto} caracteres.`;

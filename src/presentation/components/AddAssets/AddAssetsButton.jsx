@@ -850,6 +850,7 @@ export function AddAssetButton({
                   placeholder="PowerEdge R740"
                   value={forms.hardware.modelo}
                   onChange={(e) => updateField('hardware', 'modelo', e.target.value)}
+                  required
                 />
               </div>
 
@@ -878,6 +879,7 @@ export function AddAssetButton({
                   placeholder="Dell, HPE, Cisco..."
                   value={forms.hardware.manufacturer}
                   onChange={(e) => updateField('hardware', 'manufacturer', e.target.value)}
+                  required
                 />
               </div>
 

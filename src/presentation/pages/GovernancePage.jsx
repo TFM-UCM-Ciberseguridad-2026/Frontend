@@ -346,16 +346,78 @@ export function GovernancePage({ selectedProjectId }) {
 
   const submitPolicy = async (e) => {
     e.preventDefault();
-    if (!formData.name) return;
+
+    // 1. Validar nombre / título (obligatorio, mínimo 3 caracteres)
+    const name = (formData.name || '').trim();
+    if (!name || name.length < 3) {
+      toast.error('Debes indicar un título o nombre válido para la política (mínimo 3 caracteres)', 'Título requerido');
+      return;
+    }
+
+    // 2. Validar versión (obligatoria, formato SemVer / vX.Y)
+    const version = (formData.version || '').trim();
+    if (!version) {
+      toast.error('Debes indicar la versión de la política (ej: v1.0, 2.1)', 'Versión requerida');
+      return;
+    }
+    const versionRegex = /^v?\d+(\.\d+)*$/i;
+    if (!versionRegex.test(version)) {
+      toast.error('El formato de versión no es válido (ej: v1.0, 2.1, v1.0.3)', 'Versión no válida');
+      return;
+    }
+
+    // 3. Validar responsable / owner (obligatorio)
+    const owner = (formData.owner || '').trim();
+    if (!owner || owner.length < 2) {
+      toast.error('Debes indicar el responsable de la política (ej: CISO, SecOps, Dirección)', 'Responsable requerido');
+      return;
+    }
+
+    // 4. Validar fecha de próxima revisión (OPCIONAL: si no se indica se guarda en blanco para revisión pendiente)
+    // Si se especifica, debe tener formato AAAA-MM-DD (año de 4 dígitos) y ser posterior o igual al día de hoy
+    const nextReviewDate = (formData.date || '').trim();
+    if (nextReviewDate !== '') {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(nextReviewDate)) {
+        toast.error('La fecha introducida no es válida (debe tener el formato AAAA-MM-DD con año de 4 dígitos)', 'Fecha no válida');
+        return;
+      }
+
+      const parsedDate = new Date(`${nextReviewDate}T00:00:00`);
+      if (isNaN(parsedDate.getTime())) {
+        toast.error('La fecha introducida no existe o es inválida', 'Fecha no válida');
+        return;
+      }
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      if (parsedDate < today) {
+        toast.error('La fecha de próxima revisión debe ser posterior o igual a la fecha actual', 'Fecha futura requerida');
+        return;
+      }
+    }
+
+    // 5. Validar URL del documento en SharePoint / Cloud (obligatoria y con formato de URL válido)
+    const docUrl = (formData.document_url || '').trim();
+    if (!docUrl) {
+      toast.error('Debes indicar la URL del documento en SharePoint o Cloud', 'URL requerida');
+      return;
+    }
+    const urlRegex = /^https?:\/\/(([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}|(?:\d{1,3}\.){3}\d{1,3})(:\d+)?(\/[^\s]*)?$/i;
+    if (!urlRegex.test(docUrl)) {
+      toast.error('Introduce una URL válida de SharePoint o almacenamiento Cloud (ej: https://empresa.sharepoint.com/doc.pdf)', 'URL no válida');
+      return;
+    }
+
     try {
       const newPolicy = {
         id: formData.id || 'pol-' + Date.now(),
-        name: formData.name,
-        version: formData.version || 'v1.0',
-        owner: formData.owner || 'CISO',
-        next_review_date: formData.date || '',
-        document_url: formData.document_url || '',
-        under_review: formData.under_review || false
+        name,
+        version,
+        owner,
+        next_review_date: nextReviewDate,
+        document_url: docUrl,
+        under_review: Boolean(formData.under_review)
       };
       await fetch(`${API_BASE}/policies?project_id=${selectedProjectId}`, { method: 'POST', body: JSON.stringify(newPolicy) });
       toast.success('Política guardada correctamente', 'Política');
@@ -1227,9 +1289,10 @@ export function GovernancePage({ selectedProjectId }) {
                         type="text"
                         name="version"
                         className="asset-input"
+                        required
                         value={formData.version || ''}
                         onChange={handleFormChange}
-                        placeholder="v1.0"
+                        placeholder="Ej: v1.0, 2.1"
                       />
                     </div>
                     <div>
@@ -1238,20 +1301,22 @@ export function GovernancePage({ selectedProjectId }) {
                         type="text"
                         name="owner"
                         className="asset-input"
+                        required
                         value={formData.owner || ''}
                         onChange={handleFormChange}
-                        placeholder="Ej: CISO, SecOps"
+                        placeholder="Ej: CISO, SecOps, Dirección"
                       />
                     </div>
                   </div>
 
                   <div className="asset-field-row">
                     <div>
-                      <div className="asset-field-label">Próxima Revisión</div>
+                      <div className="asset-field-label">Próxima Revisión (Opcional)</div>
                       <input
                         type="date"
                         name="date"
                         className="asset-input"
+                        max="9999-12-31"
                         value={formData.date || ''}
                         onChange={handleFormChange}
                       />
@@ -1275,12 +1340,13 @@ export function GovernancePage({ selectedProjectId }) {
                   <div>
                     <div className="asset-field-label">URL del documento (SharePoint, Drive, etc.)</div>
                     <input
-                      type="text"
+                      type="url"
                       name="document_url"
                       className="asset-input"
+                      required
                       value={formData.document_url || ''}
                       onChange={handleFormChange}
-                      placeholder="https://..."
+                      placeholder="https://empresa.sharepoint.com/politica.pdf"
                     />
                   </div>
                 </>

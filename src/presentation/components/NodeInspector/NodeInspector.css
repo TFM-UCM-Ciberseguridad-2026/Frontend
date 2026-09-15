@@ -235,28 +235,32 @@
   transition: all 0.2s ease;
 }
 
-/* CRITICAL (Rojo oscuro pastel) */
+/* CRITICAL (Rojo) */
 .risk-badge-critical {
-  background: rgba(140, 20, 30, 0.85);
-  border: 1px solid rgba(220, 40, 50, 0.6);
+  background: rgba(239, 68, 68, 0.25);
+  border: 1px solid #ef4444;
+  color: #f87171 !important;
 }
 
-/* HIGH (Rojo intenso pastel) */
+/* HIGH (Naranja) */
 .risk-badge-high {
-  background: rgba(200, 45, 25, 0.8);
-  border: 1px solid rgba(245, 70, 50, 0.6);
+  background: rgba(249, 115, 22, 0.25);
+  border: 1px solid #f97316;
+  color: #fb923c !important;
 }
 
-/* MEDIUM (Naranja pastel) */
+/* MEDIUM (Amarillo / Amber) */
 .risk-badge-medium {
-  background: rgba(195, 95, 15, 0.8);
-  border: 1px solid rgba(240, 130, 30, 0.6);
+  background: rgba(245, 158, 11, 0.25);
+  border: 1px solid #f59e0b;
+  color: #fbbf24 !important;
 }
 
-/* LOW (Amarillo pastel) */
+/* LOW (Verde / Menta) */
 .risk-badge-low {
-  background: rgba(140, 145, 20, 0.85);
-  border: 1px solid rgba(210, 215, 40, 0.6);
+  background: rgba(16, 185, 129, 0.25);
+  border: 1px solid #10b981;
+  color: #34d399 !important;
 }
 
 /* Insignia para resaltar el hallazgo objetivo de la ruta de ataque */

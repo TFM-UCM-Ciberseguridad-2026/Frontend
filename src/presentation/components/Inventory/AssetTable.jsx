@@ -93,20 +93,21 @@ export function AssetTable({
       case 'Hardware': {
         const mfg = props.manufacturer || props.fabricante;
         const model = props.model || props.modelo;
-        const cpu = props.cpu;
-        const ram = props.ram_gb || props.ram;
-        const storage = props.storage_gb || props.almacenamiento;
+        const cpu = props.cpu_cores ?? props.cpu ?? props.cores;
+        const ram = props.ram ?? props.ram_gb;
+        const storage = props.storage ?? props.storage_gb ?? props.disk_gb ?? props.disk;
 
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', fontSize: '12px' }}>
             <div>
               {mfg && <strong style={{ color: 'var(--c100)' }}>{mfg} </strong>}
               {model && <span style={{ color: 'var(--c300)' }}>{model}</span>}
+              {!mfg && !model && <span style={{ color: 'var(--c300)' }}>Hardware</span>}
             </div>
             <div style={{ display: 'flex', gap: '10px', fontSize: '11px', color: 'var(--muted)', fontFamily: 'Share Tech Mono, monospace' }}>
-              {cpu && <span>CPU: {cpu}</span>}
-              {ram && <span>RAM: {ram}GB</span>}
-              {storage && <span>DISC: {storage}GB</span>}
+              {cpu !== undefined && cpu !== null && <span>CPU: {cpu}</span>}
+              {ram !== undefined && ram !== null && <span>RAM: {ram}GB</span>}
+              {storage !== undefined && storage !== null && <span>DISC: {storage}GB</span>}
             </div>
           </div>
         );
@@ -195,6 +196,43 @@ export function AssetTable({
     }
   };
 
+  // Helper para estilos de badges de nivel de riesgo (CRITICAL, HIGH, MEDIUM, LOW)
+  const getRiskBadgeStyle = (tier) => {
+    const t = (tier || '').toUpperCase();
+    switch (t) {
+      case 'CRITICAL':
+        return {
+          background: 'rgba(239, 68, 68, 0.18)',
+          color: '#f87171',
+          border: '1px solid #ef4444'
+        };
+      case 'HIGH':
+        return {
+          background: 'rgba(249, 115, 22, 0.18)',
+          color: '#fb923c',
+          border: '1px solid #f97316'
+        };
+      case 'MEDIUM':
+        return {
+          background: 'rgba(245, 158, 11, 0.18)',
+          color: '#fbbf24',
+          border: '1px solid #f59e0b'
+        };
+      case 'LOW':
+        return {
+          background: 'rgba(16, 185, 129, 0.18)',
+          color: '#34d399',
+          border: '1px solid #10b981'
+        };
+      default:
+        return {
+          background: 'rgba(122, 115, 255, 0.12)',
+          color: 'var(--c200)',
+          border: '1px solid var(--line)'
+        };
+    }
+  };
+
   // Renderizado de Badges de Estado y Riesgo (sin mostrar el entorno)
   const renderAssetStatus = (node) => {
     const props = node.properties || {};
@@ -243,9 +281,7 @@ export function AssetTable({
             padding: '2px 6px',
             borderRadius: '4px',
             textTransform: 'uppercase',
-            background: riskTier.toUpperCase() === 'CRITICAL' ? 'rgba(239, 68, 68, 0.2)' : riskTier.toUpperCase() === 'HIGH' ? 'rgba(249, 115, 22, 0.2)' : 'rgba(122, 115, 255, 0.12)',
-            color: riskTier.toUpperCase() === 'CRITICAL' ? '#f87171' : riskTier.toUpperCase() === 'HIGH' ? '#fb923c' : 'var(--c200)',
-            border: `1px solid ${riskTier.toUpperCase() === 'CRITICAL' ? '#ef4444' : riskTier.toUpperCase() === 'HIGH' ? '#f97316' : 'var(--line)'}`
+            ...getRiskBadgeStyle(riskTier)
           }}>
             {riskTier}
           </span>

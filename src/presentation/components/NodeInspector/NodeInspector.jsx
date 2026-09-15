@@ -73,6 +73,15 @@ const getFindingPatchState = (props = {}) => {
  * Filtra y formatea únicamente los atributos visibles y configurables por el usuario
  * al crear o editar el activo, ocultando variables internas del motor de cálculo.
  */
+const cleanVal = (val) => {
+  if (val === undefined || val === null) return null;
+  const str = String(val).trim();
+  if (str === '' || str === '0' || str.toLowerCase() === 'null' || str.toLowerCase() === 'undefined' || str.toLowerCase() === 'n/a' || str.toLowerCase() === 'none') {
+    return null;
+  }
+  return str;
+};
+
 const getVisibleAssetAttributes = (node) => {
   if (!node) return [];
   const props = node.properties || {};
@@ -80,33 +89,35 @@ const getVisibleAssetAttributes = (node) => {
   const fields = [];
 
   switch (cat) {
-    case 'Endpoint':
-      if (props.hostname || node.name) fields.push({ key: 'Hostname', value: props.hostname || node.name });
-      if (props.tipo || props.type) fields.push({ key: 'Tipo de Equipo', value: props.tipo || props.type });
-      if (props.status || props.estado) fields.push({ key: 'Estado', value: props.status || props.estado });
-      if (props.environment || props.entorno) fields.push({ key: 'Entorno', value: props.environment || props.entorno });
+    case 'Endpoint': {
+      const h = cleanVal(props.hostname || node.name); if (h) fields.push({ key: 'Hostname', value: h });
+      const t = cleanVal(props.tipo || props.type); if (t) fields.push({ key: 'Tipo de Equipo', value: t });
+      const s = cleanVal(props.status || props.estado); if (s) fields.push({ key: 'Estado', value: s });
+      const e = cleanVal(props.environment || props.entorno); if (e) fields.push({ key: 'Entorno', value: e });
       fields.push({ key: 'Expuesto a Internet', value: Boolean(props.internet_exposed) });
-      if (props.confidentiality_req) fields.push({ key: 'Confidencialidad Req.', value: props.confidentiality_req });
-      if (props.integrity_req) fields.push({ key: 'Integridad Req.', value: props.integrity_req });
-      if (props.availability_req) fields.push({ key: 'Disponibilidad Req.', value: props.availability_req });
+      const c = cleanVal(props.confidentiality_req); if (c) fields.push({ key: 'Confidencialidad Req.', value: c });
+      const i = cleanVal(props.integrity_req); if (i) fields.push({ key: 'Integridad Req.', value: i });
+      const a = cleanVal(props.availability_req); if (a) fields.push({ key: 'Disponibilidad Req.', value: a });
 
-      // Formatear direcciones IP y VLANs
       const epsIps = Array.isArray(props.ips) ? props.ips : (props.ip ? [props.ip] : []);
       if (epsIps.length > 0) {
         const formatted = epsIps.map(ip => {
           if (typeof ip === 'object' && ip !== null) {
-            return ip.vlan_id ? `${ip.ip || 'Sin IP'} (VLAN ${ip.vlan_id})` : ip.ip;
+            const cleanIpStr = cleanVal(ip.ip);
+            if (!cleanIpStr) return null;
+            return ip.vlan_id ? `${cleanIpStr} (VLAN ${ip.vlan_id})` : cleanIpStr;
           }
-          return String(ip);
+          return cleanVal(ip);
         }).filter(Boolean).join(', ');
         if (formatted) fields.push({ key: 'Direcciones IP / VLAN', value: formatted });
       }
       break;
+    }
 
-    case 'Container':
-      if (props.name || node.name) fields.push({ key: 'Nombre Contenedor', value: props.name || node.name });
-      if (props.state || props.status) fields.push({ key: 'Estado', value: props.state || props.status });
-      if (props.image_id || props.image) fields.push({ key: 'Imagen Base', value: props.image_id || props.image });
+    case 'Container': {
+      const name = cleanVal(props.name || node.name); if (name) fields.push({ key: 'Nombre Contenedor', value: name });
+      const st = cleanVal(props.state || props.status); if (st) fields.push({ key: 'Estado', value: st });
+      const img = cleanVal(props.image_id || props.image); if (img) fields.push({ key: 'Imagen Base', value: img });
       fields.push({ key: 'Expuesto a Internet', value: Boolean(props.internet_exposed) });
       fields.push({ key: 'Modo Privilegiado', value: Boolean(props.privileged) });
 
@@ -114,58 +125,73 @@ const getVisibleAssetAttributes = (node) => {
       if (contIps.length > 0) {
         const formatted = contIps.map(ip => {
           if (typeof ip === 'object' && ip !== null) {
-            return ip.vlan_id ? `${ip.ip || 'Sin IP'} (VLAN ${ip.vlan_id})` : ip.ip;
+            const cleanIpStr = cleanVal(ip.ip);
+            if (!cleanIpStr) return null;
+            return ip.vlan_id ? `${cleanIpStr} (VLAN ${ip.vlan_id})` : cleanIpStr;
           }
-          return String(ip);
+          return cleanVal(ip);
         }).filter(Boolean).join(', ');
         if (formatted) fields.push({ key: 'Direcciones IP / VLAN', value: formatted });
       }
       break;
+    }
 
-    case 'Hardware':
-      if (props.manufacturer || props.fabricante) fields.push({ key: 'Fabricante', value: props.manufacturer || props.fabricante });
-      if (props.modelo || props.model) fields.push({ key: 'Modelo', value: props.modelo || props.model });
-      if (props.tipo || props.type) fields.push({ key: 'Tipo / Arquitectura', value: props.tipo || props.type });
-      if (props.serial_number) fields.push({ key: 'Número de Serie', value: props.serial_number });
-      if (props.cpu) fields.push({ key: 'CPU Cores', value: props.cpu });
-      if (props.ram_gb !== undefined || props.ram !== undefined) fields.push({ key: 'Memoria RAM', value: `${props.ram_gb ?? props.ram} GB` });
-      if (props.storage_gb !== undefined || props.storage !== undefined) fields.push({ key: 'Almacenamiento', value: `${props.storage_gb ?? props.storage} GB` });
+    case 'Hardware': {
+      const mfg = cleanVal(props.manufacturer || props.fabricante); if (mfg) fields.push({ key: 'Fabricante', value: mfg });
+      const mod = cleanVal(props.model || props.modelo); if (mod) fields.push({ key: 'Modelo', value: mod });
+      const arq = cleanVal(props.architecture || props.tipo || props.type || props.arquitectura); if (arq) fields.push({ key: 'Tipo / Arquitectura', value: arq });
+      const sn = cleanVal(props.serial_number || props.numero_serie || props.serial); if (sn) fields.push({ key: 'Número de Serie', value: sn });
+
+      const cpu = cleanVal(props.cpu ?? props.cpu_cores ?? props.cores);
+      if (cpu && Number(cpu) > 0) fields.push({ key: 'Núcleos de CPU', value: String(cpu) });
+
+      const ram = cleanVal(props.ram_gb ?? props.ram);
+      if (ram && Number(ram) > 0) fields.push({ key: 'Memoria RAM', value: `${ram} GB` });
+
+      const storage = cleanVal(props.storage_gb ?? props.storage ?? props.disk_gb ?? props.disk);
+      if (storage && Number(storage) > 0) fields.push({ key: 'Almacenamiento', value: `${storage} GB` });
       break;
+    }
 
-    case 'Software':
-      if (props.name || node.name) fields.push({ key: 'Nombre', value: props.name || node.name });
-      if (props.vendor) fields.push({ key: 'Fabricante (Vendor)', value: props.vendor });
-      if (props.version) fields.push({ key: 'Versión', value: props.version });
-      if (props.type) {
+    case 'Software': {
+      const name = cleanVal(props.name || node.name); if (name) fields.push({ key: 'Nombre', value: name });
+      const vendor = cleanVal(props.vendor); if (vendor) fields.push({ key: 'Fabricante (Vendor)', value: vendor });
+      const ver = cleanVal(props.version); if (ver) fields.push({ key: 'Versión', value: ver });
+      const type = cleanVal(props.type);
+      if (type) {
         const typeLabels = { a: 'Aplicación / Servicio (a)', o: 'Sistema Operativo (o)', h: 'Hardware / Firmware (h)' };
-        fields.push({ key: 'Tipo', value: typeLabels[props.type] || props.type });
+        fields.push({ key: 'Tipo', value: typeLabels[type] || type });
       }
-      if (props.cpe) fields.push({ key: 'CPE 2.3', value: props.cpe });
-      if (props.release_date) fields.push({ key: 'Fecha de Lanzamiento', value: String(props.release_date).split('T')[0] });
-      if (props.url) fields.push({ key: 'Sitio Web / Referencia', value: props.url });
+      const cpe = cleanVal(props.cpe); if (cpe) fields.push({ key: 'CPE 2.3', value: cpe });
+      const rel = cleanVal(props.release_date); if (rel) fields.push({ key: 'Fecha de Lanzamiento', value: String(rel).split('T')[0] });
+      const url = cleanVal(props.url); if (url) fields.push({ key: 'Sitio Web / Referencia', value: url });
       break;
+    }
 
-    case 'SoftwareInstallation':
-      if (props.associated_endpoint) fields.push({ key: 'Endpoint Asociado', value: props.associated_endpoint });
-      if (props.associated_software) fields.push({ key: 'Software Asociado', value: props.associated_software });
-      if (props.install_path) fields.push({ key: 'Ruta de Instalación', value: props.install_path });
-      if (props.status) fields.push({ key: 'Estado', value: props.status });
-      if (props.criticality_level) fields.push({ key: 'Criticidad de Instalación', value: props.criticality_level });
+    case 'SoftwareInstallation': {
+      const ep = cleanVal(props.associated_endpoint); if (ep) fields.push({ key: 'Endpoint Asociado', value: ep });
+      const sw = cleanVal(props.associated_software); if (sw) fields.push({ key: 'Software Asociado', value: sw });
+      const path = cleanVal(props.install_path); if (path) fields.push({ key: 'Ruta de Instalación', value: path });
+      const st = cleanVal(props.status); if (st) fields.push({ key: 'Estado', value: st });
+      const crit = cleanVal(props.criticality_level); if (crit) fields.push({ key: 'Criticidad de Instalación', value: crit });
       break;
+    }
 
-    case 'Network':
-      if (props.nombre || props.name || node.name) fields.push({ key: 'Nombre del Segmento', value: props.nombre || props.name || node.name });
-      if (props.cidr) fields.push({ key: 'Rango CIDR', value: props.cidr });
-      if (props.gateway) fields.push({ key: 'Gateway IP', value: props.gateway });
-      if (props.vlan_id !== undefined && props.vlan_id !== null && props.vlan_id !== 0) fields.push({ key: 'VLAN ID', value: props.vlan_id });
-      if (props.descripcion || props.description) fields.push({ key: 'Descripción', value: props.descripcion || props.description });
+    case 'Network': {
+      const name = cleanVal(props.nombre || props.name || node.name); if (name) fields.push({ key: 'Nombre del Segmento', value: name });
+      const cidr = cleanVal(props.cidr); if (cidr) fields.push({ key: 'Rango CIDR', value: cidr });
+      const gw = cleanVal(props.gateway); if (gw) fields.push({ key: 'Gateway IP', value: gw });
+      const vlan = cleanVal(props.vlan_id); if (vlan && Number(vlan) > 0) fields.push({ key: 'VLAN ID', value: String(vlan) });
+      const desc = cleanVal(props.descripcion || props.description); if (desc) fields.push({ key: 'Descripción', value: desc });
       break;
+    }
 
-    case 'Project':
-      if (props.name || node.name) fields.push({ key: 'Nombre del Proyecto', value: props.name || node.name });
-      if (props.descripcion || props.description) fields.push({ key: 'Descripción', value: props.descripcion || props.description });
-      if (props.type || props.tipo) fields.push({ key: 'Tipo de Proyecto', value: props.type || props.tipo });
+    case 'Project': {
+      const name = cleanVal(props.name || node.name); if (name) fields.push({ key: 'Nombre del Proyecto', value: name });
+      const desc = cleanVal(props.descripcion || props.description); if (desc) fields.push({ key: 'Descripción', value: desc });
+      const type = cleanVal(props.type || props.tipo); if (type) fields.push({ key: 'Tipo de Proyecto', value: type });
       break;
+    }
 
     default: {
       const internalKeys = [
@@ -182,7 +208,8 @@ const getVisibleAssetAttributes = (node) => {
       ];
       Object.entries(props).forEach(([k, v]) => {
         if (!internalKeys.includes(k) && typeof v !== 'object') {
-          fields.push({ key: k.replace(/_/g, ' '), value: v });
+          const cv = cleanVal(v);
+          if (cv) fields.push({ key: k.replace(/_/g, ' '), value: cv });
         }
       });
       break;

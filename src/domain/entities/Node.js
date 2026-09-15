@@ -65,11 +65,30 @@ export class Node {
         let hostname = props.hostname || props.nombre || props.name;
         if (!hostname) hostname = `Endpoint #${props.id}`;
         return hostname;
-      case 'Hardware':
-        const cpu = props.cpu_cores ? `${props.cpu_cores}C/` : '';
-        const ram = props.ram_gb ? `${props.ram_gb}G` : '';
-        if (cpu || ram) return `HW: ${cpu}${ram}`;
-        return `${props.manufacturer || ''} ${props.model || ''}`.trim() || `Hardware #${props.id}`;
+      case 'Hardware': {
+        const clean = (v) => {
+          if (v === undefined || v === null) return '';
+          const s = String(v).trim();
+          if (s === '' || s === '0' || s.toLowerCase() === 'null' || s.toLowerCase() === 'undefined' || s.toLowerCase() === 'n/a' || s.toLowerCase() === 'none') return '';
+          return s;
+        };
+        const mfg = clean(props.manufacturer || props.fabricante);
+        const mod = clean(props.modelo || props.model);
+        const fullName = [mfg, mod].filter(Boolean).join(' ');
+
+        const cpuVal = clean(props.cpu ?? props.cpu_cores);
+        const ramVal = clean(props.ram_gb ?? props.ram);
+        const specs = [
+          cpuVal && Number(cpuVal) > 0 ? `${cpuVal}C` : null,
+          ramVal && Number(ramVal) > 0 ? `${ramVal}GB` : null
+        ].filter(Boolean).join('/');
+
+        if (fullName) {
+          return specs ? `${fullName} (${specs})` : fullName;
+        }
+        if (specs) return `HW: ${specs}`;
+        return `Hardware #${props.id}`;
+      }
       case 'Container':
         return props.name || `Container #${props.id}`;
       case 'ContainerImage': {

@@ -675,6 +675,7 @@ export function EditNodeModal({ node, onClose, updateNode, allNodes = [] }) {
                       className="asset-input"
                       value={formData.manufacturer || ''}
                       onChange={(e) => updateField('manufacturer', e.target.value)}
+                      required
                     />
                   </div>
                   <div>
@@ -684,6 +685,7 @@ export function EditNodeModal({ node, onClose, updateNode, allNodes = [] }) {
                       className="asset-input"
                       value={formData.modelo || ''}
                       onChange={(e) => updateField('modelo', e.target.value)}
+                      required
                     />
                   </div>
                 </div>

@@ -261,6 +261,61 @@ function getNodeDepth(n) {
   return 4;
 }
 
+function getStixTargetRadius(n) {
+  if (!n) return 470;
+  const entity = n.entity || n;
+  const cat = (entity.categoryId || '').toLowerCase().trim();
+  const label = (entity.primaryLabel || entity.labels?.[0] || '').toLowerCase().trim();
+  const labels = (entity.labels || []).map(l => String(l).toLowerCase().trim());
+
+  // Nivel 0: Proyecto -> Centro exacto (0)
+  if (cat === 'proyecto' || cat === 'project' || label === 'project' || labels.includes('project')) {
+    return 0;
+  }
+  // Nivel 1: Redes y Segmentos -> r = 110
+  if (cat === 'red' || cat === 'network' || label === 'network' || labels.includes('network') || labels.includes('subnet')) {
+    return 110;
+  }
+  // Nivel 2: Endpoints -> r = 230
+  if (cat === 'endpoint' || label === 'endpoint' || labels.includes('endpoint')) {
+    return 230;
+  }
+  // Nivel 3: Contenedores e Imágenes -> r = 350
+  if (
+    cat.includes('container') || cat.includes('contenedor') || cat.includes('imagen') || cat.includes('image') ||
+    label.includes('container') || labels.some(l => l.includes('container'))
+  ) {
+    return 350;
+  }
+  // Nivel 4: Instalaciones de Software (SoftwareInstallation) -> r = 470
+  if (
+    cat === 'instalacion' || cat === 'installation' || cat === 'softwareinstallation' ||
+    label === 'installation' || label === 'softwareinstallation' ||
+    labels.includes('installation') || labels.includes('softwareinstallation') ||
+    cat.includes('instal') || label.includes('instal')
+  ) {
+    return 470;
+  }
+  // Nivel 5: Software y Hardware -> r = 590
+  if (
+    cat === 'software' || label === 'software' || labels.includes('software') ||
+    cat === 'hardware' || label === 'hardware' || labels.includes('hardware')
+  ) {
+    return 590;
+  }
+  // Nivel 6: Hallazgos, Vulnerabilidades y Remediaciones -> r = 710
+  if (
+    cat === 'hallazgo' || cat === 'finding' || label === 'finding' || labels.includes('finding') ||
+    cat === 'vulnerabilidad' || cat === 'remediacion' || cat === 'parche' ||
+    label === 'vulnerability' || label === 'remediation' ||
+    labels.includes('vulnerability') || labels.includes('remediation')
+  ) {
+    return 710;
+  }
+
+  return 470;
+}
+
 function getCanonicalNodeId(rawId, nodes) {
   if (!rawId || !nodes) return String(rawId);
   const targetStr = String(rawId);
@@ -498,6 +553,59 @@ export function NetworkGraph({
           y: centerY - treeH / 2,
           w: treeW,
           h: treeH
+        });
+      } else if (layoutMode === 'stix') {
+        // Asignar sub-órbitas (carriles concéntricos) si un anillo supera su capacidad cómoda
+        const ringNodesMap = new Map();
+        nodesRef.current.forEach(node => {
+          const r = getStixTargetRadius(node.entity);
+          if (r > 0) {
+            if (!ringNodesMap.has(r)) ringNodesMap.set(r, []);
+            ringNodesMap.get(r).push(node);
+          }
+        });
+
+        ringNodesMap.forEach((ringNodes, radius) => {
+          const count = ringNodes.length;
+          const maxCapacity = Math.floor((2 * Math.PI * radius) / 48);
+          if (count > maxCapacity) {
+            // Distribuir en 3 carriles concéntricos (-24px, 0px, +24px)
+            ringNodes.forEach((node, idx) => {
+              const lane = idx % 3;
+              node.stixLaneOffset = lane === 0 ? -24 : lane === 1 ? 0 : 24;
+            });
+          } else if (count > Math.floor(maxCapacity * 0.6)) {
+            // Distribuir en 2 carriles (-16px, +16px)
+            ringNodes.forEach((node, idx) => {
+              node.stixLaneOffset = idx % 2 === 0 ? -16 : 16;
+            });
+          } else {
+            ringNodes.forEach(node => {
+              node.stixLaneOffset = 0;
+            });
+          }
+        });
+
+        const stixW = 1660;
+        const stixH = 1660;
+        const canvas = canvasRef.current;
+        let fitW = stixW;
+        let fitH = stixH;
+
+        if (canvas && canvas.clientWidth > 0 && canvas.clientHeight > 0) {
+          const aspect = canvas.clientWidth / canvas.clientHeight;
+          if (fitW / fitH < aspect) {
+            fitW = fitH * aspect;
+          } else {
+            fitH = fitW / aspect;
+          }
+        }
+
+        setViewBox({
+          x: WORLD_CENTER_X - fitW / 2,
+          y: WORLD_CENTER_Y - fitH / 2,
+          w: fitW,
+          h: fitH
         });
       }
     }
@@ -1237,29 +1345,28 @@ export function NetworkGraph({
           }
 
           if (layoutMode === 'stix') {
-            // Grafo STIX: gravedad radial por profundidad de nodo (mismos niveles que Árbol)
-            const depth = getNodeDepth(node.entity);
-            let targetRadius;
-            if (depth === 0) targetRadius = 0;        // PROYECTO → centro
-            else if (depth === 1) targetRadius = 105; // REDES Y SEGMENTOS
-            else if (depth === 2) targetRadius = 240; // ENDPOINTS
-            else if (depth >= 3 && depth < 4) targetRadius = 380; // INSTALACIONES Y CONTENEDORES
-            else targetRadius = 510;                  // SOFTWARE, HALLAZGOS Y HARDWARE (última capa; el nivel 5 de vulns/remediaciones nunca se renderiza)
-
-            const dx = node.x - WORLD_CENTER_X;
-            const dy = node.y - WORLD_CENTER_Y;
-            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            // Grafo STIX: gravedad radial por categoría y anillo concéntrico
+            const targetRadius = getStixTargetRadius(node.entity);
 
             if (targetRadius === 0) {
-              // Nodo raíz (Project): anclar al centro
+              // PROYECTO: Atraer suavemente al centro con la misma física de retorno que el resto
               node.fx += (WORLD_CENTER_X - node.x) * 0.25;
               node.fy += (WORLD_CENTER_Y - node.y) * 0.25;
             } else {
-              // Atraer hacia el radio objetivo manteniendo la dirección actual
-              const targetX = WORLD_CENTER_X + (dx / dist) * targetRadius;
-              const targetY = WORLD_CENTER_Y + (dy / dist) * targetRadius;
-              node.fx += (targetX - node.x) * 0.08;
-              node.fy += (targetY - node.y) * 0.08;
+              const laneOffset = node.stixLaneOffset || 0;
+              const effectiveTargetRadius = targetRadius + laneOffset;
+
+              const dx = node.x - WORLD_CENTER_X;
+              const dy = node.y - WORLD_CENTER_Y;
+              const currentDist = Math.sqrt(dx * dx + dy * dy) || 1;
+
+              // Proyectar objetivo sobre su anillo/sub-órbita concéntrica
+              const targetX = WORLD_CENTER_X + (dx / currentDist) * effectiveTargetRadius;
+              const targetY = WORLD_CENTER_Y + (dy / currentDist) * effectiveTargetRadius;
+
+              // Fuerza de atracción radial potente hacia su sub-carril
+              node.fx += (targetX - node.x) * 0.25;
+              node.fy += (targetY - node.y) * 0.25;
             }
           } else if (layoutMode === 'tree') {
             const targetX = node.treeX !== undefined ? node.treeX : WORLD_CENTER_X;
@@ -1359,33 +1466,49 @@ export function NetworkGraph({
       if (layoutMode === 'stix') {
         const stixRings = [
           {
-            radius: 105,
+            radius: 110,
             label: 'NIVEL 1 · REDES Y SEGMENTOS',
-            color: 'rgba(139, 92, 246, 0.07)',
+            color: 'rgba(139, 92, 246, 0.05)',
             stroke: 'rgba(168, 85, 247, 0.6)',
             glow: '#a855f7',
             textColor: '#e9d5ff'
           },
           {
-            radius: 240,
+            radius: 230,
             label: 'NIVEL 2 · ENDPOINTS',
-            color: 'rgba(14, 165, 233, 0.05)',
+            color: 'rgba(14, 165, 233, 0.04)',
             stroke: 'rgba(56, 189, 248, 0.6)',
             glow: '#38bdf8',
             textColor: '#bae6fd'
           },
           {
-            radius: 380,
-            label: 'NIVEL 3 · INSTALACIONES Y CONTENEDORES',
-            color: 'rgba(20, 184, 166, 0.05)',
+            radius: 350,
+            label: 'NIVEL 3 · CONTENEDORES E IMÁGENES',
+            color: 'rgba(20, 184, 166, 0.04)',
             stroke: 'rgba(45, 212, 191, 0.6)',
             glow: '#2dd4bf',
             textColor: '#99f6e4'
           },
           {
-            radius: 510,
-            label: 'NIVEL 4 · SOFTWARE, HALLAZGOS Y HARDWARE',
-            color: 'rgba(245, 158, 11, 0.05)',
+            radius: 470,
+            label: 'NIVEL 4 · INSTALACIONES DE SOFTWARE',
+            color: 'rgba(168, 85, 247, 0.04)',
+            stroke: 'rgba(192, 132, 252, 0.6)',
+            glow: '#c084fc',
+            textColor: '#e9d5ff'
+          },
+          {
+            radius: 590,
+            label: 'NIVEL 5 · SOFTWARE Y HARDWARE',
+            color: 'rgba(59, 130, 246, 0.04)',
+            stroke: 'rgba(96, 165, 250, 0.6)',
+            glow: '#60a5fa',
+            textColor: '#bfdbfe'
+          },
+          {
+            radius: 710,
+            label: 'NIVEL 6 · HALLAZGOS Y VULNERABILIDADES',
+            color: 'rgba(245, 158, 11, 0.04)',
             stroke: 'rgba(251, 191, 36, 0.6)',
             glow: '#fbbf24',
             textColor: '#fef08a'
@@ -1978,15 +2101,22 @@ export function NetworkGraph({
           }
 
           alphaRef.current = 0.85; // Activar asentamiento dinámico suave
+        } else if (layoutMode === 'stix') {
+          subtreeNodeIds.forEach(idStr => {
+            const subNode = nodeMapRef.current.get(idStr);
+            if (subNode) {
+              subNode.pinned = false; // Des-anclar nodo para que retorne libremente a su anillo
+            }
+          });
+          alphaRef.current = 1.0; // Re-activar física completa para retorno al anillo
         } else {
           subtreeNodeIds.forEach(idStr => {
             const subNode = nodeMapRef.current.get(idStr);
             if (subNode) {
-              subNode.pinned = true;
-              subNode.vx = 0;
-              subNode.vy = 0;
+              subNode.pinned = false;
             }
           });
+          alphaRef.current = 0.85;
         }
       };
 
