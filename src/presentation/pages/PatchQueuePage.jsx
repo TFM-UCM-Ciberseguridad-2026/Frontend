@@ -600,7 +600,7 @@ export function PatchQueuePage({
                       <td>
                         {item.in_container
                           ? `Container: ${item.container_name || 'N/A'}`
-                          : `Host · ${item.environment || 'N/A'}`}
+                          : `Host: ${item.hostname || 'N/A'}`}
                       </td>
                       <td>
                         <div className="patch-actions">

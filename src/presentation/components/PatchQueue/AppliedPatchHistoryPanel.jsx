@@ -120,7 +120,7 @@ export function AppliedPatchHistoryPanel({
           </h4>
           <p className="applied-history-subtitle">
             {selectedItem.asset_type === 'ENDPOINT'
-              ? `Host · ${selectedItem.hostname} (#${selectedItem.endpoint_id || selectedItem.asset_id})`
+              ? `Host: ${selectedItem.hostname} (#${selectedItem.endpoint_id || selectedItem.asset_id})`
               : selectedItem.asset_type === 'CONTAINER'
               ? `Container · ${selectedItem.container_name || selectedItem.container_id || selectedItem.asset_id}`
               : `SoftwareInstallation · ${selectedItem.hostname ? selectedItem.hostname + ' · ' : ''}${selectedItem.installation_id || selectedItem.asset_id}`}
@@ -195,4 +195,3 @@ export function AppliedPatchHistoryPanel({
     </aside>
   );
 }
-
