@@ -420,16 +420,27 @@ export function PatchQueuePage({
             Cola priorizada de remediación según vulnerabilidad y criticidad contextual del activo.
           </p>
         </div>
-        <button
-          className="btn btn-secondary"
-          onClick={async () => {
-            await refreshPatchesForProject?.(queue);
-            await refetch();
-          }}
-          disabled={patchQueueLoading || patchProjectRefreshLoading}
-        >
-          {patchProjectRefreshLoading ? 'Refrescando patches...' : 'Refrescar cola'}
-        </button>
+        <div className="patch-refresh-action">
+          <button
+            className="btn btn-primary patch-refresh-button"
+            title="Consultar y actualizar los parches disponibles"
+            aria-busy={patchProjectRefreshLoading}
+            onClick={async () => {
+              await refreshPatchesForProject?.(queue);
+              await refetch();
+            }}
+            disabled={patchQueueLoading || patchProjectRefreshLoading}
+          >
+            <span aria-hidden="true" className="patch-refresh-icon">↻</span>
+            {patchProjectRefreshLoading
+              ? 'Consultando fuentes...'
+              : 'Buscar parches disponibles'}
+          </button>
+          <p className="patch-refresh-help">
+            Pulsa este botón para consultar y actualizar la información de parches y
+            versiones corregidas.
+          </p>
+        </div>
       </div>
 
       {/* Badges de métricas por Nivel de Prioridad */}
@@ -500,7 +511,7 @@ export function PatchQueuePage({
         <span>
           Mostrando {startItem} - {endItem} de {totalItems} parches pendientes
         </span>
-        {patchProjectRefreshProgress && (
+      {patchProjectRefreshProgress && (
           <span className="patch-queue-refresh-progress">
             Refrescando patches... {patchProjectRefreshProgress.processed}/{patchProjectRefreshProgress.total || '?'}
           </span>
