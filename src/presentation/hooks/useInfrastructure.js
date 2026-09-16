@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { InfrastructureApiDataSource } from '../../data/datasources/InfrastructureApiDataSource';
 import { InfrastructureRepositoryImpl } from '../../data/repositories/InfrastructureRepositoryImpl';
 import { GetInfrastructureUseCase } from '../../domain/usecases/GetInfrastructureUseCase';
@@ -35,6 +35,16 @@ import { GetPatchesForProjectUseCase } from '../../domain/usecases/GetPatchesFor
 import { ExportWeeklyReportUseCase } from '../../domain/usecases/ExportWeeklyReportUseCase';
 import { ExportMonthlyReportUseCase } from '../../domain/usecases/ExportMonthlyReportUseCase';
 import { GetAppliedPatchHistoryUseCase } from '../../domain/usecases/GetAppliedPatchHistoryUseCase';
+import { prepararCopiaDeProyecto } from '../../domain/entities/copiaDeProyecto';
+import {
+  VULN_SCAN_IDLE,
+  SCAN_END,
+  GRAPH_END,
+  DONE_HOLD_MS,
+  ERROR_HOLD_MS,
+  itemSlot,
+  createVulnScanTracker
+} from '../utils/vulnScanProgress';
 
 const isSoftwareInstallationNode = node =>
   node?.primaryLabel === 'SoftwareInstallation' ||
@@ -793,111 +803,7 @@ export function useInfrastructure() {
       }
 
       if (options.renameTo) {
-        const newProjId = Date.now();
-        if (dataToImport.project) {
-          dataToImport.project.name = options.renameTo;
-          dataToImport.project.id = newProjId;
-        }
-
-        const nodes = dataToImport.nodes || dataToImport.graphData?.nodes || [];
-        const rels = dataToImport.relationships || dataToImport.graphData?.relationships || [];
-
-        const idMapping = {};
-        // Referencias antiguas que corresponden a más de un nodo (un id de propiedad
-        // compartido por nodos de tipos distintos). No se pueden remapear sin arriesgarse
-        // a enganchar relaciones al nodo equivocado.
-        const ambiguousRefs = new Set();
-        const mapRef = (oldRef, newId) => {
-          if (idMapping[oldRef] !== undefined && idMapping[oldRef] !== newId) {
-            ambiguousRefs.add(oldRef);
-          } else {
-            idMapping[oldRef] = newId;
-          }
-        };
-        // Catálogos compartidos entre proyectos: conservan su identidad al copiar. CAPEC y CWE
-        // se identifican por capec_id/cwe_id; darles un id nuevo no aportaba nada y era una
-        // fuente más de colisiones.
-        const globalLabels = ['Vulnerability', 'ThreatActor', 'TTP', 'Mitigation', 'Software', 'ContainerImage', 'CAPEC', 'CWE'];
-
-        // Ids nuevos consecutivos a partir de una base común: con Date.now() + idx + un
-        // aleatorio, dos nodos podían recibir el mismo id y la importación los fusionaba.
-        const baseId = newProjId + 1;
-        let nextOffset = 0;
-
-        nodes.forEach((n) => {
-          const isGlobal = n.labels?.some(l => globalLabels.includes(l));
-
-          if (!isGlobal) {
-            const newId = n.labels?.includes('Project') ? String(newProjId) : String(baseId + nextOffset++);
-            const oldNodeId = String(n.id);
-            mapRef(oldNodeId, newId);
-
-            if (n.properties?.id !== undefined && n.properties?.id !== null) {
-              const oldPropId = String(n.properties.id);
-              mapRef(oldPropId, newId);
-              if (typeof n.properties.id === 'number') {
-                n.properties.id = parseInt(newId, 10);
-              } else {
-                n.properties.id = newId;
-              }
-            }
-
-            n.id = newId;
-
-            if (n.labels?.includes('Project')) {
-              if (n.properties) {
-                delete n.properties.nombre; // los ficheros antiguos lo traen; el esquema usa `name`
-                n.properties.name = options.renameTo;
-              }
-            }
-          }
-        });
-
-        // Un finding se identifica por finding_key (activo|CVE). Si la copia conservara la
-        // clave del activo original, la importación la fusionaría con el finding del
-        // proyecto de origen. Se reescribe el activo con su id nuevo; si no se puede
-        // remapear, se quita la clave para que la copia no pise al original.
-        nodes.forEach((n) => {
-          if (!n.labels?.includes('Finding') || !n.properties) return;
-          const p = n.properties;
-
-          if (p.container_id !== undefined && p.container_id !== null) {
-            const oldContainer = String(p.container_id);
-            if (idMapping[oldContainer] && !ambiguousRefs.has(oldContainer)) {
-              p.container_id = idMapping[oldContainer];
-            }
-          }
-
-          if (typeof p.finding_key === 'string' && p.finding_key.includes('|')) {
-            const parts = p.finding_key.split('|');
-            const oldOwner = parts[0];
-            if (idMapping[oldOwner] && !ambiguousRefs.has(oldOwner)) {
-              parts[0] = idMapping[oldOwner];
-              p.finding_key = parts.join('|');
-            } else {
-              delete p.finding_key;
-            }
-          }
-        });
-
-        const remappedRels = [];
-        rels.forEach(rel => {
-          const sStr = String(rel.source);
-          const tStr = String(rel.target);
-          if (ambiguousRefs.has(sStr) || ambiguousRefs.has(tStr)) {
-            console.warn('Relación omitida en la importación por referencia ambigua:', rel);
-            return;
-          }
-          if (idMapping[sStr]) {
-            rel.source = idMapping[sStr];
-          }
-          if (idMapping[tStr]) {
-            rel.target = idMapping[tStr];
-          }
-          remappedRels.push(rel);
-        });
-        rels.length = 0;
-        rels.push(...remappedRels);
+        prepararCopiaDeProyecto(dataToImport, options.renameTo);
       }
 
       await importInfrastructureUseCase.execute(dataToImport);
@@ -1471,18 +1377,25 @@ export function useInfrastructure() {
       )
       .map(n => ({
         imageId: n.properties?.id,
-        imageName: n.properties?.id || n.properties?.name,
+        // El id del nodo es <container_id>_<imagen>; lo que se escanea es la imagen.
+        imageName: n.properties?.image_id || n.properties?.name || n.properties?.id,
         imageNode: n
       }))
       .filter(item => item.imageId);
   }, [filteredGraphData]);
 
-// Estado para la rueda de progreso dinámico
-  const [vulnScanProgress, setVulnScanProgress] = useState({ current: 0, total: 0, percent: 0, statusText: '' });
+  // Progreso del análisis de vulnerabilidades (ver utils/vulnScanProgress.js)
+  const [vulnScanProgress, setVulnScanProgress] = useState(VULN_SCAN_IDLE);
+  const vulnScanResetTimerRef = useRef(null);
+
+  useEffect(() => () => clearTimeout(vulnScanResetTimerRef.current), []);
 
   const analyzeProjectVulnerabilities = async () => {
     if (!selectedProjectId || vulnScanLoading || riskComputeLoading) return;
 
+    // Un reintento descarta el estado de error que pudiera seguir visible.
+    clearTimeout(vulnScanResetTimerRef.current);
+    setVulnScanProgress(VULN_SCAN_IDLE);
     setVulnScanLoading(true);
     setRiskActionError(null);
 
@@ -1507,30 +1420,24 @@ export function useInfrastructure() {
       return;
     }
 
-    setVulnScanProgress({ current: 0, total: totalItems, percent: 5, statusText: 'Iniciando...' });
     const failedItems = [];
-    const itemWeight = 100 / totalItems;
+    const tracker = createVulnScanTracker(totalItems, setVulnScanProgress);
+    tracker.start();
+
+    // Deja el anillo detenido donde llegó, marcado como fallido.
+    const failScan = (message) => {
+      tracker.stop();
+      tracker.update({ phase: 'error', error: message, statusText: message, stalled: false });
+    };
 
     try {
       for (let i = 0; i < totalItems; i++) {
         const item = allItems[i];
-        const basePercent = Math.round(i * itemWeight);
-
-        // Ticker de progreso continuo mientras esperamos la respuesta de red de la API
-        let currentSub = basePercent + 2;
-        const maxSub = Math.round(basePercent + itemWeight * 0.88);
-
-        const subInterval = setInterval(() => {
-          if (currentSub < maxSub) {
-            currentSub += 3;
-            setVulnScanProgress({
-              current: i,
-              total: totalItems,
-              percent: Math.min(96, currentSub),
-              statusText: item.type === 'software' ? `Analizando ${item.softwareName || 'software'}...` : `Escaneando ${item.imageName || 'imagen'}...`
-            });
-          }
-        }, 120);
+        const slot = itemSlot(i, totalItems);
+        tracker.enterStage(slot.start, slot.end, {
+          current: i + 1,
+          statusText: item.type === 'software' ? `Analizando ${item.softwareName || 'software'}...` : `Escaneando ${item.imageName || 'imagen'}...`
+        });
 
         try {
           if (item.type === 'software') {
@@ -1562,27 +1469,37 @@ export function useInfrastructure() {
           console.error(`Error analizando elemento:`, err);
           failedItems.push(`${item.type === 'software' ? 'Soft' : 'Img'}: ${item.softwareName || item.imageName || item.installationId || item.imageId}`);
         } finally {
-          clearInterval(subInterval);
-          const completedPercent = Math.round((i + 1) * itemWeight);
-          setVulnScanProgress({
-            current: i + 1,
-            total: totalItems,
-            percent: Math.min(100, completedPercent),
-            statusText: `Completado ${i + 1}/${totalItems}`
-          });
+          tracker.update({ completed: i + 1, failed: failedItems.length, percent: slot.end, waitingMs: 0, stalled: false });
         }
       }
 
-      setVulnScanProgress({ current: totalItems, total: totalItems, percent: 100, statusText: 'Actualizando grafo...' });
-      await fetchInfrastructure(true);
-
-      if (successCount > 0) {
-        setVulnScanProgress({ current: totalItems, total: totalItems, percent: 100, statusText: 'Calculando riesgos...' });
-        await computeSelectedProjectRisk();
+      if (successCount === 0) {
+        const errorMsg = `No se pudo analizar ningún elemento. Fallaron: ${failedItems.join(', ')}`;
+        failScan(`No se pudo analizar ningún elemento (${failedItems.length}/${totalItems} con error).`);
+        await fetchInfrastructure(true);
+        setRiskActionError(errorMsg);
+        toast.error(errorMsg, 'Falló el Análisis');
+        return;
       }
 
+      tracker.enterStage(SCAN_END, GRAPH_END, { phase: 'graph', statusText: 'Actualizando grafo...' });
+      await fetchInfrastructure(true);
+
+      tracker.enterStage(GRAPH_END, 100, { phase: 'risk', statusText: 'Calculando riesgos...' });
+      await computeSelectedProjectRisk();
+
+      tracker.stop();
+      tracker.update({
+        phase: 'done',
+        percent: 100,
+        stalled: false,
+        statusText: failedItems.length === 0
+          ? 'Análisis completado'
+          : `Completado con ${failedItems.length} elemento(s) con error`
+      });
+
       // Pausa visual al 100% para que el usuario aprecie la rueda completa
-      await new Promise(resolve => setTimeout(resolve, 600));
+      await new Promise(resolve => setTimeout(resolve, DONE_HOLD_MS));
 
       const summaryLines = [
         `Vulnerabilidades analizadas: ${successCount} elemento(s).`,
@@ -1597,20 +1514,23 @@ export function useInfrastructure() {
 
       if (failedItems.length === 0) {
         toast.success(summaryLines.join('\n'), 'Análisis Completado');
-      } else if (successCount > 0) {
-        toast.warning(`${summaryLines.join('\n')}\nNo se pudo analizar: ${failedItems.join(', ')}.`, `Análisis Parcial (${successCount}/${totalItems})`);
       } else {
-        const errorMsg = `No se pudo analizar ningún elemento. Fallaron: ${failedItems.join(', ')}`;
-        setRiskActionError(errorMsg);
-        toast.error(errorMsg, 'Falló el Análisis');
+        toast.warning(`${summaryLines.join('\n')}\nNo se pudo analizar: ${failedItems.join(', ')}.`, `Análisis Parcial (${successCount}/${totalItems})`);
       }
     } catch (err) {
       console.error(err);
+      failScan(`Error inesperado: ${err.message}`);
       setRiskActionError(err.message);
       toast.error(`Error inesperado analizando vulnerabilidades: ${err.message}`, 'Falló el Análisis');
     } finally {
+      tracker.stop();
       setVulnScanLoading(false);
-      setVulnScanProgress({ current: 0, total: 0, percent: 0, statusText: '' });
+      // Un fallo se deja visible (anillo detenido en rojo) unos segundos antes de volver al reposo.
+      if (tracker.state.phase === 'error') {
+        vulnScanResetTimerRef.current = setTimeout(() => setVulnScanProgress(VULN_SCAN_IDLE), ERROR_HOLD_MS);
+      } else {
+        setVulnScanProgress(VULN_SCAN_IDLE);
+      }
     }
   };
 
@@ -1796,6 +1716,7 @@ export function useInfrastructure() {
     exportMonthlyReport,
     importProject,
     vulnScanLoading,
+    vulnScanProgress,
     riskComputeLoading,
     riskActionLoading: vulnScanLoading || riskComputeLoading,
     riskActionError,

@@ -41,6 +41,7 @@ export function GraphPage({
   renameProject,
   deleteProject,
   vulnScanLoading,
+  vulnScanProgress,
   riskComputeLoading,
   analyzeProjectVulnerabilities,
   computeSelectedProjectRisk,
@@ -65,6 +66,7 @@ export function GraphPage({
         selectedExploitationPath={selectedExploitationPath}
         clearSelectedExploitationPath={clearSelectedExploitationPath}
         vulnScanLoading={vulnScanLoading}
+        vulnScanProgress={vulnScanProgress}
         riskComputeLoading={riskComputeLoading}
         analyzeProjectVulnerabilities={analyzeProjectVulnerabilities}
         computeSelectedProjectRisk={computeSelectedProjectRisk}

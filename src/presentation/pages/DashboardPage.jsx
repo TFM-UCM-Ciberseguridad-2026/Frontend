@@ -66,6 +66,7 @@ export function DashboardPage({
   exportMonthlyReport,
   importProject,
   vulnScanLoading,
+  vulnScanProgress,
   riskComputeLoading,
   analyzeProjectVulnerabilities,
   computeSelectedProjectRisk,
@@ -218,6 +219,7 @@ export function DashboardPage({
             renameProject={renameProject}
             deleteProject={deleteProject}
             vulnScanLoading={vulnScanLoading}
+            vulnScanProgress={vulnScanProgress}
             riskComputeLoading={riskComputeLoading}
             analyzeProjectVulnerabilities={analyzeProjectVulnerabilities}
             computeSelectedProjectRisk={computeSelectedProjectRisk}

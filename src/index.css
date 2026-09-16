@@ -784,6 +784,38 @@ aside {
   box-shadow: 0 0 12px rgba(122, 115, 255, 0.3);
 }
 
+.sidebar-action-btn.vuln-btn--error {
+  border-color: rgba(239, 68, 68, 0.6);
+  color: #fca5a5;
+}
+
+.vuln-btn-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  text-align: left;
+}
+
+.vuln-btn-sub {
+  font-family: inherit;
+  font-size: 8.5px;
+  letter-spacing: 0.6px;
+  font-weight: 500;
+  text-transform: none;
+  opacity: 0.75;
+}
+
+/* Espera larga en un mismo elemento: el anillo late para dejar claro que sigue vivo */
+.vuln-ring--stalled {
+  animation: vulnRingPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes vulnRingPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
 .sidebar-action-btn.risk-btn {
   background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(180, 83, 9, 0.25));
   border-color: rgba(245, 158, 11, 0.35);

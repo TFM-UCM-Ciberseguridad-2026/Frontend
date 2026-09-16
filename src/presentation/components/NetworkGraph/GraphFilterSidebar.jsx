@@ -1,4 +1,52 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { VULN_SCAN_IDLE } from '../../utils/vulnScanProgress';
+
+const RING_COLOR = {
+  ok: 'var(--c400, #7973FF)',
+  partial: '#f59e0b',
+  error: '#ef4444'
+};
+
+// Texto, detalle (title) y estado visual del botón de análisis a partir del progreso real.
+function describeVulnScan(progress, loading) {
+  const pct = Math.floor(progress.percent);
+  const waitingS = Math.floor(progress.waitingMs / 1000);
+  const failedNote = progress.failed > 0 ? `${progress.failed} con error` : '';
+  const tone = progress.phase === 'error' ? 'error' : progress.failed > 0 ? 'partial' : 'ok';
+
+  let label;
+  let detail = progress.statusText;
+  switch (progress.phase) {
+    case 'scanning':
+      label = `Analizando ${progress.current}/${progress.total} · ${pct}%`;
+      detail = `${progress.statusText} (elemento ${progress.current} de ${progress.total})`;
+      break;
+    case 'graph':
+      label = `Actualizando grafo · ${pct}%`;
+      break;
+    case 'risk':
+      label = `Calculando riesgo · ${pct}%`;
+      break;
+    case 'done':
+      label = 'Completado · 100%';
+      break;
+    case 'error':
+      label = `Análisis fallido · ${pct}%`;
+      detail = `${progress.error} Pulsa para reintentar.`;
+      break;
+    default:
+      label = loading ? 'Analizando...' : 'Analizar vulnerabilidades';
+      detail = undefined;
+  }
+
+  const subParts = [];
+  if (progress.stalled) subParts.push(`Esperando respuesta · ${waitingS} s`);
+  if (failedNote) subParts.push(failedNote);
+  if (progress.stalled) detail = `${detail} — sin respuesta desde hace ${waitingS} s, sigue en curso`;
+  if (failedNote && progress.phase !== 'error') detail = `${detail} — ${failedNote}`;
+
+  return { label, detail, sub: subParts.join(' · '), tone };
+}
 
 export function GraphFilterSidebar({
   graphData,
@@ -15,6 +63,7 @@ export function GraphFilterSidebar({
   selectedExploitationPath,
   clearSelectedExploitationPath,
   vulnScanLoading,
+  vulnScanProgress = VULN_SCAN_IDLE,
   riskComputeLoading,
   analyzeProjectVulnerabilities,
   computeSelectedProjectRisk
@@ -23,33 +72,6 @@ export function GraphFilterSidebar({
     categories: true,
     advanced: true
   });
-
-  // Progreso fluido y reactivo gestionado internamente
-  const [progressPercent, setProgressPercent] = useState(0);
-
-  useEffect(() => {
-    let timer = null;
-    if (vulnScanLoading) {
-      setProgressPercent(8);
-      timer = setInterval(() => {
-        setProgressPercent(prev => {
-          if (prev < 35) return prev + 5;
-          if (prev < 70) return prev + 3;
-          if (prev < 92) return prev + 1;
-          return prev;
-        });
-      }, 160);
-    } else {
-      if (progressPercent > 0) {
-        setProgressPercent(100);
-        const resetTimer = setTimeout(() => setProgressPercent(0), 600);
-        return () => clearTimeout(resetTimer);
-      }
-    }
-    return () => {
-      if (timer) clearInterval(timer);
-    };
-  }, [vulnScanLoading]);
 
   const toggleSection = (sectionKey) => {
     setOpenSections(prev => ({
@@ -81,10 +103,14 @@ export function GraphFilterSidebar({
   const totalNodes = graphData?.nodes?.length || 0;
   const totalEdges = graphData?.links?.length || graphData?.edges?.length || graphData?.relationships?.length || 0;
 
+  // Progreso real del análisis (lo publica useInfrastructure)
+  const showScanRing = vulnScanLoading || vulnScanProgress.phase !== 'idle';
+  const scanView = describeVulnScan(vulnScanProgress, vulnScanLoading);
+
   // Cálculo del trazado SVG del anillo de progreso
   const radius = 8.5;
   const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (progressPercent / 100) * circumference;
+  const strokeDashoffset = circumference - (vulnScanProgress.percent / 100) * circumference;
 
   return (
     <aside className="sidebar compact-sidebar">
@@ -175,13 +201,25 @@ export function GraphFilterSidebar({
           {analyzeProjectVulnerabilities && (
             <button
               type="button"
-              className="sidebar-action-btn vuln-btn"
+              className={`sidebar-action-btn vuln-btn${vulnScanProgress.phase === 'error' ? ' vuln-btn--error' : ''}`}
               disabled={vulnScanLoading || riskComputeLoading}
               onClick={analyzeProjectVulnerabilities}
+              title={scanView.detail}
+              aria-busy={vulnScanLoading}
             >
               <span className="ic">
-                {vulnScanLoading || progressPercent > 0 ? (
-                  <svg width="18" height="18" viewBox="0 0 24 24" style={{ transform: 'rotate(-90deg)', flexShrink: 0 }}>
+                {showScanRing ? (
+                  <svg
+                    className={vulnScanProgress.stalled ? 'vuln-ring--stalled' : undefined}
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    style={{ transform: 'rotate(-90deg)', flexShrink: 0 }}
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={Math.floor(vulnScanProgress.percent)}
+                  >
                     <circle
                       cx="12"
                       cy="12"
@@ -194,13 +232,13 @@ export function GraphFilterSidebar({
                       cx="12"
                       cy="12"
                       r={radius}
-                      stroke="var(--c400, #7973FF)"
+                      stroke={RING_COLOR[scanView.tone]}
                       strokeWidth="2.5"
                       strokeDasharray={circumference}
                       strokeDashoffset={strokeDashoffset}
                       strokeLinecap="round"
                       fill="none"
-                      style={{ transition: 'stroke-dashoffset 0.18s linear' }}
+                      style={{ transition: 'stroke-dashoffset 0.25s linear, stroke 0.2s ease' }}
                     />
                   </svg>
                 ) : (
@@ -211,10 +249,11 @@ export function GraphFilterSidebar({
                   </svg>
                 )}
               </span>
-              <span>
-                {vulnScanLoading || progressPercent > 0
-                  ? `Analizando... ${progressPercent}%`
-                  : 'Analizar vulnerabilidades'}
+              <span className="vuln-btn-text">
+                <span>{scanView.label}</span>
+                {showScanRing && scanView.sub && (
+                  <span className="vuln-btn-sub">{scanView.sub}</span>
+                )}
               </span>
             </button>
           )}
