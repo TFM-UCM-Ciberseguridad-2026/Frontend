@@ -24,6 +24,67 @@
   color: var(--muted);
 }
 
+.patch-refresh-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-width: 16rem;
+  padding: 0.78rem 1rem;
+  background: rgba(79, 70, 229, 0.2);
+  color: var(--c100);
+  border: 1px solid rgba(129, 140, 248, 0.65);
+  box-shadow: 0 0 14px rgba(79, 70, 229, 0.2);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.patch-refresh-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  background: rgba(79, 70, 229, 0.34);
+  border-color: rgba(165, 180, 252, 0.9);
+  box-shadow: 0 0 20px rgba(79, 70, 229, 0.38);
+}
+
+.patch-refresh-button:disabled {
+  opacity: 0.75;
+  cursor: wait;
+}
+
+.patch-refresh-icon {
+  display: inline-block;
+  color: var(--c300);
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1;
+  transition: transform 0.6s ease;
+}
+
+.patch-refresh-button[aria-busy="true"] .patch-refresh-icon {
+  animation: patch-refresh-spin 1s linear infinite;
+}
+
+.patch-refresh-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  max-width: 22rem;
+}
+
+.patch-refresh-help {
+  margin: 0.55rem 0 0;
+  color: var(--c100);
+  font-size: 0.84rem;
+  line-height: 1.35;
+  text-align: right;
+}
+
+@keyframes patch-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .patch-queue-summary {
   margin-bottom: 0.75rem;
   color: var(--c100);
