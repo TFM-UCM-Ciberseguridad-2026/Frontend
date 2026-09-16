@@ -26,6 +26,8 @@ export const C = {
   NIST: '00BFD1',      // capa normativa
   NIST_D: '0A2B31',
 
+  CONT: '6E9BFF',      // grupo de contenedores
+
   CRIT: 'E5484D',
   HIGH: 'F76B15',
   MED: 'E5B700',
@@ -49,12 +51,41 @@ export const F = { SANS: 'Arial', MONO: 'Consolas' };
 export const PAGE = { W: 13.33, H: 7.5, M: 0.55 };
 export const CW = PAGE.W - PAGE.M * 2;
 
+/**
+ * Convierte los "\n" de una lista de runs en `breakLine` explícitos. pptxgenjs 4.0.1 marca
+ * con salto todos los trozos de un texto partido, también el último, así que el run
+ * siguiente acababa en un párrafo aparte.
+ */
+function partirSaltos(runs) {
+  if (!Array.isArray(runs)) return runs;
+  const out = [];
+  runs.forEach(r => {
+    const trozos = String(r.text ?? '').split('\n');
+    trozos.forEach((t, i) => {
+      if (i > 0) {
+        const prev = out[out.length - 1];
+        if (prev) prev.options = { ...prev.options, breakLine: true };
+        else out.push({ text: '', options: { ...r.options, breakLine: true } });
+      }
+      if (t !== '' || i === trozos.length - 1) out.push({ text: t, options: { ...r.options } });
+    });
+  });
+  return out;
+}
+
 export const SEV_COLOR = { Critical: C.CRIT, High: C.HIGH, Medium: C.MED, Low: C.LOW };
 export const SEV_ES = { Critical: 'Crítica', High: 'Alta', Medium: 'Media', Low: 'Baja' };
 export const SEV_ORDER = ['Critical', 'High', 'Medium', 'Low'];
 
-export const CAT_LABEL = { Server: 'Servidores', Workstation: 'Puestos de trabajo' };
-export const CAT_COLOR = { Server: C.NIST, Workstation: C.ACCENT };
+export const CAT_LABEL = { Server: 'Servidores', Workstation: 'Puestos de trabajo', Container: 'Contenedores' };
+export const CAT_COLOR = { Server: C.NIST, Workstation: C.ACCENT, Container: C.CONT };
+
+/**
+ * Grupos con acuerdo de nivel de servicio propio, en orden de presentación. Los contenedores
+ * van aparte de los endpoints porque su ciclo de vida es otro (NIST SP 800-190): la imagen no
+ * se parchea, se reconstruye y se redespliega.
+ */
+export const GRUPOS_SLA = ['Server', 'Workstation', 'Container'];
 
 /**
  * Contexto de construcción del informe. Lleva la presentación, el contador de páginas y los
@@ -187,7 +218,7 @@ export class ReportCtx {
         fontSize: 8.5, fontFace: F.MONO, bold: true, color, charSpacing: 1.3,
       });
     }
-    s.addText(runs, {
+    s.addText(partirSaltos(runs), {
       x: x + 0.26, y: y + (titulo ? 0.4 : 0.16), w: w - 0.55, h: h - (titulo ? 0.55 : 0.32),
       fontSize: 9.5, fontFace: F.SANS, lineSpacingMultiple: 1.3, valign: 'top',
     });
@@ -366,6 +397,15 @@ export class ReportCtx {
       fontSize: 14, fontFace: F.SANS, italic: true, color: C.MUTE, align: 'center', valign: 'middle',
     });
   }
+}
+
+/**
+ * Recorta un texto a `max` caracteres. Las celdas de las tablas no ajustan de línea: un
+ * nombre largo se comería la columna de al lado, y es mejor perder la cola que la vecina.
+ */
+export function recortar(texto, max) {
+  const t = String(texto ?? '');
+  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
 }
 
 /** Formatea una fecha ISO o Date como "2 sep 2026". */

@@ -12,8 +12,15 @@
 import { TACTICS, normalizeTacticKeys } from '../../mitre/tactics';
 import { indexarGrafo } from '../../excel/grafo';
 import { metricasDeRemediacion } from '../../remediacion/metricas';
+import { GRUPOS_SLA } from './reportKit.js';
 
 const DIA_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Filas máximas de las tablas de la cola. Diez es lo que cabe en una lámina con la nota
+ * de lectura debajo; con más, la nota se montaba sobre las últimas filas.
+ */
+export const FILAS_COLA = 10;
 
 // Catálogo y traducción de tácticas: una sola fuente compartida con la matriz de
 // la interfaz. Antes había aquí una copia propia que ya había divergido de la de
@@ -112,7 +119,15 @@ export async function recopilarCrudos(repositorio, projectId, opciones = {}) {
 }
 
 export async function recopilarDatos(repositorio, projectId, ventanaDias) {
-  const crudos = await recopilarCrudos(repositorio, projectId);
+  // Además de la cola completa, dos lecturas filtradas: host y contenedores se remedian de
+  // forma distinta y el informe los presenta en láminas separadas. Pedirlas ya filtradas
+  // garantiza que la cabecera de cada una esté completa aunque la cola general supere el
+  // límite de elementos que devuelve el endpoint.
+  const [crudos, colaHostCruda, colaContCruda] = await Promise.all([
+    recopilarCrudos(repositorio, projectId),
+    pedirJSON(`/api/patch-queue?project_id=${projectId}&limit=${FILAS_COLA}&in_container=FALSE`),
+    pedirJSON(`/api/patch-queue?project_id=${projectId}&limit=${FILAS_COLA}&in_container=TRUE`),
+  ]);
 
   const grafo = crudos.grafo;
   const nodos = grafo.nodes;
@@ -180,8 +195,14 @@ export async function recopilarDatos(repositorio, projectId, ventanaDias) {
   });
   const vulns = { total: 0, Critical: 0, High: 0, Medium: 0, Low: 0 };
   let conKEV = 0, conExploit = 0, conEPSS = 0;
+  // Se cuenta por cve_id y no por nodo: si el grafo arrastra dos nodos de la misma CVE,
+  // contarlos por separado inflaba las "CVE únicas" por encima de los propios hallazgos.
+  const cvesVistas = new Set();
   vulnNodos.forEach(n => {
     const p = n.properties || {};
+    const clave = String(p.cve_id || n.id).toUpperCase();
+    if (cvesVistas.has(clave)) return;
+    cvesVistas.add(clave);
     const sev = (p.severity && ['Critical', 'High', 'Medium', 'Low'].includes(p.severity))
       ? p.severity
       : severidadDeScore(p.base_score ?? p.cvss_score);
@@ -192,7 +213,7 @@ export async function recopilarDatos(repositorio, projectId, ventanaDias) {
   });
 
   const enriquecimiento = {
-    total: vulnNodos.length,
+    total: cvesVistas.size,
     kev: conKEV,
     exploit: conExploit,
     epss: conEPSS,
@@ -239,27 +260,39 @@ export async function recopilarDatos(repositorio, projectId, ventanaDias) {
   };
 
   // ── SLA: configuración vigente y cumplimiento por grupo ───────────────
-  const sla = { Server: {}, Workstation: {} };
+  // Tres acuerdos: servidores, puestos de trabajo y contenedores.
+  const sla = {};
+  GRUPOS_SLA.forEach(cat => { sla[cat] = {}; });
   (Array.isArray(slaConfig) ? slaConfig : []).forEach(c => {
     if (sla[c.category]) sla[c.category][c.severity] = c.days;
   });
 
   const breaches = Array.isArray(slaBreaches) ? slaBreaches : [];
+
+  // Cada fila del endpoint es una CVE en un activo concreto y agrupa sus `finding_count`
+  // hallazgos —más de uno solo si la CVE afecta a varios paquetes del mismo activo—. El
+  // resto del informe cuenta hallazgos, así que se pondera por esa cifra: contar filas daba
+  // CVE por activo, y no cuadraba con los hallazgos de las láminas contiguas.
+  const peso = b => Number(b.finding_count) || 1;
+  const sumar = filas => filas.reduce((a, b) => a + peso(b), 0);
+
   const cumplimiento = {};
-  ['Server', 'Workstation'].forEach(cat => {
+  GRUPOS_SLA.forEach(cat => {
     const filas = breaches.filter(b => b.category === cat && b.sla_days > 0);
-    const incumplidos = filas.filter(b => b.days_remaining < 0).length;
-    const porVencer = filas.filter(b => b.days_remaining >= 0 && b.days_remaining <= b.sla_days * 0.2).length;
-    const enPlazo = filas.length - incumplidos;
+    const total = sumar(filas);
+    const incumplidos = sumar(filas.filter(b => b.days_remaining < 0));
+    const porVencer = sumar(filas.filter(b => b.days_remaining >= 0 && b.days_remaining <= b.sla_days * 0.2));
+    const enPlazo = total - incumplidos;
     cumplimiento[cat] = {
-      total: filas.length,
+      total,
       enPlazo,
       porVencer,
       incumplidos,
-      pct: filas.length === 0 ? 100 : Math.round((enPlazo / filas.length) * 1000) / 10,
+      pct: total === 0 ? 100 : Math.round((enPlazo / total) * 1000) / 10,
     };
   });
-  const sinSLA = breaches.filter(b => !b.category || !b.sla_days).length;
+  const incumplidos = GRUPOS_SLA.reduce((a, cat) => a + cumplimiento[cat].incumplidos, 0);
+  const sinSLA = sumar(breaches.filter(b => !b.category || !b.sla_days));
 
   // Vencimientos próximos: solo tiene sentido en el semanal, pero se calcula siempre.
   const vencenPronto = breaches
@@ -267,21 +300,28 @@ export async function recopilarDatos(repositorio, projectId, ventanaDias) {
     .sort((a, b) => a.days_remaining - b.days_remaining);
 
   // ── Hallazgos abiertos por grupo de mantenimiento y severidad ─────────
-  const porGrupo = {
-    Server: { Critical: 0, High: 0, Medium: 0, Low: 0, total: 0 },
-    Workstation: { Critical: 0, High: 0, Medium: 0, Low: 0, total: 0 },
-    sinClasificar: { Critical: 0, High: 0, Medium: 0, Low: 0, total: 0 },
-  };
+  // Del mismo conjunto salen las CVE únicas abiertas: así el anillo y las barras del
+  // panorama describen los mismos hallazgos y solo cambia la unidad de cuenta.
+  const porGrupo = {};
+  [...GRUPOS_SLA, 'sinClasificar'].forEach(k => {
+    porGrupo[k] = { Critical: 0, High: 0, Medium: 0, Low: 0, total: 0 };
+  });
+  const severidadPorCVE = new Map();
   breaches.forEach(b => {
-    const clave = b.category === 'Server' || b.category === 'Workstation' ? b.category : 'sinClasificar';
+    const clave = GRUPOS_SLA.includes(b.category) ? b.category : 'sinClasificar';
     const sev = b.severity;
     if (porGrupo[clave][sev] === undefined) return;
-    porGrupo[clave][sev] += 1;
-    porGrupo[clave].total += 1;
+    const n = peso(b);
+    porGrupo[clave][sev] += n;
+    porGrupo[clave].total += n;
+    if (b.cve_id) severidadPorCVE.set(String(b.cve_id).toUpperCase(), sev);
   });
+  const abiertas = { total: severidadPorCVE.size, Critical: 0, High: 0, Medium: 0, Low: 0 };
+  severidadPorCVE.forEach(sev => { abiertas[sev] += 1; });
+  abiertas.hallazgos = Object.values(porGrupo).reduce((a, g) => a + g.total, 0);
 
   // ── Cola de remediación ───────────────────────────────────────────────
-  const colaItems = (cola?.queue || []).slice(0, 15).map(i => ({
+  const aFila = i => ({
     cve: i.cve_id,
     cvss: Number(i.risk_score || 0),
     prio: Number(i.priority_score || 0),
@@ -291,7 +331,22 @@ export async function recopilarDatos(repositorio, projectId, ventanaDias) {
     fix: i.fixed_version || '',
     host: i.hostname || '—',
     parche: Boolean(i.patch_available),
-  }));
+    contenedor: i.container_name || '—',
+    // Hallazgo de la propia imagen (capa base) frente a software empaquetado dentro de ella.
+    imagen: i.asset_type === 'CONTAINER' || Boolean(i.image_id),
+  });
+
+  // Si la lectura filtrada falla se reparte la cola general, que puede venir recortada.
+  const deCola = (filtrada, enContenedor) => {
+    if (filtrada) {
+      const items = (filtrada.queue || []).slice(0, FILAS_COLA);
+      return { items: items.map(aFila), total: filtrada.total ?? items.length };
+    }
+    const items = (cola?.queue || []).filter(i => Boolean(i.in_container) === enContenedor);
+    return { items: items.slice(0, FILAS_COLA).map(aFila), total: items.length };
+  };
+  const colaHost = deCola(colaHostCruda, false);
+  const colaCont = deCola(colaContCruda, true);
 
   // ── Parcheo y tiempo de remediación ───────────────────────────────────
   // El cálculo es el mismo que publica el informe técnico en Excel: recorre el grafo
@@ -362,11 +417,16 @@ export async function recopilarDatos(repositorio, projectId, ventanaDias) {
   };
 
   return {
-    proyecto, inventario, vulns, enriquecimiento, findings, aging,
-    sla, cumplimiento, sinSLA, vencenPronto, porGrupo,
+    proyecto, inventario, vulns, abiertas, enriquecimiento, findings, aging,
+    sla, cumplimiento, incumplidos, sinSLA, vencenPronto, porGrupo,
+    vencenProntoHallazgos: sumar(vencenPronto),
+    // Las filas son CVE-en-un-activo, así que contarlas no da CVE distintas: la misma CVE
+    // en dos contenedores son dos filas y un solo boletín que leer.
+    vencenProntoCVEs: new Set(vencenPronto.map(b => String(b.cve_id || '').toUpperCase())).size,
     // El endpoint devuelve `total`, no `count`: con la clave equivocada el informe
-    // enseñaba como total de la cola las 15 filas que él mismo recorta.
-    cola: colaItems, colaTotal: cola?.total ?? colaItems.length,
+    // enseñaba como total de la cola las filas que él mismo recorta.
+    cola: colaHost.items, colaTotal: colaHost.total,
+    colaContenedores: colaCont.items, colaContenedoresTotal: colaCont.total,
     remediacion,
     ttp, apts,
     ventanaDias, generadoEn: new Date(ahora),

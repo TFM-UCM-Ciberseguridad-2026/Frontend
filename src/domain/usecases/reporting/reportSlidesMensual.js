@@ -2,12 +2,12 @@
  * reportSlidesMensual — láminas exclusivas del informe mensual.
  *
  * El semanal es operativo: qué hay que cerrar y en qué plazo. El mensual es de gobierno:
- * bajo qué marco se decide, con qué política se prioriza, quién responde de cada actividad
- * y de qué control es evidencia cada cifra. Estas secciones cambian de mes a mes como mucho,
- * así que repetirlas cada semana solo conseguiría que se dejara de leer el informe.
+ * bajo qué marco se decide, quién responde de cada actividad y de qué control es evidencia
+ * cada cifra. Estas secciones cambian de mes a mes como mucho, así que repetirlas cada semana
+ * solo conseguiría que se dejara de leer el informe.
  */
 
-import { C, F, PAGE, CW, SEV_ES, SEV_ORDER, SEV_COLOR } from './reportKit.js';
+import { C, F, PAGE, CW } from './reportKit.js';
 
 // ════════════════════════════════════════════════════════════════════════════
 // ÍNDICE
@@ -17,7 +17,7 @@ export function indice(ctx, secciones) {
   ctx.head(s, {
     fase: 'Índice',
     titulo: 'Contenido del informe',
-    subtitulo: 'El marco normativo, la política de priorización, la situación del periodo y el gobierno del proceso',
+    subtitulo: 'El marco normativo, la situación del periodo, la eficacia del parcheo y el gobierno del proceso',
   });
 
   const H_HEAD = 0.28, H_ITEM = 0.40, H_GAP = 0.10;
@@ -138,101 +138,6 @@ export function marcoDeReferencia(ctx, D) {
     'Pruebas de intrusión, revisión de código fuente y seguridad física. El informe cubre gestión de vulnerabilidades conocidas sobre inventario declarado; no acredita la ausencia de vulnerabilidades no publicadas.',
     { x: 8.72, y: 5.85, w: 3.8, h: 0.9, fontSize: 8.5, fontFace: F.SANS, color: C.MUTE, lineSpacingMultiple: 1.25 }
   );
-
-  ctx.footer(s);
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// MATRIZ DE DECISIÓN Y RESPUESTA AL RIESGO
-// ════════════════════════════════════════════════════════════════════════════
-export function matrizDecision(ctx, D) {
-  const s = ctx.slide();
-  ctx.head(s, {
-    fase: 'Fase 2 · Selección de respuesta',
-    titulo: 'Matriz de decisión y respuesta al riesgo',
-    subtitulo: 'Criticidad del activo × severidad de la vulnerabilidad, según el esquema recomendado en SP 800-40 Rev. 4',
-    control: 'SP 800-53r4 · RA-3',
-  });
-
-  const crits = ['Alta', 'Media', 'Baja'];
-  const cell = [[3, 3, 2, 1], [3, 2, 1, 1], [2, 1, 1, 0]];
-  const urg = [
-    { t: 'Rutinario', c: C.LOW, bg: C.BG_OK },
-    { t: 'Planificado', c: C.MED, bg: C.BG_WARN },
-    { t: 'Acelerado', c: C.HIGH, bg: C.BG_HIGH },
-    { t: 'Inmediato', c: C.CRIT, bg: C.BG_CRIT },
-  ];
-
-  const mx = PAGE.M + 1.55, my = 2.15, cw = 1.14, ch = 0.72;
-  s.addText('SEVERIDAD CVSS →', {
-    x: mx, y: my - 0.66, w: cw * 4, h: 0.24, fontSize: 7.5, fontFace: F.MONO, color: C.MUTE, align: 'center', charSpacing: 1,
-  });
-  SEV_ORDER.forEach((sev, j) => {
-    s.addText(SEV_ES[sev], {
-      x: mx + j * cw, y: my - 0.36, w: cw, h: 0.3,
-      fontSize: 9, fontFace: F.MONO, bold: true, color: SEV_COLOR[sev], align: 'center', valign: 'middle',
-    });
-  });
-  s.addText('CRITICIDAD\nDEL ACTIVO', {
-    x: PAGE.M, y: my + 0.55, w: 1.45, h: 0.6,
-    fontSize: 7.5, fontFace: F.MONO, color: C.MUTE, align: 'right', charSpacing: 1, lineSpacingMultiple: 1.2,
-  });
-
-  crits.forEach((k, i) => {
-    s.addText(k, {
-      x: PAGE.M, y: my + i * ch, w: 1.45, h: ch,
-      fontSize: 10, fontFace: F.SANS, bold: true, color: C.TEXT, align: 'right', valign: 'middle',
-    });
-    SEV_ORDER.forEach((sev, j) => {
-      const u = urg[cell[i][j]];
-      s.addShape(ctx.pres.ShapeType.rect, {
-        x: mx + j * cw, y: my + i * ch, w: cw - 0.045, h: ch - 0.045,
-        fill: { color: u.bg }, line: { color: u.c, width: 0.75 },
-      });
-      s.addText(u.t, {
-        x: mx + j * cw, y: my + i * ch, w: cw - 0.045, h: ch - 0.045,
-        fontSize: 8.5, fontFace: F.SANS, bold: true, color: u.c, align: 'center', valign: 'middle',
-      });
-    });
-  });
-
-  const criticasServidor = D.porGrupo.Server.Critical;
-  s.addText(
-    `Los ${D.inventario.servidores} servidores del alcance caen en la fila de criticidad alta: están expuestos a Internet o marcados con requisitos CIA altos. Sus ${criticasServidor} hallazgos críticos exigen por tanto respuesta inmediata.`,
-    { x: PAGE.M, y: 4.42, w: 6.2, h: 0.7, fontSize: 9.5, fontFace: F.SANS, color: C.TEXT_2, lineSpacingMultiple: 1.3 }
-  );
-
-  // Las cuatro respuestas al riesgo de SP 800-40 Rev. 4
-  s.addText('RESPUESTA AL RIESGO SELECCIONADA', {
-    x: 7.0, y: 1.66, w: 5.8, h: 0.24, fontSize: 8, fontFace: F.MONO, color: C.MUTE, charSpacing: 1.2,
-  });
-  const abiertosTotales = D.porGrupo.Server.total + D.porGrupo.Workstation.total + D.porGrupo.sinClasificar.total;
-  const respuestas = [
-    { t: 'Mitigar', en: 'Minimization', n: abiertosTotales, d: 'Aplicar el parche del fabricante o una mitigación de configuración.', c: C.OK },
-    { t: 'Aceptar', en: 'Acceptance', n: 0, d: 'Riesgo residual asumido formalmente, con controles compensatorios y caducidad.', c: C.MED },
-    { t: 'Transferir', en: 'Transfer', n: 0, d: 'Traslado a un tercero: seguro cibernético o migración a servicio gestionado.', c: C.MUTE },
-    { t: 'Evitar', en: 'Avoidance', n: 0, d: 'Retirada del activo o desactivación del componente vulnerable.', c: C.MUTE },
-  ];
-  respuestas.forEach((r, i) => {
-    const y = 1.96 + i * 1.16;
-    s.addShape(ctx.pres.ShapeType.roundRect, {
-      x: 7.0, y, w: 5.78, h: 1.02, fill: { color: C.PANEL }, line: { color: C.RULE, width: 0.6 }, rectRadius: 0.06,
-    });
-    s.addShape(ctx.pres.ShapeType.rect, { x: 7.0, y, w: 0.045, h: 1.02, fill: { color: r.c } });
-    s.addText(r.t, { x: 7.22, y: y + 0.1, w: 2.2, h: 0.3, fontSize: 12, fontFace: F.SANS, bold: true, color: C.TEXT, valign: 'middle' });
-    s.addText(r.en, { x: 7.22, y: y + 0.38, w: 2.2, h: 0.22, fontSize: 8, fontFace: F.MONO, color: C.MUTE });
-    s.addText(r.d, { x: 7.22, y: y + 0.6, w: 4.0, h: 0.36, fontSize: 8.5, fontFace: F.SANS, color: C.TEXT_2, lineSpacingMultiple: 1.15 });
-    s.addText(String(r.n), {
-      x: 11.35, y: y + 0.12, w: 1.2, h: 0.5, fontSize: 22, fontFace: F.SANS, bold: true,
-      color: r.n > 0 ? r.c : C.MUTE, align: 'right', valign: 'middle',
-    });
-    s.addText('hallazgos', { x: 11.35, y: y + 0.62, w: 1.2, h: 0.24, fontSize: 7.5, fontFace: F.MONO, color: C.MUTE, align: 'right' });
-  });
-
-  ctx.nota(s, {
-    x: PAGE.M, y: 5.25, w: 6.2,
-    text: 'No hay ninguna excepción formalizada: todo hallazgo abierto se está tratando por defecto como «mitigar». Si algún activo no admite parche, procede registrar la aceptación con caducidad en vez de dejarlo envejecer en la cola.',
-  });
 
   ctx.footer(s);
 }
@@ -423,154 +328,26 @@ export function gobiernoDocumental(ctx, D, gob) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// ACCIONES DEL PERIODO
-// ════════════════════════════════════════════════════════════════════════════
-export function acciones(ctx, D, gob) {
-  const s = ctx.slide();
-  ctx.head(s, {
-    fase: 'Cierre',
-    titulo: 'Acciones para el próximo periodo',
-    subtitulo: 'Compromisos derivados de los indicadores de este informe, con responsable propuesto',
-    control: 'SP 800-53r4 · PM-4',
-  });
-
-  // Las acciones se derivan del propio dato: no se listan si el indicador está en verde.
-  const lista = [];
-  const incumplidos = D.cumplimiento.Server.incumplidos + D.cumplimiento.Workstation.incumplidos;
-  const obsoletas = (gob.politicas || []).filter(p => p.status === 'obsolete');
-
-  if (incumplidos > 0) {
-    lista.push({
-      t: `Escalar los ${incumplidos} hallazgos fuera de plazo`,
-      d: 'PROC-06 exige escalado a Responsable de Infraestructura al vencer, y al CISO a los 15 días para aceptación formal o priorización forzada.',
-      r: 'Equipo SOC', c: C.CRIT,
-    });
-  }
-  if (D.inventario.sinClasificar > 0) {
-    lista.push({
-      t: `Reclasificar los ${D.inventario.sinClasificar} endpoints sin tipo válido`,
-      d: `Asignar Server o Workstation en el inventario. Incorpora ${D.porGrupo.sinClasificar.total} hallazgos a la medición de SLA y eleva la cobertura desde el ${D.inventario.coberturaClasificacion}%.`,
-      r: 'Equipo Infraestructura', c: C.CRIT,
-    });
-  }
-  if (D.cola.length > 0) {
-    const hosts = [...new Set(D.cola.slice(0, 10).map(r => r.host))];
-    const sws = [...new Set(D.cola.slice(0, 10).map(r => r.sw))];
-    lista.push({
-      t: `Actualizar ${sws.slice(0, 3).join(', ')}`,
-      d: `Cierra la cabecera de la cola de remediación, concentrada en ${hosts.length} ${hosts.length === 1 ? 'activo' : 'activos'}. Convierte diez tareas de parcheo en ${hosts.length} ${hosts.length === 1 ? 'ventana' : 'ventanas'} de mantenimiento.`,
-      r: 'Equipo Infraestructura', c: C.CRIT,
-    });
-  }
-  // Severidades cuyo tiempo medio de cierre no cabe en el plazo acordado: el problema no
-  // es un hallazgo concreto sino la capacidad de cierre, y se corrige con capacidad o
-  // renegociando el plazo, no escalando caso a caso.
-  const lentas = SEV_ORDER.filter(sev => {
-    const b = D.remediacion.mttr.porSeveridad[sev];
-    return b.n > 0 && Number.isFinite(b.slaDias) && b.media > b.slaDias;
-  });
-  if (lentas.length > 0) {
-    const peor = D.remediacion.mttr.porSeveridad[lentas[0]];
-    lista.push({
-      t: `Recuperar el ritmo de cierre en severidad ${SEV_ES[lentas[0]].toLowerCase()}`,
-      d: `El tiempo medio de remediación es de ${peor.media} días frente a los ${peor.slaDias} acordados. Mientras la media siga por encima del plazo, cada tanda nueva de hallazgos de esa severidad nace condenada a vencer: procede ampliar la ventana de mantenimiento o revisar el plazo con el Comité.`,
-      r: 'Equipo Infraestructura', c: C.CRIT,
-    });
-  }
-  if (D.remediacion.disponibilidad.abiertosSinParche > 0) {
-    lista.push({
-      t: `Decidir sobre los ${D.remediacion.disponibilidad.abiertosSinParche} hallazgos sin parche disponible`,
-      d: 'No son accionables por parcheo: el fabricante no ha publicado arreglo. Cada uno necesita mitigación compensatoria o aceptación formal con caducidad, y hasta entonces envejece en el backlog consumiendo plazo de SLA.',
-      r: 'CISO', c: C.HIGH,
-    });
-  }
-  if (D.remediacion.aplicados.total === 0 && D.remediacion.disponibilidad.abiertosConParche > 0) {
-    lista.push({
-      t: 'Registrar los parches aplicados en la ventana de mantenimiento',
-      d: `No consta ninguna declaración de parche, y hay ${D.remediacion.disponibilidad.abiertosConParche} hallazgos abiertos con arreglo ya publicado. Sin la declaración el hallazgo no se cierra, el riesgo del activo no baja y el trabajo hecho no queda acreditado como evidencia de SI-2.`,
-      r: 'Equipo Infraestructura', c: C.HIGH,
-    });
-  }
-  if (D.enriquecimiento.epss === 0 && D.enriquecimiento.total > 0) {
-    lista.push({
-      t: 'Ejecutar el enriquecimiento EPSS y KEV',
-      d: 'Sin probabilidad de explotación la cola se ordena solo por CVSS y criticidad del activo. Es el mayor retorno por esfuerzo sobre la calidad de la priorización.',
-      r: 'Equipo SOC', c: C.HIGH,
-    });
-  }
-  obsoletas.slice(0, 1).forEach(p => {
-    lista.push({
-      t: `Cerrar la revisión de «${p.name}»`,
-      d: `Revisión vencida el ${p.next_review_date || 'sin fecha'}. Mientras siga obsoleta no puede citarse como control vigente en una auditoría.`,
-      r: p.owner || 'CISO', c: C.MED,
-    });
-  });
-  if (D.cumplimiento.Workstation.total === 0) {
-    lista.push({
-      t: 'Dar de alta el parque de puestos de trabajo',
-      d: 'El segundo acuerdo de nivel de servicio está definido pero no se aplica a ningún activo, así que no se puede evidenciar su cumplimiento.',
-      r: 'Equipo Infraestructura', c: C.MED,
-    });
-  }
-
-  if (lista.length === 0) {
-    ctx.vacio(s, 'Ningún indicador del periodo requiere acción correctiva. Se mantiene la operativa habitual.');
-    ctx.footer(s);
-    return;
-  }
-
-  lista.slice(0, 5).forEach((a, i) => {
-    const y = 1.72 + i * 0.98;
-    s.addShape(ctx.pres.ShapeType.roundRect, {
-      x: PAGE.M, y, w: CW, h: 0.86, fill: { color: C.PANEL }, line: { color: C.RULE, width: 0.6 }, rectRadius: 0.06,
-    });
-    s.addShape(ctx.pres.ShapeType.rect, { x: PAGE.M, y, w: 0.05, h: 0.86, fill: { color: a.c } });
-    s.addText(String(i + 1), {
-      x: PAGE.M + 0.16, y, w: 0.5, h: 0.86, fontSize: 17, fontFace: F.MONO, bold: true, color: a.c, align: 'center', valign: 'middle',
-    });
-    s.addText(a.t, {
-      x: PAGE.M + 0.76, y: y + 0.13, w: 8.6, h: 0.3, fontSize: 11, fontFace: F.SANS, bold: true, color: C.TEXT, valign: 'middle',
-    });
-    s.addText(a.d, {
-      x: PAGE.M + 0.76, y: y + 0.42, w: 8.6, h: 0.38, fontSize: 8.5, fontFace: F.SANS, color: C.MUTE, lineSpacingMultiple: 1.2,
-    });
-    s.addText('RESPONSABLE', {
-      x: PAGE.M + 9.55, y: y + 0.16, w: 2.4, h: 0.2, fontSize: 7, fontFace: F.MONO, color: C.MUTE, charSpacing: 1, align: 'right',
-    });
-    s.addText(a.r, {
-      x: PAGE.M + 9.55, y: y + 0.36, w: 2.4, h: 0.3, fontSize: 9.5, fontFace: F.SANS, color: C.TEXT_2, align: 'right', valign: 'middle',
-    });
-  });
-
-  ctx.nota(s, {
-    x: PAGE.M, y: 6.62, w: CW,
-    text: 'Las acciones se derivan automáticamente de los indicadores del periodo: si un indicador vuelve a verde, su acción desaparece del informe siguiente. Las fechas límite las fija el Comité en la revisión.',
-  });
-
-  ctx.footer(s);
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// TRAZABILIDAD DE CONTROLES Y METODOLOGÍA
+// TRAZABILIDAD DE CONTROLES
 // ════════════════════════════════════════════════════════════════════════════
 export function trazabilidad(ctx) {
   const s = ctx.slide();
   ctx.head(s, {
     fase: 'Anexo',
-    titulo: 'Trazabilidad de controles y metodología',
-    subtitulo: 'Qué sección acredita qué control, y con qué fórmula se calcula cada indicador',
+    titulo: 'Trazabilidad de controles',
+    subtitulo: 'Qué sección acredita cada control SP 800-53',
   });
 
   const filas = [
     ['CM-8', 'Inventario de componentes del sistema', 'Inventario y grupos de mantenimiento', '1'],
     ['RA-5', 'Escaneo de vulnerabilidades', 'Cobertura del análisis y calidad del dato', '1'],
-    ['RA-3', 'Evaluación de riesgos', 'Panorama por severidad · Matriz de decisión · Concentración por táctica', '2'],
+    ['RA-3', 'Evaluación de riesgos', 'Panorama por severidad · Concentración por táctica', '2'],
     ['SI-2', 'Corrección de errores (flaw remediation)', 'Cumplimiento de SLA · Cola priorizada · Parches de software · Remediación de contenedores (NIST SP 800-190)', '3'],
     ['CM-3', 'Control de cambios de configuración', 'Procedimiento de despliegue por anillos · Declaración y verificación de parches en software y runtime', '3'],
     ['CA-7', 'Monitorización continua', 'Cadencia semanal y mensual del informe · Recálculo periódico de riesgo · Ritmo de remediación (MTTR)', '4'],
-    ['SI-5', 'Alertas y avisos de seguridad', 'Inteligencia de amenazas · Matriz ATT&CK · Actores correlacionados', '4'],
+    ['SI-5', 'Alertas y avisos de seguridad', 'Inteligencia de amenazas · Actores correlacionados', '4'],
     ['PM-1', 'Programa de seguridad de la información', 'Gobierno documental y matriz RACI', '4'],
-    ['PM-4', 'Plan de acción e hitos', 'Acciones para el próximo periodo', '—'],
+    ['PM-4', 'Plan de acción e hitos', 'Situación del mes: valoración y puntos de decisión', '—'],
   ];
 
   const header = [ctx.th('CONTROL'), ctx.th('DENOMINACIÓN'), ctx.th('EVIDENCIA EN ESTE INFORME'), ctx.th('FASE', { align: 'center' })];
@@ -591,19 +368,6 @@ export function trazabilidad(ctx) {
     border: { type: 'solid', pt: 0.4, color: C.RULE },
     autoPage: false,
   });
-
-  s.addShape(ctx.pres.ShapeType.roundRect, {
-    x: PAGE.M, y: 5.42, w: CW, h: 1.18, fill: { color: C.PANEL }, line: { color: C.RULE, width: 0.6 }, rectRadius: 0.06,
-  });
-  s.addText('MÉTODO DE CÁLCULO', {
-    x: PAGE.M + 0.26, y: 5.56, w: 5, h: 0.22, fontSize: 8, fontFace: F.MONO, bold: true, color: C.ACCENT, charSpacing: 1.2,
-  });
-  s.addText(
-    'riesgo = probabilidad × exposición × factor de remediación × impacto     ·     prioridad = riesgo × criticidad del activo × urgencia / máximo teórico\n' +
-    'fecha límite = fecha de detección + días del par (grupo de mantenimiento, severidad)     ·     cumplimiento = hallazgos en plazo ÷ hallazgos del grupo\n' +
-    'MTTR = media de (fecha de cierre − fecha de detección) sobre los hallazgos cerrados     ·     backlog accionable = hallazgos abiertos con parche publicado ÷ hallazgos abiertos',
-    { x: PAGE.M + 0.26, y: 5.8, w: CW - 0.55, h: 0.7, fontSize: 8.5, fontFace: F.MONO, color: C.TEXT_2, lineSpacingMultiple: 1.45 }
-  );
 
   ctx.footer(s);
 }

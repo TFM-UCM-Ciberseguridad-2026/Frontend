@@ -55,7 +55,7 @@ function hojaPortada(d, idx) {
     ['Técnicas MITRE en el entorno', (d.matriz || []).length],
     [],
     ['CÓMO LEER ESTE LIBRO'],
-    ['Celdas vacías', 'Una celda vacía significa que el dato no existe en el origen, no que valga cero. La hoja "Cobertura de datos" indica cuántas filas tienen valor en cada columna y por qué faltan las que faltan.'],
+    ['Celdas vacías', 'Una celda vacía significa que el dato no existe en el origen, no que valga cero.'],
     ['Mapeo de técnicas', 'La procedencia de cada mapeo CVE-técnica está en la hoja "Matriz TTP". El mapeo determinista (CWE-CAPEC-ATT&CK) es verificable contra catálogo; el inferido por modelo de lenguaje debe tratarse como indicio, no como evidencia.'],
     ['Severidad', 'Derivada de la puntuación base CVSS con el mismo corte que el backend: >=9 Critical, >=7 High, >=4 Medium, >0 Low.'],
     ['Filtros', 'Todas las hojas de datos llevan autofiltro en la fila de cabecera.'],
@@ -154,7 +154,12 @@ function hojaResumen(d, idx, rem) {
       rem.mttr.cumplimiento.pct === null ? 'Ningún cierre tiene plazo acordado que medir' : `${rem.mttr.cumplimiento.pct}% de ${rem.mttr.cumplimiento.medidos} cierres medibles`],
     ['Edad media del backlog abierto', rem.backlog.media,
       rem.backlog.vencidos > 0 ? `días · ${rem.backlog.vencidos} ya han pasado de su plazo` : 'días desde la detección'],
-    ['Incumplimientos de SLA abiertos', (d.breaches || []).length, ''],
+    // Incumplidos, no todas las filas: cada fila del endpoint es una CVE en un activo, esté
+    // o no fuera de plazo, y contarlas todas hacía pasar el backlog entero por incumplimiento.
+    ['Incumplimientos de SLA abiertos',
+      (d.breaches || []).filter(b => b.sla_days > 0 && b.days_remaining < 0)
+        .reduce((a, b) => a + (Number(b.finding_count) || 1), 0),
+      'Hallazgos con el plazo ya vencido'],
     ['Rutas de explotación detectadas', (d.rutas || []).length, ''],
     [],
     ['TOP 5 ENDPOINTS POR RIESGO', 'Riesgo', 'CVE driver'],
@@ -759,6 +764,7 @@ function hojaParcheoMTTR(d, rem) {
     ['MTTR POR GRUPO DE MANTENIMIENTO', 'Días (media)', 'Detalle'],
     ['Servidores', dia(M.porCategoria.Server.media), `${M.porCategoria.Server.n} cierres · mediana ${M.porCategoria.Server.mediana ?? '—'} d`],
     ['Puestos de trabajo', dia(M.porCategoria.Workstation.media), `${M.porCategoria.Workstation.n} cierres · mediana ${M.porCategoria.Workstation.mediana ?? '—'} d`],
+    ['Contenedores', dia(M.porCategoria.Container.media), `${M.porCategoria.Container.n} cierres · mediana ${M.porCategoria.Container.mediana ?? '—'} d`],
     ['Sin clasificar', dia(M.porCategoria.sinClasificar.media), `${M.porCategoria.sinClasificar.n} cierres — sin categoría no hay SLA aplicable`],
     [],
     ['CUMPLIMIENTO EN EL CIERRE', 'Valor', 'Detalle'],
@@ -1024,7 +1030,8 @@ function hojaSLA(d) {
     { clave: 'score', titulo: 'CVSS base', tipo: T.DECIMAL },
     { clave: 'dias', titulo: 'Días de SLA', tipo: T.ENTERO },
     { clave: 'restantes', titulo: 'Días restantes', tipo: T.ENTERO },
-    { clave: 'activos', titulo: 'Activos afectados', tipo: T.ENTERO },
+    { clave: 'activo', titulo: 'Activo', tipo: T.TEXTO },
+    { clave: 'hallazgos', titulo: 'Hallazgos', tipo: T.ENTERO },
     { clave: 'detectada', titulo: 'Primera detección', tipo: T.FECHA },
   ];
 
@@ -1046,7 +1053,8 @@ function hojaSLA(d) {
       score: b.base_score,
       dias: b.sla_days,
       restantes: b.days_remaining,
-      activos: b.asset_count,
+      activo: b.asset_name,
+      hallazgos: b.finding_count,
       detectada: b.first_detected_at,
     });
   }
@@ -1055,193 +1063,11 @@ function hojaSLA(d) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════
-// 16 · COBERTURA DE DATOS
-// ═════════════════════════════════════════════════════════════════════════
-
-/**
- * Motivos conocidos de que una columna venga vacía. Sin esto, un hueco parece un
- * fallo del informe; con esto, es un dato sobre el estado del enriquecimiento.
- */
-const MOTIVOS = {
-  'Vulnerabilidades|Versión corregida': 'OSV solo publica versión corregida para una parte de las CVE.',
-  'Vulnerabilidades|Primera detección': 'Solo se registra en las CVE ingeridas por el escaneo, no en las importadas.',
-  'Vulnerabilidades|Enriquecida en NVD': 'Solo en las CVE que han pasado por el enriquecimiento NVD.',
-  'Hallazgos|Origen': 'El worker no rellena `source` en los hallazgos generados por escaneo.',
-  'Hallazgos|Tipo de contexto': 'El worker no rellena `context_type` en los hallazgos generados por escaneo.',
-  'Hallazgos|Resuelto': 'Solo tiene valor en hallazgos cerrados.',
-  'Hallazgos|Endpoint': 'Vacío en los hallazgos de una imagen de contenedor que no está asociada a ningún contenedor del proyecto.',
-  'Hallazgos|Entorno': 'Depende de que el hallazgo resuelva endpoint; ver el motivo de la columna Endpoint.',
-  'Hallazgos|Contenedor': 'Solo aplica a hallazgos detectados dentro de un contenedor.',
-  'Hallazgos|Imagen': 'Solo aplica a hallazgos detectados sobre la imagen del contenedor.',
-  'Hallazgos|Software': 'Vacío cuando el hallazgo cuelga de una imagen y no de una instalación concreta.',
-  'Hallazgos|Versión': 'Vacío cuando el hallazgo cuelga de una imagen y no de una instalación concreta.',
-  'Hallazgos|Ruta': 'Vacío cuando el hallazgo cuelga de una imagen y no de una instalación concreta.',
-  'Vulnerabilidades|CPE': 'El CPE solo se registra en las CVE correlacionadas por producto; las de imagen de contenedor llegan por PURL.',
-  'Cola de remediación|Versión corregida': 'OSV solo publica versión corregida para una parte de las CVE.',
-  'Cola de remediación|Contenedor': 'Solo aplica a los elementos cuyo activo vive dentro de un contenedor.',
-  'Cola de remediación|Fabricante': 'Vacío en los componentes detectados por PURL, que no siempre traen vendor.',
-  'Cola de remediación|CPE': 'Vacío en los componentes detectados por PURL en lugar de por CPE.',
-  'Gobierno y SLA|Categoría': 'En las filas de incumplimiento solo se rellena si el endpoint tiene categoría Server/Workstation.',
-  'Gobierno y SLA|CVE': 'Vacío en las filas de configuración de SLA, que no se refieren a ninguna CVE concreta.',
-  'Software instalado|PURL': 'Solo lo traen los componentes detectados por gestor de paquetes.',
-  'Software instalado|URL': 'El proveedor de CPE no publica URL de producto.',
-  'Software instalado|Primera detección': 'Solo se registra en las instalaciones dadas de alta por escaneo.',
-  'Rutas de explotación|Software afectado': 'El motor de rutas solo lo resuelve en los pasos originados por una instalación concreta.',
-  'Endpoints|Categoría': 'Clasificación Server/Workstation opcional; sin ella el SLA por categoría no aplica.',
-  'Endpoints|Actualizado': 'Solo se rellena si el endpoint se ha editado tras crearse.',
-  'Parches|Fecha de publicación': 'El proveedor de parches no siempre publica fecha.',
-  'Parches|Veces declarado aplicado': 'Solo se rellena en los parches que alguien ha declarado como aplicados sobre un activo.',
-  'Parches|Activos donde se ha aplicado': 'Solo se rellena en los parches que alguien ha declarado como aplicados sobre un activo.',
-  'Parches|Última aplicación': 'Solo se rellena en los parches que alguien ha declarado como aplicados sobre un activo.',
-  'Parches aplicados|Contenedor': 'Solo aplica a las declaraciones sobre un activo que vive dentro de un contenedor.',
-  'Parches aplicados|Versión que corrige': 'Vacía cuando el proveedor no publica la versión que corrige el fallo; sin ella la verificación no puede ser concluyente.',
-  'Parches aplicados|Notas': 'Campo libre de la declaración: solo lo rellena quien la registra.',
-  'Cierres y MTTR|Contenedor': 'Solo aplica a los hallazgos detectados dentro de un contenedor.',
-  'Cierres y MTTR|Nivel de remediación declarado': 'Vacío en los hallazgos que se cerraron sin declarar parche, por ejemplo si el software desapareció del inventario.',
-  'Cierres y MTTR|Declarado por': 'Vacío en los hallazgos cerrados sin una declaración de parche asociada.',
-  'Cierres y MTTR|Parche verificado': 'Vacío en los hallazgos cerrados sin una declaración de parche asociada.',
-  'Top Threat Actors|Origen': 'MITRE no publica origen para la mayoría de los grupos.',
-  'Top Threat Actors|Motivación': 'MITRE no publica motivación para la mayoría de los grupos.',
-  'Redes e IPs|CIDR': 'Solo aplica a filas de tipo Red, no a direcciones IP.',
-  'Redes e IPs|Asignada a': 'Solo aplica a filas de tipo Dirección IP, no a redes.',
-  'Contenedores e imágenes|Contenedor': 'Vacío en las filas que describen una imagen sin contenedor asociado.',
-};
-
-/**
- * Motivos que afectan a un bloque entero de columnas de una hoja. Casi todos los
- * huecos son estructurales —una columna que solo aplica a parte de las filas—, y
- * enumerarlos uno a uno solo repetiría la misma frase.
- */
-const MOTIVOS_POR_GRUPO = [
-  {
-    hoja: 'Endpoints',
-    columnas: ['Direcciones IP', 'Redes conectadas'],
-    motivo: 'El endpoint no tiene direcciones IP ni red asociadas en el grafo.',
-  },
-  {
-    hoja: 'Endpoints',
-    columnas: ['Fabricante', 'Modelo', 'CPU', 'RAM (GB)', 'Disco (GB)', 'Nº de serie'],
-    motivo: 'Vienen del nodo Hardware asociado por HAS_HARDWARE; vacío en los endpoints sin hardware dado de alta.',
-  },
-  {
-    hoja: 'Endpoints',
-    columnas: ['CVE driver técnico', 'Software driver técnico', 'CVE driver prioridad', 'Entorno'],
-    motivo: 'El driver solo existe si el motor de riesgo ha encontrado al menos un hallazgo en el activo.',
-  },
-  {
-    hoja: 'Contenedores e imágenes',
-    columnas: ['Estado', 'Privilegiado', 'Expuesto a Internet', 'Endpoint anfitrión', 'Imagen',
-               'Riesgo', 'Tier riesgo', 'Prioridad', 'Tier prioridad', 'Instalaciones',
-               'Hallazgos directos', 'CVE driver técnico', 'Riesgo calculado'],
-    motivo: 'Vacío en las filas que describen una imagen sin contenedor asociado en el proyecto.',
-  },
-  {
-    hoja: 'Contenedores e imágenes',
-    columnas: ['CVE procesadas en la imagen', 'CVE disponibles en la imagen', 'Último escaneo de imagen', 'Escaneo desde caché'],
-    motivo: 'Vacío mientras la imagen del contenedor no se haya escaneado.',
-  },
-  {
-    hoja: 'Redes e IPs',
-    columnas: ['CIDR', 'Gateway', 'Endpoints conectados', 'Descripción'],
-    motivo: 'Solo aplica a las filas de tipo Red, no a las direcciones IP.',
-  },
-  {
-    hoja: 'Software instalado',
-    columnas: ['Software', 'Versión', 'Fabricante', 'CPE', 'PURL', 'URL'],
-    motivo: 'Vienen del nodo Software vinculado por INSTANCE_OF; vacío si la instalación no está enlazada al catálogo de componentes.',
-  },
-  {
-    hoja: 'Software instalado',
-    columnas: ['Anfitrión', 'Gestor de paquetes', 'Detectado por', 'CVE procesadas', 'CVE disponibles', 'Último escaneo'],
-    motivo: 'Vacío en las instalaciones que no han pasado todavía por un escaneo de vulnerabilidades.',
-  },
-  {
-    hoja: 'Hallazgos',
-    columnas: ['CVSS base', 'Severidad', 'En KEV', 'Exploit público'],
-    motivo: 'Requieren el nodo de la CVE. Vacío cuando la CVE del hallazgo no entra en el alcance exportado del proyecto.',
-  },
-  {
-    hoja: 'Hallazgos',
-    columnas: ['Primera detección', 'Última detección', 'Riesgo calculado'],
-    motivo: 'Vacío en los hallazgos creados antes de que el motor de riesgo registrara marcas de tiempo.',
-  },
-  {
-    hoja: 'Vulnerabilidades',
-    columnas: ['Activos afectados'],
-    motivo: 'Vacío en las CVE cuyos hallazgos cuelgan de una imagen sin contenedor asociado, que no resuelve activo.',
-  },
-  {
-    hoja: 'Gobierno y SLA',
-    columnas: ['CVSS base', 'Días restantes', 'Activos afectados', 'Primera detección', 'CVE'],
-    motivo: 'Solo aplica a las filas de incumplimiento, no a las de configuración de SLA.',
-  },
-  {
-    hoja: 'Cierres y MTTR',
-    columnas: ['Grupo de mantenimiento', 'Días de SLA', 'Cerrado en plazo', 'Desvío sobre el plazo'],
-    motivo: 'Requieren que el endpoint tenga categoría Server/Workstation y que su severidad tenga plazo acordado; sin las dos cosas no hay compromiso contra el que medir el cierre.',
-  },
-  {
-    hoja: 'Cierres y MTTR',
-    columnas: ['Endpoint', 'Software', 'Versión'],
-    motivo: 'Vacío cuando el hallazgo cuelga de una imagen de contenedor que no resuelve activo ni instalación concreta.',
-  },
-  {
-    hoja: 'Parches aplicados',
-    columnas: ['Endpoint', 'Software'],
-    motivo: 'Se resuelven subiendo por el grafo desde el activo parcheado; vacíos si la instalación no cuelga de ningún endpoint del proyecto.',
-  },
-];
-
-function motivoDeHueco(hoja, columna) {
-  const exacto = MOTIVOS[`${hoja}|${columna}`];
-  if (exacto) return exacto;
-  const grupo = MOTIVOS_POR_GRUPO.find(g => g.hoja === hoja && g.columnas.includes(columna));
-  return grupo ? grupo.motivo : null;
-}
-
-function hojaCobertura(especificaciones) {
-  const columnas = [
-    { clave: 'hoja', titulo: 'Hoja', tipo: T.TEXTO },
-    { clave: 'columna', titulo: 'Columna', tipo: T.TEXTO },
-    { clave: 'conValor', titulo: 'Filas con valor', tipo: T.ENTERO },
-    { clave: 'total', titulo: 'Filas totales', tipo: T.ENTERO },
-    { clave: 'cobertura', titulo: 'Cobertura', tipo: T.PORCENTAJE },
-    { clave: 'motivo', titulo: 'Motivo del hueco (si se conoce)', tipo: T.TEXTO, ancho: 85 },
-  ];
-
-  const filas = [];
-  for (const esp of especificaciones) {
-    if (esp.tipo !== 'tabla') continue;
-    for (const col of esp.columnas) {
-      let conValor = 0;
-      for (const f of esp.filas) {
-        const v = f[col.clave];
-        if (v === null || v === undefined || v === '') continue;
-        if (Array.isArray(v) && v.length === 0) continue;
-        conValor += 1;
-      }
-      const total = esp.filas.length;
-      filas.push({
-        hoja: esp.nombre,
-        columna: col.titulo,
-        conValor,
-        total,
-        cobertura: total > 0 ? conValor / total : null,
-        motivo: conValor < total ? motivoDeHueco(esp.nombre, col.titulo) : null,
-      });
-    }
-  }
-
-  return tabla('Cobertura de datos', columnas, filas);
-}
-
-// ═════════════════════════════════════════════════════════════════════════
 // Composición
 // ═════════════════════════════════════════════════════════════════════════
 
 /**
  * Devuelve las especificaciones de todas las hojas, en el orden del libro.
- * La hoja de cobertura se calcula a partir de las demás, así que va la última.
  */
 export function construirEspecificaciones(datos, idx) {
   // Un único cálculo de parcheo y MTTR para todo el libro, y el mismo que usan las
@@ -1272,6 +1098,5 @@ export function construirEspecificaciones(datos, idx) {
     hojaRutas(datos),
     hojaSLA(datos),
   ];
-  hojas.push(hojaCobertura(hojas));
   return hojas;
 }

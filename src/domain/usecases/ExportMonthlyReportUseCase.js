@@ -3,8 +3,7 @@ import { ReportCtx, C, fechaCorta, fechaLarga } from './reporting/reportKit.js';
 import { recopilarDatos } from './reporting/reportData.js';
 import { situacionDelPeriodo, parches, ritmoDeRemediacion } from './reporting/reportSlides.js';
 import {
-  indice, marcoDeReferencia, matrizDecision, concentracionPorTactica,
-  gobiernoDocumental, acciones, trazabilidad,
+  indice, marcoDeReferencia, concentracionPorTactica, gobiernoDocumental, trazabilidad,
 } from './reporting/reportSlidesMensual.js';
 
 /** Lee el marco normativo del proyecto. Ninguna de las tres fuentes es obligatoria. */
@@ -34,8 +33,8 @@ async function recopilarGobierno(projectId) {
  * ExportMonthlyReportUseCase — informe MENSUAL de gestión de vulnerabilidades (.pptx).
  *
  * Es el informe de gobierno: lo lee el Comité de Seguridad. Contiene lo que no cambia de una
- * semana a otra —el marco normativo, la política de priorización, el gobierno documental y
- * la trazabilidad de controles— más la situación agregada del mes. El detalle operativo
+ * semana a otra —el marco normativo, el gobierno documental y la trazabilidad de controles—
+ * más la situación agregada del mes. El detalle operativo
  * (SLA, cola, vencimientos) vive en el informe semanal.
  *
  * Láminas:
@@ -43,13 +42,11 @@ async function recopilarGobierno(projectId) {
  *   2 Índice
  *   3 Marco de referencia y alcance
  *   4 Situación del mes
- *   5 Matriz de decisión y respuesta al riesgo
- *   6 Parches: disponibilidad y aplicación
- *   7 Ritmo de remediación (MTTR)
- *   8 Concentración por táctica y cadena de ataque
- *   9 Gobierno documental y responsabilidades
- *  10 Acciones para el próximo periodo
- *  11 Trazabilidad de controles y metodología
+ *   5 Parches: disponibilidad y aplicación
+ *   6 Ritmo de remediación (MTTR)
+ *   7 Concentración por táctica y cadena de ataque
+ *   8 Gobierno documental y responsabilidades
+ *   9 Trazabilidad de controles
  */
 export class ExportMonthlyReportUseCase {
   constructor(infrastructureRepository) {
@@ -98,33 +95,27 @@ export class ExportMonthlyReportUseCase {
         ['03', 'Marco de referencia y alcance', 'Norma aplicada, fuentes de datos y exclusiones', '—'],
         ['04', 'Situación del mes', 'Resumen ejecutivo, valoración y puntos de decisión', 'PM-4'],
       ]},
-      { g: 'Política de priorización', c: C.NIST, items: [
-        ['05', 'Matriz de decisión y respuesta al riesgo', 'Criticidad × severidad y las cuatro respuestas al riesgo', 'RA-3'],
-      ]},
       { g: 'Eficacia del parcheo', c: C.NIST, items: [
-        ['06', 'Parches: disponibilidad y aplicación', 'Qué backlog es parcheable y qué se ha declarado aplicado', 'SI-2'],
-        ['07', 'Ritmo de remediación', 'Tiempo medio de cierre (MTTR) frente al plazo acordado', 'SI-2'],
+        ['05', 'Parches: disponibilidad y aplicación', 'Qué backlog es parcheable y qué se ha declarado aplicado', 'SI-2'],
+        ['06', 'Ritmo de remediación', 'Tiempo medio de cierre (MTTR) frente al plazo acordado', 'SI-2'],
       ]},
       { g: 'Inteligencia de amenazas', c: C.NIST, items: [
-        ['08', 'Concentración por táctica y cadena de ataque', 'Dónde se acumula la superficie explotable', 'RA-3'],
+        ['07', 'Concentración por táctica y cadena de ataque', 'Dónde se acumula la superficie explotable', 'RA-3'],
       ]},
       { g: 'Gobierno', c: C.NIST, items: [
-        ['09', 'Gobierno documental y responsabilidades', 'Estado del marco normativo interno y matriz RACI', 'PM-1'],
+        ['08', 'Gobierno documental y responsabilidades', 'Estado del marco normativo interno y matriz RACI', 'PM-1'],
       ]},
-      { g: 'Cierre y anexos', c: C.ACCENT, items: [
-        ['10', 'Acciones para el próximo periodo', 'Compromisos derivados de los indicadores', 'PM-4'],
-        ['11', 'Trazabilidad de controles y metodología', 'Qué sección acredita qué control y con qué fórmula', '—'],
+      { g: 'Anexos', c: C.ACCENT, items: [
+        ['09', 'Trazabilidad de controles', 'Qué sección acredita cada control SP 800-53', '—'],
       ]},
     ]);
 
     marcoDeReferencia(ctx, D);
     situacionDelPeriodo(ctx, D, { titulo: 'Situación del mes', etiquetaPeriodo: 'el mes' });
-    matrizDecision(ctx, D);
     parches(ctx, D, { etiquetaPeriodo: 'el mes' });
     ritmoDeRemediacion(ctx, D, { etiquetaPeriodo: 'el mes' });
     concentracionPorTactica(ctx, D);
     gobiernoDocumental(ctx, D, gob);
-    acciones(ctx, D, gob);
     trazabilidad(ctx);
 
     const slug = String(D.proyecto.nombre || projectName).toLowerCase().replace(/[^a-z0-9]+/gi, '_');

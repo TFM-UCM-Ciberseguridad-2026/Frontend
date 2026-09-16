@@ -87,8 +87,14 @@ function diasEntre(desde, hasta) {
   return Math.round(Math.max(d, 0) * 10) / 10;
 }
 
-function categoriaDe(endpoint) {
-  const c = endpoint?.properties?.category;
+/**
+ * Grupo de SLA del hallazgo. Lo que vive dentro de un contenedor —la imagen o el software
+ * empaquetado en ella— se mide contra el acuerdo de contenedores sea cual sea el host, igual
+ * que hace el backend al calcular los incumplimientos.
+ */
+function categoriaDe(ctx) {
+  if (ctx.contenedor || ctx.imagen) return 'Container';
+  const c = ctx.endpoint?.properties?.category;
   return c === 'Server' || c === 'Workstation' ? c : '';
 }
 
@@ -214,7 +220,7 @@ export function metricasDeRemediacion(idx, { slaConfig = [], ahora = Date.now(),
     const ctx = contextoDeHallazgo(idx, f);
     const ref = cveDeHallazgo(idx, f, vulnPorCVE);
     const severidad = severidadDeScore(ref.nodo?.properties?.base_score);
-    const categoria = categoriaDe(ctx.endpoint);
+    const categoria = categoriaDe(ctx);
     const activoID = ctx.instalacion?.properties?.id || ctx.contenedor?.properties?.id || null;
     const hayParche = Boolean(ref.cveID && cvesConParche.has(ref.cveID));
 
@@ -286,7 +292,7 @@ export function metricasDeRemediacion(idx, { slaConfig = [], ahora = Date.now(),
   });
 
   const porCategoria = {};
-  ['Server', 'Workstation', ''].forEach(cat => {
+  ['Server', 'Workstation', 'Container', ''].forEach(cat => {
     const filas = cierres.filter(c => c.categoria === cat);
     porCategoria[cat || 'sinClasificar'] = resumenDeDias(filas.map(c => c.dias));
   });

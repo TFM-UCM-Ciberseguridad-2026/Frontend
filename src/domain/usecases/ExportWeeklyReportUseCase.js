@@ -3,8 +3,8 @@ import { ReportCtx, fechaCorta, fechaLarga } from './reporting/reportKit.js';
 import { recopilarDatos } from './reporting/reportData.js';
 import {
   situacionDelPeriodo, inventarioYGrupos, coberturaYCalidad, panoramaVulnerabilidades,
-  cumplimientoSLA, colaRemediacion, envejecimiento, inteligenciaAmenazas,
-  matrizAttack, actoresAmenaza, vencimientosProximos, ritmoDeRemediacion, parches,
+  cumplimientoSLA, colaRemediacion, colaContenedores, envejecimiento, inteligenciaAmenazas,
+  actoresAmenaza, vencimientosProximos, ritmoDeRemediacion, parches,
 } from './reporting/reportSlides.js';
 
 /**
@@ -23,12 +23,12 @@ import {
  *   5 Panorama de vulnerabilidades
  *   6 Cumplimiento de los acuerdos de nivel de servicio
  *   7 Vencimientos en los próximos 7 días
- *   8 Cola de remediación priorizada
- *   9 Envejecimiento del backlog
- *  10 Parches: disponibilidad y aplicación
- *  11 Ritmo de remediación (MTTR)
- *  12 Inteligencia de amenazas
- *  13 Matriz MITRE ATT&CK
+ *   8 Cola de remediación priorizada (software del host)
+ *   9 Cola de remediación · contenedores
+ *  10 Envejecimiento del backlog
+ *  11 Parches: disponibilidad y aplicación
+ *  12 Ritmo de remediación (MTTR)
+ *  13 Inteligencia de amenazas
  *  14 Actores de amenaza correlacionados
  */
 export class ExportWeeklyReportUseCase {
@@ -75,11 +75,11 @@ export class ExportWeeklyReportUseCase {
     cumplimientoSLA(ctx, D, { etiquetaPeriodo: 'esta semana' });
     vencimientosProximos(ctx, D);
     colaRemediacion(ctx, D);
+    colaContenedores(ctx, D);
     envejecimiento(ctx, D);
     parches(ctx, D, { etiquetaPeriodo: 'la semana' });
     ritmoDeRemediacion(ctx, D, { etiquetaPeriodo: 'la semana' });
     inteligenciaAmenazas(ctx, D);
-    matrizAttack(ctx, D);
     actoresAmenaza(ctx, D);
 
     const slug = String(D.proyecto.nombre || projectName).toLowerCase().replace(/[^a-z0-9]+/gi, '_');

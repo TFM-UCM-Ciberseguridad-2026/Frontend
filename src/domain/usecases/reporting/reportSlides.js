@@ -8,8 +8,12 @@
  */
 
 import {
-  C, F, PAGE, CW, SEV_COLOR, SEV_ES, SEV_ORDER, CAT_LABEL, CAT_COLOR, fechaCorta,
+  C, F, PAGE, CW, SEV_COLOR, SEV_ES, SEV_ORDER, CAT_LABEL, CAT_COLOR, GRUPOS_SLA, fechaCorta, recortar,
 } from './reportKit.js';
+import { FILAS_COLA } from './reportData.js';
+
+/** Suma una severidad (o el total) sobre todos los grupos, contenedores incluidos. */
+const sumaGrupos = (porGrupo, clave) => Object.values(porGrupo).reduce((a, g) => a + (g[clave] || 0), 0);
 
 const pct = (n) => `${Math.round(Number(n || 0) * 100)}%`;
 
@@ -25,8 +29,8 @@ export function situacionDelPeriodo(ctx, D, { titulo, etiquetaPeriodo }) {
     control: 'SP 800-53r4 · PM-4',
   });
 
-  const criticasAbiertas = D.porGrupo.Server.Critical + D.porGrupo.Workstation.Critical + D.porGrupo.sinClasificar.Critical;
-  const incumplidos = D.cumplimiento.Server.incumplidos + D.cumplimiento.Workstation.incumplidos;
+  const criticasAbiertas = sumaGrupos(D.porGrupo, 'Critical');
+  const incumplidos = D.incumplidos;
   const cumpServidores = D.cumplimiento.Server.total > 0 ? `${D.cumplimiento.Server.pct}%` : '—';
 
   const kw = (CW - 0.18 * 4) / 5;
@@ -68,7 +72,8 @@ export function situacionDelPeriodo(ctx, D, { titulo, etiquetaPeriodo }) {
   const runs = [];
   if (incumplidos === 0) {
     runs.push({ text: `Ningún plazo de remediación se ha incumplido en ${etiquetaPeriodo}`, options: { bold: true, color: C.TEXT } });
-    runs.push({ text: `. Los ${D.cumplimiento.Server.total} hallazgos medidos sobre servidores están dentro del acuerdo. `, options: { color: C.TEXT_2 } });
+    const medidos = GRUPOS_SLA.reduce((a, cat) => a + D.cumplimiento[cat].total, 0);
+    runs.push({ text: `. Los ${medidos} hallazgos con plazo acordado están dentro de su acuerdo. `, options: { color: C.TEXT_2 } });
   } else {
     runs.push({ text: `${incumplidos} hallazgos han superado su plazo de remediación`, options: { bold: true, color: C.CRIT } });
     runs.push({ text: `, y son el primer punto a tratar: cada uno es un compromiso vencido, no una tarea pendiente. `, options: { color: C.TEXT_2 } });
@@ -93,11 +98,8 @@ export function situacionDelPeriodo(ctx, D, { titulo, etiquetaPeriodo }) {
   if (D.inventario.sinClasificar > 0) {
     atencion.push(`${D.inventario.sinClasificar} de ${D.inventario.endpoints} endpoints no tienen tipo válido: quedan fuera de toda medición de SLA.`);
   }
-  if (D.enriquecimiento.epss === 0 && D.enriquecimiento.total > 0) {
-    atencion.push(`El enriquecimiento EPSS/KEV no ha corrido: 0 de ${D.enriquecimiento.total} CVE con dato de explotabilidad.`);
-  }
   if (incumplidos > 0) atencion.push(`${incumplidos} hallazgos fuera de plazo requieren escalado según PROC-06.`);
-  if (D.vencenPronto.length > 0) atencion.push(`${D.vencenPronto.length} hallazgos vencen en los próximos 7 días.`);
+  if (D.vencenPronto.length > 0) atencion.push(`${D.vencenProntoHallazgos} hallazgos vencen en los próximos 7 días.`);
   if (atencion.length === 0) atencion.push('Sin puntos de decisión pendientes en este periodo.');
 
   s.addShape(ctx.pres.ShapeType.roundRect, {
@@ -117,7 +119,7 @@ export function situacionDelPeriodo(ctx, D, { titulo, etiquetaPeriodo }) {
   // Franja de severidad del total abierto
   const totalSev = {};
   SEV_ORDER.forEach(k => {
-    totalSev[k] = D.porGrupo.Server[k] + D.porGrupo.Workstation[k] + D.porGrupo.sinClasificar[k];
+    totalSev[k] = sumaGrupos(D.porGrupo, k);
   });
   const suma = SEV_ORDER.reduce((a, k) => a + totalSev[k], 0);
 
@@ -263,43 +265,29 @@ export function coberturaYCalidad(ctx, D) {
     { fuente: 'NVD — CVE y CVSS', n: D.vulns.total, cubre: `${D.vulns.total} de ${D.enriquecimiento.total} CVE` },
     { fuente: 'MITRE CAPEC → ATT&CK', n: D.ttp.mapeadas, cubre: `${D.ttp.mapeadas} de ${D.ttp.totalCves} CVE mapeadas` },
     { fuente: 'OSV — parches y versión corregida', n: D.enriquecimiento.parches, cubre: `${D.enriquecimiento.parches} parches registrados` },
-    { fuente: 'FIRST EPSS — probabilidad de explotación', n: D.enriquecimiento.epss, cubre: `${D.enriquecimiento.epss} de ${D.enriquecimiento.total} CVE` },
-    { fuente: 'CISA KEV — explotación confirmada', n: D.enriquecimiento.kev, cubre: `${D.enriquecimiento.kev} de ${D.enriquecimiento.total} CVE` },
   ];
 
+  // Las filas ocupan todo el ancho y la etiqueta de estado va dentro de la fila, alineada a
+  // su borde derecho: con la columna lateral la etiqueta asomaba por fuera del recuadro.
+  const rowH = 0.62;
   fuentes.forEach((f, i) => {
-    const y = 1.72 + i * 0.62;
+    const y = 1.78 + i * (rowH + 0.1);
     const e = estado(f.n);
     const p = Math.min(100, Math.round((f.n / tot) * 100));
-    s.addShape(ctx.pres.ShapeType.rect, { x: PAGE.M, y, w: 7.9, h: 0.54, fill: { color: i % 2 ? C.PANEL_2 : C.PANEL } });
-    s.addText(f.fuente, { x: PAGE.M + 0.2, y, w: 3.5, h: 0.54, fontSize: 10, fontFace: F.SANS, color: C.TEXT, valign: 'middle' });
-    s.addText(f.cubre, { x: PAGE.M + 3.75, y, w: 2.1, h: 0.54, fontSize: 9, fontFace: F.MONO, color: C.MUTE, valign: 'middle' });
-    ctx.bar(s, { x: PAGE.M + 5.9, y: y + 0.21, w: 1.0, h: 0.12, value: p, max: 100, color: e.c });
+    s.addShape(ctx.pres.ShapeType.rect, { x: PAGE.M, y, w: CW, h: rowH, fill: { color: i % 2 ? C.PANEL_2 : C.PANEL } });
+    s.addText(f.fuente, { x: PAGE.M + 0.25, y, w: 4.6, h: rowH, fontSize: 11, fontFace: F.SANS, color: C.TEXT, valign: 'middle' });
+    s.addText(f.cubre, { x: PAGE.M + 5.0, y, w: 3.0, h: rowH, fontSize: 9.5, fontFace: F.MONO, color: C.MUTE, valign: 'middle' });
+    ctx.bar(s, { x: PAGE.M + 8.15, y: y + (rowH - 0.14) / 2, w: 2.3, h: 0.14, value: p, max: 100, color: e.c });
     s.addText(e.t, {
-      x: PAGE.M + 7.0, y, w: 1.05, h: 0.54, fontSize: 8, fontFace: F.MONO, bold: true, color: e.c, align: 'right', valign: 'middle',
+      x: PAGE.M + 10.6, y, w: CW - 10.6 - 0.25, h: rowH,
+      fontSize: 8.5, fontFace: F.MONO, bold: true, color: e.c, align: 'right', valign: 'middle',
     });
   });
-
-  const sinExplotabilidad = D.enriquecimiento.epss === 0 && D.enriquecimiento.kev === 0;
-  s.addShape(ctx.pres.ShapeType.roundRect, {
-    x: 8.7, y: 1.72, w: 4.08, h: 3.06,
-    fill: { color: C.PANEL }, line: { color: sinExplotabilidad ? C.BAD : C.OK, width: 0.9 }, rectRadius: 0.08,
-  });
-  s.addText('CONSECUENCIA SOBRE LA PRIORIZACIÓN', {
-    x: 8.95, y: 1.94, w: 3.6, h: 0.42,
-    fontSize: 8.5, fontFace: F.MONO, bold: true, color: sinExplotabilidad ? C.BAD : C.OK, charSpacing: 1.2, lineSpacingMultiple: 1.2,
-  });
-  s.addText(
-    sinExplotabilidad
-      ? 'Sin EPSS ni KEV, la probabilidad de explotación del motor de riesgo cae a su valor por defecto. La cola de remediación se ordena hoy casi solo por CVSS y por la criticidad del activo.\n\nEn la práctica esto sobrevalora vulnerabilidades teóricamente graves pero nunca explotadas, e infravalora las de CVSS medio con explotación activa en el mundo real.'
-      : `Con ${D.enriquecimiento.epss} CVE puntuadas por EPSS y ${D.enriquecimiento.kev} confirmadas en el catálogo KEV, la probabilidad de explotación del motor de riesgo se apoya en datos reales y no en el valor por defecto.\n\nLa cola de remediación distingue por tanto entre gravedad teórica y explotación observada.`,
-    { x: 8.95, y: 2.5, w: 3.6, h: 2.1, fontSize: 9, fontFace: F.SANS, color: C.TEXT_2, lineSpacingMultiple: 1.3 }
-  );
 
   // Procedencia del mapeo a técnicas
   const totalRel = D.ttp.capec + D.ttp.llm;
   s.addText('PROCEDENCIA DEL MAPEO A TÉCNICAS ADVERSARIAS', {
-    x: PAGE.M, y: 5.0, w: 8, h: 0.24, fontSize: 8, fontFace: F.MONO, color: C.MUTE, charSpacing: 1.2,
+    x: PAGE.M, y: 4.3, w: 8, h: 0.24, fontSize: 8, fontFace: F.MONO, color: C.MUTE, charSpacing: 1.2,
   });
   const proc = [
     { l: 'Correlación determinista CWE → CAPEC → ATT&CK', n: D.ttp.capec, c: C.OK, tag: 'Confianza alta' },
@@ -307,19 +295,19 @@ export function coberturaYCalidad(ctx, D) {
   ];
   const maxProc = Math.max(D.ttp.capec, D.ttp.llm, 1);
   proc.forEach((p, i) => {
-    const y = 5.32 + i * 0.62;
+    const y = 4.62 + i * 0.62;
     s.addText(p.l, { x: PAGE.M, y, w: 4.6, h: 0.42, fontSize: 9.5, fontFace: F.SANS, color: C.TEXT_2, valign: 'middle' });
-    ctx.bar(s, { x: PAGE.M + 4.7, y: y + 0.13, w: 2.6, h: 0.18, value: p.n, max: maxProc, color: p.c });
+    ctx.bar(s, { x: PAGE.M + 4.7, y: y + 0.13, w: 4.1, h: 0.18, value: p.n, max: maxProc, color: p.c });
     s.addText(`${p.n} relaciones`, {
-      x: PAGE.M + 7.4, y, w: 1.4, h: 0.42, fontSize: 9, fontFace: F.MONO, bold: true, color: C.TEXT, valign: 'middle',
+      x: PAGE.M + 8.95, y, w: 1.5, h: 0.42, fontSize: 9, fontFace: F.MONO, bold: true, color: C.TEXT, valign: 'middle',
     });
-    s.addText(p.tag, { x: PAGE.M + 8.85, y, w: 1.6, h: 0.42, fontSize: 8.5, fontFace: F.SANS, color: p.c, valign: 'middle' });
+    s.addText(p.tag, { x: PAGE.M + 10.5, y, w: 1.6, h: 0.42, fontSize: 8.5, fontFace: F.SANS, color: p.c, valign: 'middle' });
   });
 
   if (totalRel > 0) {
     const pc = Math.round((D.ttp.capec / totalRel) * 100);
     ctx.nota(s, {
-      x: PAGE.M, y: 6.6, w: CW,
+      x: PAGE.M, y: 6.0, w: CW,
       text: `La distinción se conserva en el grafo (propiedad \`source\` de la relación :MAPS_TO): ${pc}% del mapeo procede de correlación determinista y ${100 - pc}% de inferencia, que debe tratarse como indicio y no como evidencia.`,
     });
   }
@@ -339,44 +327,56 @@ export function panoramaVulnerabilidades(ctx, D) {
     control: 'SP 800-53r4 · RA-3',
   });
 
-  s.addText('SEVERIDAD DE LAS VULNERABILIDADES ÚNICAS', {
+  // Las dos mitades salen del mismo conjunto —los hallazgos abiertos de los tres grupos más
+  // los de activos sin clasificar— y solo cambia la unidad: en el anillo cada CVE cuenta una
+  // vez; en las barras, una vez por activo afectado. Antes el anillo contaba todas las CVE del
+  // grafo y las barras solo el software del host, y las cifras no podían cuadrar.
+  const A = D.abiertas;
+
+  s.addText('SEVERIDAD DE LAS CVE ÚNICAS ABIERTAS', {
     x: PAGE.M, y: 1.66, w: 5.5, h: 0.24, fontSize: 8, fontFace: F.MONO, color: C.MUTE, charSpacing: 1.2,
   });
 
-  if (D.vulns.total > 0) {
+  if (A.total > 0) {
+    // El anillo tiene su propia caja y la leyenda empieza a su derecha: a 3,5 in de ancho el
+    // gráfico llegaba hasta la leyenda y los colores se montaban sobre el anillo.
+    const dx = PAGE.M, dy = 2.0, dd = 3.1;
     s.addChart(ctx.pres.charts.DOUGHNUT, [{
       name: 'Severidad',
       labels: SEV_ORDER.map(k => SEV_ES[k]),
-      values: SEV_ORDER.map(k => D.vulns[k]),
+      values: SEV_ORDER.map(k => A[k]),
     }], {
-      x: PAGE.M - 0.15, y: 1.9, w: 3.5, h: 3.5,
+      x: dx, y: dy, w: dd, h: dd,
       showTitle: false, showLegend: false, showPercent: true, showValue: false,
-      dataLabelColor: 'FFFFFF', dataLabelFontSize: 10, dataLabelFontBold: true,
+      dataLabelColor: 'FFFFFF', dataLabelFontSize: 9, dataLabelFontBold: true,
       chartColors: SEV_ORDER.map(k => SEV_COLOR[k]),
       holeSize: 62, plotArea: { fill: { color: C.INK } },
       border: { pt: 0, color: C.INK },
     });
-    s.addText(String(D.vulns.total), {
-      x: PAGE.M + 0.72, y: 3.32, w: 1.6, h: 0.5,
+    s.addText(String(A.total), {
+      x: dx + dd / 2 - 0.8, y: dy + dd / 2 - 0.34, w: 1.6, h: 0.5,
       fontSize: 24, fontFace: F.SANS, bold: true, color: C.TEXT, align: 'center', valign: 'middle',
     });
     s.addText('CVE únicas', {
-      x: PAGE.M + 0.72, y: 3.76, w: 1.6, h: 0.24, fontSize: 8, fontFace: F.MONO, color: C.MUTE, align: 'center',
+      x: dx + dd / 2 - 0.8, y: dy + dd / 2 + 0.12, w: 1.6, h: 0.24, fontSize: 8, fontFace: F.MONO, color: C.MUTE, align: 'center',
     });
 
+    const lx = dx + dd + 0.35;
     SEV_ORDER.forEach((sev, i) => {
-      const y = 2.25 + i * 0.62;
-      s.addShape(ctx.pres.ShapeType.rect, { x: 3.7, y: y + 0.06, w: 0.14, h: 0.28, fill: { color: SEV_COLOR[sev] } });
-      s.addText(SEV_ES[sev], { x: 3.98, y, w: 1.25, h: 0.4, fontSize: 10.5, fontFace: F.SANS, color: C.TEXT, valign: 'middle' });
-      s.addText(String(D.vulns[sev]), {
-        x: 5.2, y, w: 0.6, h: 0.4, fontSize: 11, fontFace: F.MONO, bold: true, color: SEV_COLOR[sev], align: 'right', valign: 'middle',
+      const y = 2.35 + i * 0.62;
+      s.addShape(ctx.pres.ShapeType.rect, { x: lx, y: y + 0.06, w: 0.14, h: 0.28, fill: { color: SEV_COLOR[sev] } });
+      s.addText(SEV_ES[sev], { x: lx + 0.26, y, w: 1.0, h: 0.4, fontSize: 10.5, fontFace: F.SANS, color: C.TEXT, valign: 'middle' });
+      s.addText(String(A[sev]), {
+        x: lx + 1.25, y, w: 0.55, h: 0.4, fontSize: 11, fontFace: F.MONO, bold: true, color: SEV_COLOR[sev], align: 'right', valign: 'middle',
       });
-      s.addText(`${((D.vulns[sev] / D.vulns.total) * 100).toFixed(1)}%`, {
-        x: 5.85, y, w: 0.7, h: 0.4, fontSize: 9, fontFace: F.MONO, color: C.MUTE, align: 'right', valign: 'middle',
+      s.addText(`${((A[sev] / A.total) * 100).toFixed(1)}%`, {
+        x: lx + 1.82, y, w: 0.7, h: 0.4, fontSize: 9, fontFace: F.MONO, color: C.MUTE, align: 'right', valign: 'middle',
       });
     });
   } else {
-    ctx.vacio(s, 'No se han registrado vulnerabilidades en este proyecto.');
+    s.addText('No hay vulnerabilidades abiertas en este proyecto.', {
+      x: PAGE.M, y: 3.2, w: 6.1, h: 0.6, fontSize: 12, fontFace: F.SANS, italic: true, color: C.MUTE, align: 'center', valign: 'middle',
+    });
   }
 
   s.addText('HALLAZGOS ABIERTOS POR GRUPO DE MANTENIMIENTO', {
@@ -385,12 +385,25 @@ export function panoramaVulnerabilidades(ctx, D) {
   const filas = [
     { g: 'Servidores', d: D.porGrupo.Server },
     { g: 'Puestos de trabajo', d: D.porGrupo.Workstation },
+    { g: 'Contenedores', d: D.porGrupo.Container },
     { g: 'Sin clasificar', d: D.porGrupo.sinClasificar },
   ];
-  const maxG = Math.max(...filas.map(r => r.d.total), 1);
+  // Cada barra ocupa todo el ancho y muestra el reparto dentro de su grupo (el total va a la
+  // derecha). Escaladas al grupo mayor, las de grupos pequeños quedaban en un muñón ilegible.
+  const MIN_TRAMO = 0.08;
+  const anchosTramos = (d, bw) => {
+    const sevs = SEV_ORDER.filter(sev => d[sev] > 0);
+    const minimos = sevs.filter(sev => (bw * d[sev]) / d.total < MIN_TRAMO);
+    const resto = sevs.filter(sev => !minimos.includes(sev));
+    const sumaResto = resto.reduce((a, sev) => a + d[sev], 0);
+    const libre = bw - minimos.length * MIN_TRAMO;
+    return sevs.map(sev => ({
+      sev, n: d[sev], w: minimos.includes(sev) ? MIN_TRAMO : (libre * d[sev]) / sumaResto,
+    }));
+  };
 
   filas.forEach((r, i) => {
-    const y = 2.0 + i * 1.12;
+    const y = 2.0 + i * 0.98;
     s.addText(r.g, { x: 6.95, y, w: 3.2, h: 0.3, fontSize: 11, fontFace: F.SANS, bold: true, color: C.TEXT, valign: 'middle' });
     s.addText(`${r.d.total} hallazgos`, {
       x: 10.5, y, w: 2.3, h: 0.3, fontSize: 10, fontFace: F.MONO, color: r.d.total ? C.TEXT : C.MUTE, align: 'right', valign: 'middle',
@@ -405,34 +418,39 @@ export function panoramaVulnerabilidades(ctx, D) {
       });
     } else {
       let bx = 6.95;
-      SEV_ORDER.forEach(sev => {
-        const w = (bw * r.d[sev]) / maxG;
-        if (w <= 0) return;
+      anchosTramos(r.d, bw).forEach(({ sev, n, w }) => {
         s.addShape(ctx.pres.ShapeType.rect, { x: bx, y: y + 0.36, w, h: 0.3, fill: { color: SEV_COLOR[sev] } });
-        if (w > 0.5) {
-          s.addText(String(r.d[sev]), {
-            x: bx, y: y + 0.36, w, h: 0.3, fontSize: 8.5, fontFace: F.SANS, bold: true,
+        if (w > 0.4) {
+          s.addText(String(n), {
+            x: bx, y: y + 0.36, w, h: 0.3, fontSize: 8.5, fontFace: F.SANS, bold: true, margin: 0,
             color: sev === 'Medium' ? '1A1400' : 'FFFFFF', align: 'center', valign: 'middle',
           });
         }
         bx += w;
       });
     }
-    s.addText('Crítica · Alta · Media · Baja', {
-      x: 6.95, y: y + 0.7, w: bw, h: 0.22, fontSize: 7.5, fontFace: F.MONO, color: C.MUTE,
+    // Leyenda con la cifra de cada severidad: se lee aunque el tramo sea demasiado estrecho para rotularlo.
+    s.addText(SEV_ORDER.flatMap((sev, j) => [
+      ...(j > 0 ? [{ text: '  ·  ', options: { color: C.MUTE } }] : []),
+      { text: `${SEV_ES[sev]} `, options: { color: C.MUTE } },
+      { text: String(r.d[sev] || 0), options: { bold: true, color: r.d[sev] ? SEV_COLOR[sev] : C.MUTE } },
+    ]), {
+      x: 6.95, y: y + 0.7, w: bw, h: 0.22, fontSize: 7.5, fontFace: F.MONO, margin: 0, valign: 'middle',
     });
   });
 
-  const notaVulns = D.findings.total > D.vulns.total
-    ? `Las ${D.vulns.total} CVE únicas generan ${D.findings.total} hallazgos: varias vulnerabilidades afectan a más de un activo y cada instancia se remedia por separado.`
-    : D.findings.total === D.vulns.total
-      ? `Las ${D.vulns.total} CVE únicas corresponden exactamente a ${D.findings.total} hallazgos: cada vulnerabilidad detectada afecta a una única instancia de activo.`
-      : `Las ${D.vulns.total} CVE identificadas generan ${D.findings.total} hallazgos en el parque.`;
+  // Un hallazgo es una CVE en un activo concreto: las CVE únicas nunca pueden superar a los
+  // hallazgos, y la diferencia son las CVE presentes en más de un activo.
+  const reparto = filas.filter(r => r.d.total > 0).map(r => `${r.d.total} en ${r.g.toLowerCase()}`).join(', ');
+  const notaVulns = A.total === 0
+    ? ''
+    : A.hallazgos > A.total
+      ? `Las ${A.total} CVE únicas abiertas generan ${A.hallazgos} hallazgos (${reparto}). Una CVE presente en varios activos cuenta una vez en el anillo y una vez por activo en las barras, porque cada instancia se remedia por separado.`
+      : `Las ${A.total} CVE únicas abiertas corresponden a ${A.hallazgos} hallazgos (${reparto}): cada vulnerabilidad afecta a una única instancia de activo.`;
 
-  ctx.nota(s, {
-    x: PAGE.M, y: 5.62, w: 6.1,
-    text: notaVulns,
-  });
+  if (notaVulns) {
+    ctx.nota(s, { x: PAGE.M, y: 5.35, w: 6.1, text: notaVulns });
+  }
 
   ctx.footer(s);
 }
@@ -445,93 +463,149 @@ export function cumplimientoSLA(ctx, D, { etiquetaPeriodo }) {
   ctx.head(s, {
     fase: 'Fase 3 · Ejecución',
     titulo: 'Cumplimiento de los acuerdos de nivel de servicio',
-    subtitulo: 'Un acuerdo por grupo de mantenimiento: el mismo hallazgo no concede el mismo plazo en un servidor que en un puesto',
+    subtitulo: 'Un acuerdo por grupo: servidores, puestos y contenedores no comparten plazo ni forma de remediar',
     control: 'SP 800-53r4 · SI-2',
   });
 
-  ['Server', 'Workstation'].forEach((cat, i) => {
-    const x = PAGE.M + i * (6.16 + 0.2);
-    const w = 6.16;
+  const gap = 0.2;
+  const w = (CW - gap * (GRUPOS_SLA.length - 1)) / GRUPOS_SLA.length;
+  const top = 1.68;
+  const inner = w - 0.48;
+
+  GRUPOS_SLA.forEach((cat, i) => {
+    const x = PAGE.M + i * (w + gap);
     const cump = D.cumplimiento[cat];
     const plazos = D.sla[cat] || {};
     const vacio = cump.total === 0;
 
     s.addShape(ctx.pres.ShapeType.roundRect, {
-      x, y: 1.68, w, h: 3.35,
+      x, y: top, w, h: 3.6,
       fill: { color: C.PANEL }, line: { color: C.RULE, width: 0.9 }, rectRadius: 0.08,
     });
-    s.addShape(ctx.pres.ShapeType.rect, { x, y: 1.68, w, h: 0.055, fill: { color: CAT_COLOR[cat] } });
+    s.addShape(ctx.pres.ShapeType.rect, { x, y: top, w, h: 0.055, fill: { color: CAT_COLOR[cat] } });
     s.addText(`SLA · ${CAT_LABEL[cat].toUpperCase()}`, {
-      x: x + 0.26, y: 1.88, w: w - 0.5, h: 0.3,
-      fontSize: 10.5, fontFace: F.MONO, bold: true, color: CAT_COLOR[cat], charSpacing: 1.3, valign: 'middle',
+      x: x + 0.24, y: top + 0.18, w: inner, h: 0.3,
+      fontSize: 10, fontFace: F.MONO, bold: true, color: CAT_COLOR[cat], charSpacing: 1.3, valign: 'middle',
     });
 
     s.addText(vacio ? '—' : `${cump.pct.toFixed(1)}%`, {
-      x: x + 0.24, y: 2.2, w: 2.3, h: 0.75,
-      fontSize: 38, fontFace: F.SANS, bold: true,
+      x: x + 0.22, y: top + 0.5, w: inner, h: 0.62,
+      fontSize: 32, fontFace: F.SANS, bold: true,
       color: vacio ? C.MUTE : cump.pct >= 95 ? C.OK : cump.pct >= 80 ? C.WARN : C.BAD,
       valign: 'middle',
     });
-    s.addText(vacio ? 'Sin hallazgos que medir' : `${cump.enPlazo} de ${cump.total} en plazo`, {
-      x: x + 0.26, y: 2.95, w: 3, h: 0.26, fontSize: 9, fontFace: F.SANS, color: C.MUTE, valign: 'middle',
+    s.addText(vacio ? 'Sin hallazgos que medir' : `${cump.enPlazo} de ${cump.total} hallazgos en plazo`, {
+      x: x + 0.24, y: top + 1.12, w: inner, h: 0.24, fontSize: 9, fontFace: F.SANS, color: C.MUTE, valign: 'middle',
     });
 
+    // Los tres estados en fila bajo el porcentaje: con tres tarjetas ya no caben a su lado.
     const estados = [
       { t: 'En plazo', n: cump.enPlazo - cump.porVencer, c: C.OK },
       { t: 'Por vencer', n: cump.porVencer, c: C.WARN },
       { t: 'Incumplidos', n: cump.incumplidos, c: C.BAD },
     ];
+    const ew = inner / 3;
     estados.forEach((e, j) => {
-      const ex = x + 2.75 + j * 1.12;
+      const ex = x + 0.24 + j * ew;
       s.addText(String(e.n), {
-        x: ex, y: 2.28, w: 1.0, h: 0.42, fontSize: 18, fontFace: F.SANS, bold: true,
+        x: ex, y: top + 1.44, w: ew, h: 0.38, fontSize: 17, fontFace: F.SANS, bold: true,
         color: e.n > 0 ? e.c : C.MUTE, align: 'center', valign: 'middle',
       });
-      s.addText(e.t, { x: ex, y: 2.7, w: 1.0, h: 0.24, fontSize: 8, fontFace: F.SANS, color: C.MUTE, align: 'center' });
-      s.addShape(ctx.pres.ShapeType.rect, { x: ex + 0.2, y: 2.96, w: 0.6, h: 0.05, fill: { color: e.n > 0 ? e.c : C.RULE } });
+      s.addText(e.t, { x: ex, y: top + 1.82, w: ew, h: 0.22, fontSize: 8, fontFace: F.SANS, color: C.MUTE, align: 'center' });
+      s.addShape(ctx.pres.ShapeType.rect, { x: ex + ew * 0.25, y: top + 2.06, w: ew * 0.5, h: 0.05, fill: { color: e.n > 0 ? e.c : C.RULE } });
     });
 
-    s.addShape(ctx.pres.ShapeType.rect, { x: x + 0.26, y: 3.32, w: w - 0.52, h: 0.012, fill: { color: C.RULE } });
+    s.addShape(ctx.pres.ShapeType.rect, { x: x + 0.24, y: top + 2.22, w: inner, h: 0.012, fill: { color: C.RULE } });
     s.addText('PLAZO MÁXIMO DESDE LA DETECCIÓN', {
-      x: x + 0.26, y: 3.44, w: w - 0.52, h: 0.22, fontSize: 7.5, fontFace: F.MONO, color: C.MUTE, charSpacing: 1,
+      x: x + 0.24, y: top + 2.3, w: inner, h: 0.22, fontSize: 7.5, fontFace: F.MONO, color: C.MUTE, charSpacing: 1,
     });
+    const tw = inner / 4;
     SEV_ORDER.forEach((sev, j) => {
-      const px = x + 0.26 + j * ((w - 0.52) / 4);
-      const pw = (w - 0.52) / 4 - 0.12;
+      const px = x + 0.24 + j * tw;
+      const pw = tw - 0.08;
+      const py = top + 2.56;
       s.addShape(ctx.pres.ShapeType.roundRect, {
-        x: px, y: 3.68, w: pw, h: 1.1, fill: { color: C.PANEL_2 }, line: { color: C.RULE, width: 0.6 }, rectRadius: 0.05,
+        x: px, y: py, w: pw, h: 0.92, fill: { color: C.PANEL_2 }, line: { color: C.RULE, width: 0.6 }, rectRadius: 0.05,
       });
-      s.addShape(ctx.pres.ShapeType.rect, { x: px, y: 3.68, w: pw, h: 0.05, fill: { color: SEV_COLOR[sev] } });
+      s.addShape(ctx.pres.ShapeType.rect, { x: px, y: py, w: pw, h: 0.05, fill: { color: SEV_COLOR[sev] } });
       s.addText(SEV_ES[sev], {
-        x: px, y: 3.78, w: pw, h: 0.24, fontSize: 8.5, fontFace: F.SANS, color: SEV_COLOR[sev], align: 'center', valign: 'middle',
+        x: px, y: py + 0.08, w: pw, h: 0.22, fontSize: 8, fontFace: F.SANS, color: SEV_COLOR[sev], align: 'center', valign: 'middle',
       });
       s.addText(plazos[sev] !== undefined ? String(plazos[sev]) : '—', {
-        x: px, y: 4.0, w: pw, h: 0.48, fontSize: 22, fontFace: F.SANS, bold: true, color: C.TEXT, align: 'center', valign: 'middle',
+        x: px, y: py + 0.28, w: pw, h: 0.4, fontSize: 19, fontFace: F.SANS, bold: true, color: C.TEXT, align: 'center', valign: 'middle',
       });
-      s.addText('días', { x: px, y: 4.46, w: pw, h: 0.24, fontSize: 8, fontFace: F.MONO, color: C.MUTE, align: 'center' });
+      s.addText('días', { x: px, y: py + 0.66, w: pw, h: 0.2, fontSize: 7.5, fontFace: F.MONO, color: C.MUTE, align: 'center' });
     });
   });
 
-  // Lectura del dato, redactada según la situación real
-  const srv = D.cumplimiento.Server;
+  // Lectura del dato, redactada según la situación real y sobre los tres grupos a la vez
+  const T = GRUPOS_SLA.reduce((acc, cat) => {
+    const c = D.cumplimiento[cat];
+    acc.total += c.total; acc.enPlazo += c.enPlazo; acc.porVencer += c.porVencer; acc.incumplidos += c.incumplidos;
+    return acc;
+  }, { total: 0, enPlazo: 0, porVencer: 0, incumplidos: 0 });
+  const pctTotal = T.total === 0 ? 100 : Math.round((T.enPlazo / T.total) * 1000) / 10;
+  const hayContenedores = D.cumplimiento.Container.total > 0;
+
+  // Plazo más corto entre los grupos que tienen hallazgos, leído de la configuración real.
+  const plazosConDatos = GRUPOS_SLA
+    .filter(cat => D.cumplimiento[cat].total > 0)
+    .flatMap(cat => SEV_ORDER
+      .filter(sev => Number(D.sla[cat]?.[sev]) > 0)
+      .map(sev => ({ cat, sev, dias: Number(D.sla[cat][sev]) })));
+  const minimo = plazosConDatos.reduce((m, p) => (!m || p.dias < m.dias ? p : m), null);
+  const minimoDe = (cat) => Math.min(...SEV_ORDER.map(sev => Number(D.sla[cat]?.[sev]) || Infinity));
+  const contenedoresMasCortos = hayContenedores
+    && GRUPOS_SLA.filter(cat => cat !== 'Container').every(cat => minimoDe('Container') < minimoDe(cat));
+  // Con todo el backlog en su primera semana y ningún plazo de 7 días o menos, nada ha podido vencer.
+  const soloRecientes = D.aging['8 — 30 días'] === 0 && D.aging['31 — 90 días'] === 0 && D.aging['> 90 días'] === 0;
+  const sinVencimientos = T.incumplidos === 0 && (!minimo || (soloRecientes && minimo.dias > 7));
+
   const runs = [];
-  if (srv.total === 0) {
+  if (T.total === 0) {
     runs.push({ text: 'No hay hallazgos medibles en ningún grupo. ', options: { bold: true, color: C.TEXT } });
     runs.push({ text: 'Los acuerdos están definidos pero todavía no se aplican a ningún activo con tipo válido.', options: { color: C.TEXT_2 } });
-  } else if (srv.incumplidos === 0 && D.aging['8 — 30 días'] === 0 && D.aging['31 — 90 días'] === 0 && D.aging['> 90 días'] === 0) {
-    runs.push({ text: `El cumplimiento es del ${srv.pct.toFixed(1)}% porque todos los hallazgos se detectaron dentro de la ventana reciente y ninguno ha agotado aún su plazo. `, options: { color: C.TEXT_2 } });
-    runs.push({ text: 'No mide capacidad de remediación, mide que el reloj acaba de empezar.', options: { bold: true, color: C.TEXT } });
-    runs.push({ text: ' El primer dato con valor llegará cuando venza el plazo de las críticas de servidor.', options: { color: C.TEXT_2 } });
+  } else if (sinVencimientos) {
+    runs.push({ text: `El cumplimiento global es del ${pctTotal.toFixed(1)}% porque todos los hallazgos se detectaron hace menos que el plazo más corto y ninguno ha podido agotarlo aún. `, options: { color: C.TEXT_2 } });
+    runs.push({ text: 'Todavía no mide capacidad de remediación.', options: { bold: true, color: C.TEXT } });
+    if (minimo) {
+      runs.push({
+        text: ` El primer dato con valor llegará cuando venza el plazo más corto: ${minimo.dias} días, el de las ${SEV_ES[minimo.sev].toLowerCase()}s en ${CAT_LABEL[minimo.cat].toLowerCase()}.`,
+        options: { color: C.TEXT_2 },
+      });
+    }
+  } else if (T.incumplidos === 0 && T.porVencer > 0) {
+    runs.push({ text: `El cumplimiento global es del ${pctTotal.toFixed(1)}% y ningún hallazgo ha superado su plazo`, options: { bold: true, color: C.OK } });
+    runs.push({ text: `, pero ${T.porVencer} ${T.porVencer === 1 ? 'está' : 'están'} en el último quinto de su ventana y ${T.porVencer === 1 ? 'es el primer candidato' : 'son los primeros candidatos'} a incumplir.`, options: { color: C.TEXT_2 } });
+  } else if (T.incumplidos === 0) {
+    runs.push({ text: `El cumplimiento global es del ${pctTotal.toFixed(1)}% y ningún hallazgo ha superado su plazo`, options: { bold: true, color: C.OK } });
+    runs.push({ text: ', y ninguno está todavía en el último quinto de su ventana: no hay vencimientos inminentes.', options: { color: C.TEXT_2 } });
   } else {
-    runs.push({ text: `${srv.incumplidos} hallazgos de servidor han superado su plazo`, options: { bold: true, color: C.CRIT } });
-    runs.push({ text: ` y ${srv.porVencer} están en el último cuarto de su ventana. Según PROC-06, el vencimiento dispara escalado a Responsable de Infraestructura, y a los 15 días al CISO para aceptación formal del riesgo o priorización forzada.`, options: { color: C.TEXT_2 } });
+    const detalle = GRUPOS_SLA
+      .filter(cat => D.cumplimiento[cat].incumplidos > 0)
+      .map(cat => `${D.cumplimiento[cat].incumplidos} en ${CAT_LABEL[cat].toLowerCase()}`)
+      .join(', ');
+    runs.push({ text: `${T.incumplidos} hallazgos han superado su plazo (${detalle})`, options: { bold: true, color: C.CRIT } });
+    runs.push({ text: ` y ${T.porVencer} están en el último quinto de su ventana. Según PROC-06, el vencimiento dispara escalado a Responsable de Infraestructura, y a los 15 días al CISO para aceptación formal del riesgo o priorización forzada.`, options: { color: C.TEXT_2 } });
+  }
+  if (hayContenedores) {
+    runs.push({
+      text: contenedoresMasCortos ? '\nLos contenedores tienen el plazo más corto' : '\nLos contenedores se remedian de otra forma',
+      options: { bold: true, color: CAT_COLOR.Container },
+    });
+    runs.push({
+      text: contenedoresMasCortos
+        ? ' porque no se parchean en ejecución: se reconstruye la imagen sobre una base corregida y se redespliega (NIST SP 800-190), sin ventana de mantenimiento del host.'
+        : ': no se parchean en ejecución, se reconstruye la imagen sobre una base corregida y se redespliega (NIST SP 800-190), sin ventana de mantenimiento del host.',
+      options: { color: C.TEXT_2 },
+    });
   }
   if (D.sinSLA > 0) {
-    runs.push({ text: `\n\n${D.sinSLA} hallazgos quedan fuera de ambos acuerdos`, options: { bold: true, color: C.WARN } });
-    runs.push({ text: ': afectan a activos sin tipo reconocido, así que no se les puede exigir plazo y no computan en ninguno de los dos porcentajes.', options: { color: C.TEXT_2 } });
+    runs.push({ text: `\n${D.sinSLA} hallazgos quedan fuera de los acuerdos`, options: { bold: true, color: C.WARN } });
+    runs.push({ text: ': afectan a activos sin tipo reconocido, así que no se les puede exigir plazo y no computan en ningún porcentaje.', options: { color: C.TEXT_2 } });
   }
 
-  ctx.callout(s, { x: PAGE.M, y: 5.2, w: CW, h: 1.35, titulo: `Cómo leer estas cifras · ${etiquetaPeriodo}`, runs });
+  ctx.callout(s, { x: PAGE.M, y: 5.42, w: CW, h: 1.42, titulo: `Cómo leer estas cifras · ${etiquetaPeriodo}`, runs });
   ctx.footer(s);
 }
 
@@ -543,17 +617,18 @@ export function colaRemediacion(ctx, D) {
   ctx.head(s, {
     fase: 'Fase 3 · Ejecución',
     titulo: 'Cola de remediación priorizada',
-    subtitulo: 'Ordenada por prioridad operativa: riesgo técnico × criticidad del activo × urgencia',
+    subtitulo: 'Software del host, por prioridad operativa: riesgo técnico × criticidad del activo × urgencia',
     control: 'SP 800-53r4 · SI-2',
   });
 
   if (D.cola.length === 0) {
-    ctx.vacio(s, 'No hay hallazgos pendientes de remediación en este proyecto.');
+    ctx.vacio(s, 'No hay hallazgos del software del host pendientes de remediación.');
     ctx.footer(s);
     return;
   }
 
-  const filas = D.cola.slice(0, 12);
+  // Los contenedores tienen su propia lámina: aquí solo el software instalado en el host.
+  const filas = D.cola.slice(0, FILAS_COLA);
   const header = [
     ctx.th('#', { align: 'center' }), ctx.th('CVE'), ctx.th('PRIORIDAD', { align: 'center' }),
     ctx.th('TIER', { align: 'center' }), ctx.th('SOFTWARE'), ctx.th('VERSIÓN', { align: 'center' }),
@@ -592,13 +667,84 @@ export function colaRemediacion(ctx, D) {
 
   const y = 1.7 + (filas.length + 1) * 0.345 + 0.25;
   ctx.callout(s, {
-    x: PAGE.M, y: Math.min(y, 6.0), w: CW, h: 0.8, titulo: null,
+    x: PAGE.M, y, w: CW, h: 0.95, titulo: null,
     runs: [
       { text: 'Concentración: ', options: { bold: true, color: C.ACCENT } },
-      { text: `las ${filas.length} entradas de mayor prioridad se reparten entre ${hosts.length} ${hosts.length === 1 ? 'activo' : 'activos'} y ${sws.length} ${sws.length === 1 ? 'producto' : 'productos'}. `, options: { color: C.TEXT_2 } },
+      { text: `las ${filas.length} entradas de mayor prioridad${D.colaTotal > filas.length ? ` de ${D.colaTotal}` : ''} se reparten entre ${hosts.length} ${hosts.length === 1 ? 'activo' : 'activos'} y ${sws.length} ${sws.length === 1 ? 'producto' : 'productos'}. `, options: { color: C.TEXT_2 } },
       { text: sinParche > 0
           ? `${sinParche} de ellas no tienen parche disponible todavía: no son accionables y procede valorar mitigación o aceptación temporal en vez de dejarlas envejecer en la cola.`
           : 'Todas tienen parche disponible, así que la cola es enteramente accionable en la próxima ventana de mantenimiento.',
+        options: { color: C.TEXT_2 } },
+    ],
+  });
+
+  ctx.footer(s);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// COLA DE REMEDIACIÓN · CONTENEDORES
+// ════════════════════════════════════════════════════════════════════════════
+export function colaContenedores(ctx, D) {
+  const s = ctx.slide();
+  ctx.head(s, {
+    fase: 'Fase 3 · Ejecución',
+    titulo: 'Cola de remediación · contenedores',
+    subtitulo: 'Imágenes y software empaquetado en ellas: se corrigen reconstruyendo la imagen, no parcheando',
+    control: 'SP 800-53r4 · SI-2 · CM-3',
+  });
+
+  if (D.colaContenedores.length === 0) {
+    ctx.vacio(s, 'No hay hallazgos en contenedores pendientes de remediación.');
+    ctx.footer(s);
+    return;
+  }
+
+  const filas = D.colaContenedores.slice(0, FILAS_COLA);
+  const header = [
+    ctx.th('#', { align: 'center' }), ctx.th('CVE'), ctx.th('PRIORIDAD', { align: 'center' }),
+    ctx.th('TIER', { align: 'center' }), ctx.th('COMPONENTE'), ctx.th('ORIGEN', { align: 'center' }),
+    ctx.th('CONTENEDOR'), ctx.th('HOST'), ctx.th('PARCHE', { align: 'center' }),
+  ];
+
+  const tierColor = { CRITICAL: C.CRIT, HIGH: C.HIGH, MEDIUM: C.MED, LOW: C.LOW };
+  const conVersion = (r) => (r.version && r.version !== '—' && r.version !== 'N/A' ? `${r.sw} ${r.version}` : r.sw);
+  const rows = filas.map((r, i) => {
+    const bg = i % 2 === 0 ? C.PANEL : C.PANEL_2;
+    return [
+      ctx.td(String(i + 1), { align: 'center', color: C.MUTE, mono: true, fill: bg }),
+      ctx.td(r.cve, { color: C.TEXT, bold: true, mono: true, fill: bg }),
+      ctx.td(r.prio.toFixed(3), { align: 'center', color: C.TEXT, bold: true, mono: true, fill: bg }),
+      ctx.td(r.tier, { align: 'center', color: tierColor[r.tier] || C.LOW, bold: true, fill: bg }),
+      ctx.td(conVersion(r), { color: C.TEXT_2, fill: bg }),
+      ctx.td(r.imagen ? 'Imagen' : 'Software', { align: 'center', color: r.imagen ? CAT_COLOR.Container : C.TEXT_2, fill: bg }),
+      ctx.td(r.contenedor, { color: C.TEXT_2, mono: true, fill: bg }),
+      ctx.td(r.host, { color: C.MUTE, mono: true, fill: bg }),
+      ctx.td(r.parche ? 'Sí' : 'No', { align: 'center', color: r.parche ? C.OK : C.MUTE, bold: true, fill: bg }),
+    ];
+  });
+
+  s.addTable([header, ...rows], {
+    x: PAGE.M, y: 1.7, w: CW,
+    colW: [0.42, 1.62, 1.0, 0.95, 2.0, 0.95, 1.7, 1.5, 0.75].map(v => v * (CW / 10.89)),
+    rowH: 0.345,
+    border: { type: 'solid', pt: 0.4, color: C.RULE },
+    autoPage: false,
+  });
+
+  const contenedores = new Set(filas.map(r => r.contenedor)).size;
+  const deImagen = filas.filter(r => r.imagen).length;
+  const sinParche = filas.filter(r => !r.parche).length;
+
+  const y = 1.7 + (filas.length + 1) * 0.345 + 0.25;
+  ctx.callout(s, {
+    x: PAGE.M, y, w: CW, h: 0.95, titulo: null, color: CAT_COLOR.Container,
+    runs: [
+      { text: 'Remediación por reconstrucción: ', options: { bold: true, color: CAT_COLOR.Container } },
+      { text: `las ${filas.length} entradas de mayor prioridad${D.colaContenedoresTotal > filas.length ? ` de ${D.colaContenedoresTotal}` : ''} afectan a ${contenedores} ${contenedores === 1 ? 'contenedor' : 'contenedores'}; ${deImagen} vienen de la imagen base y ${filas.length - deImagen} del software empaquetado en ella. `, options: { color: C.TEXT_2 } },
+      { text: 'Actualizar el paquete dentro del contenedor en marcha no sirve: el cambio se pierde al recrearlo, así que la corrección va al Dockerfile o a la imagen base. ', options: { color: C.TEXT_2 } },
+      { text: sinParche > 0
+          ? `${sinParche} no tienen versión corregida publicada: procede valorar otra imagen base o una aceptación temporal.`
+          : 'Todas tienen versión corregida publicada.',
         options: { color: C.TEXT_2 } },
     ],
   });
@@ -636,21 +782,42 @@ export function envejecimiento(ctx, D) {
     s.addText('hallazgos', { x: PAGE.M + 10.45, y, w: 1.3, h: 0.5, fontSize: 9, fontFace: F.SANS, color: C.MUTE, valign: 'middle' });
   });
 
+  const medios = D.aging['8 — 30 días'];
   const viejos = D.aging['31 — 90 días'] + D.aging['> 90 días'];
-  const limpio = viejos === 0 && D.aging['8 — 30 días'] === 0;
+  const abiertosConFecha = Object.values(D.aging).reduce((a, n) => a + n, 0);
+  const limpio = viejos === 0 && medios === 0;
+  const { cerrados, total } = D.findings;
+  const cierres = cerrados === 0
+    ? `ninguno de los ${total} hallazgos figura todavía como remediado`
+    : `${cerrados} de ${total} hallazgos figuran como remediados`;
+
+  let runs;
+  if (abiertosConFecha === 0) {
+    runs = [
+      { text: 'Sin backlog que medir. ', options: { bold: true, color: C.OK } },
+      { text: `No hay hallazgos abiertos con fecha de detección registrada; ${cierres}.`, options: { color: C.TEXT_2 } },
+    ];
+  } else if (limpio) {
+    runs = [
+      { text: 'Sin deuda acumulada. ', options: { bold: true, color: C.OK } },
+      { text: `Todos los hallazgos abiertos con fecha de detección registrada caen en la franja de 0 a 7 días. Conviene leerlo con cuidado: ${cierres}, así que la franja baja refleja un inventario reciente más que una capacidad de cierre demostrada.`, options: { color: C.TEXT_2 } },
+    ];
+  } else if (viejos === 0) {
+    runs = [
+      { text: `${medios} ${medios === 1 ? 'hallazgo lleva' : 'hallazgos llevan'} entre 8 y 30 días abiertos`, options: { bold: true, color: C.WARN } },
+      { text: ` y ninguno supera los 30: todavía no hay deuda antigua, pero el backlog ya no es solo inventario reciente. Como ${cierres}, esta franja es la que hay que vigilar para que no pase a la siguiente.`, options: { color: C.TEXT_2 } },
+    ];
+  } else {
+    runs = [
+      { text: `${viejos} ${viejos === 1 ? 'hallazgo lleva' : 'hallazgos llevan'} más de 30 días abiertos`, options: { bold: true, color: C.WARN } },
+      { text: `, de los cuales ${D.aging['> 90 días']} superan los 90. Un hallazgo que envejece por encima de su plazo deja de ser una tarea pendiente y pasa a ser riesgo aceptado de facto, pero sin la decisión formal que lo respalde. Procede o priorizarlos o registrar la aceptación con caducidad según PROC-05.`, options: { color: C.TEXT_2 } },
+    ];
+  }
 
   ctx.callout(s, {
     x: PAGE.M, y: 5.5, w: CW, h: 1.1, titulo: null,
     color: limpio ? C.OK : C.WARN, fill: limpio ? C.BG_OK : C.PANEL, borde: limpio ? C.OK : C.WARN,
-    runs: limpio
-      ? [
-          { text: 'Sin deuda acumulada. ', options: { bold: true, color: C.OK } },
-          { text: `Todos los hallazgos con fecha de detección registrada caen en la franja de 0 a 7 días. El backlog está limpio, aunque conviene leerlo con cuidado: solo ${D.findings.cerrados} de ${D.findings.total} hallazgos figuran como remediados, así que la franja baja refleja un inventario reciente más que una capacidad de cierre demostrada.`, options: { color: C.TEXT_2 } },
-        ]
-      : [
-          { text: `${viejos} hallazgos llevan más de 30 días abiertos`, options: { bold: true, color: C.WARN } },
-          { text: `, de los cuales ${D.aging['> 90 días']} superan los 90. Un hallazgo que envejece por encima de su plazo deja de ser una tarea pendiente y pasa a ser riesgo aceptado de facto, pero sin la decisión formal que lo respalde. Procede o priorizarlos o registrar la aceptación con caducidad según PROC-05.`, options: { color: C.TEXT_2 } },
-        ],
+    runs,
   });
 
   if (D.findings.sinFechaDeteccion > 0) {
@@ -676,7 +843,9 @@ export function inteligenciaAmenazas(ctx, D) {
   });
 
   const cobertura = D.ttp.totalCves > 0 ? Math.round((D.ttp.mapeadas / D.ttp.totalCves) * 100) : 0;
-  const kw = (5.9 - 0.18 * 2) / 3;
+  // A todo el ancho: repartidas en la mitad izquierda, etiqueta y subtítulo partían en dos
+  // líneas y se salían de la tarjeta. Encima del panel del actor no hay nada.
+  const kw = (CW - 0.18 * 2) / 3;
   [
     { label: 'CVE analizadas', value: D.ttp.totalCves, sub: 'Del alcance del proyecto', accent: C.ACCENT, color: C.TEXT },
     { label: 'Mapeadas a TTP', value: D.ttp.mapeadas, sub: `${cobertura}% de cobertura`, accent: cobertura >= 90 ? C.OK : C.WARN, color: cobertura >= 90 ? C.OK : C.WARN },
@@ -740,110 +909,6 @@ export function inteligenciaAmenazas(ctx, D) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// MATRIZ MITRE ATT&CK
-// ════════════════════════════════════════════════════════════════════════════
-export function matrizAttack(ctx, D) {
-  const s = ctx.slide();
-  ctx.head(s, {
-    fase: 'Fase 4 · Monitorización',
-    titulo: 'Matriz MITRE ATT&CK',
-    subtitulo: 'Las 14 tácticas de la matriz Enterprise con las técnicas que las vulnerabilidades del inventario habilitan',
-    control: 'SP 800-53r4 · SI-5',
-  });
-
-  const T = D.ttp.tacticas;
-  const gap = 0.055;
-  const colW = (CW - gap * (T.length - 1)) / T.length;
-  const y0 = 1.78;
-  const maxCves = Math.max(...T.map(t => t.cves), 1);
-
-  // El heatmap va en la cabecera de columna: intensidad por CVE que habilitan la táctica.
-  const heat = (v) => {
-    if (v === 0) return { bg: C.PANEL_2, fg: C.MUTE, br: C.RULE };
-    const r = v / maxCves;
-    if (r >= 0.6) return { bg: '3A1030', fg: 'FF9BD2', br: 'B0247F' };
-    if (r >= 0.3) return { bg: '2E1338', fg: 'D9A8FF', br: '8B4BC7' };
-    if (r >= 0.1) return { bg: '221B44', fg: 'B0A8FF', br: '5B52B8' };
-    return { bg: '1A1B2E', fg: '8A90C0', br: '3A3E62' };
-  };
-
-  T.forEach((t, i) => {
-    const x = PAGE.M + i * (colW + gap);
-    const h = heat(t.cves);
-
-    s.addShape(ctx.pres.ShapeType.rect, { x, y: y0, w: colW, h: 0.92, fill: { color: h.bg }, line: { color: h.br, width: 0.6 } });
-    s.addShape(ctx.pres.ShapeType.rect, { x, y: y0, w: colW, h: 0.04, fill: { color: h.br } });
-    // 6 pt para que «Reconnaissance», el nombre más largo, quepa en una línea.
-    s.addText(t.n, {
-      x: x + 0.02, y: y0 + 0.09, w: colW - 0.04, h: 0.42,
-      fontSize: 6, fontFace: F.SANS, bold: true, color: t.tec ? C.TEXT : C.MUTE,
-      align: 'center', valign: 'top', lineSpacingMultiple: 1.05,
-    });
-    s.addText(String(t.tec), {
-      x: x + 0.03, y: y0 + 0.52, w: colW - 0.06, h: 0.24,
-      fontSize: 12, fontFace: F.SANS, bold: true, color: t.tec ? h.fg : C.MUTE, align: 'center', valign: 'middle',
-    });
-    s.addText(t.id, {
-      x: x + 0.03, y: y0 + 0.74, w: colW - 0.06, h: 0.16, fontSize: 5.5, fontFace: F.MONO, color: C.MUTE, align: 'center',
-    });
-
-    for (let j = 0; j < 3; j++) {
-      const cy = y0 + 1.0 + j * 0.72;
-      const tec = t.top[j];
-      if (!tec) {
-        s.addShape(ctx.pres.ShapeType.rect, {
-          x, y: cy, w: colW, h: 0.66, fill: { color: C.INK }, line: { color: C.RULE_SOFT, width: 0.5 },
-        });
-        continue;
-      }
-      s.addShape(ctx.pres.ShapeType.rect, {
-        x, y: cy, w: colW, h: 0.66, fill: { color: C.PANEL }, line: { color: C.RULE, width: 0.5 },
-      });
-      s.addText(tec.id, {
-        x: x + 0.03, y: cy + 0.05, w: colW - 0.06, h: 0.18,
-        fontSize: 6, fontFace: F.MONO, bold: true, color: C.ACCENT, align: 'center', valign: 'middle',
-      });
-      s.addText(tec.name, {
-        x: x + 0.03, y: cy + 0.22, w: colW - 0.06, h: 0.42,
-        fontSize: 5.5, fontFace: F.SANS, color: C.TEXT_2, align: 'center', valign: 'top', lineSpacingMultiple: 1.05,
-      });
-    }
-  });
-
-  const legY = 4.98;
-  s.addText('INTENSIDAD — CVE QUE HABILITAN CADA TÁCTICA', {
-    x: PAGE.M, y: legY, w: 4.6, h: 0.22, fontSize: 7.5, fontFace: F.MONO, color: C.MUTE, charSpacing: 1,
-  });
-  [['Ninguna', C.PANEL_2, C.RULE], ['Baja', '1A1B2E', '3A3E62'], ['Media', '221B44', '5B52B8'],
-   ['Alta', '2E1338', '8B4BC7'], ['Muy alta', '3A1030', 'B0247F']].forEach(([n, bg, br], i) => {
-    const x = PAGE.M + i * 1.28;
-    s.addShape(ctx.pres.ShapeType.rect, { x, y: legY + 0.26, w: 0.34, h: 0.2, fill: { color: bg }, line: { color: br, width: 0.6 } });
-    s.addText(n, { x: x + 0.42, y: legY + 0.24, w: 0.85, h: 0.24, fontSize: 8, fontFace: F.SANS, color: C.TEXT_2, valign: 'middle' });
-  });
-  s.addText('Se muestran las tres técnicas de mayor peso por táctica; la cifra de la cabecera es el total de técnicas distintas detectadas.', {
-    x: PAGE.M, y: legY + 0.56, w: 7.4, h: 0.3, fontSize: 8, fontFace: F.SANS, italic: true, color: C.MUTE,
-  });
-
-  const vacias = T.filter(t => t.tec === 0).map(t => t.n);
-  s.addShape(ctx.pres.ShapeType.roundRect, {
-    x: 8.25, y: legY - 0.06, w: 4.53, h: 1.42,
-    fill: { color: C.PANEL }, line: { color: C.RULE, width: 0.75 }, rectRadius: 0.06,
-  });
-  s.addText(
-    [
-      { text: `${D.ttp.tecnicasDistintas} técnicas distintas sobre ${T.length - vacias.length} de las 14 tácticas. `, options: { bold: true, color: C.TEXT } },
-      { text: vacias.length === 0
-          ? 'Las catorce tienen soporte en el inventario: la cadena de ataque está completa de extremo a extremo.'
-          : `${vacias.length === 1 ? 'Solo' : 'Quedan'} ${vacias.join(', ')} sin cobertura, lo que no significa que sea inalcanzable: la cadena que sí está completa permite llegar hasta ahí por otros medios.`,
-        options: { color: C.TEXT_2 } },
-    ],
-    { x: 8.48, y: legY + 0.1, w: 4.1, h: 1.12, fontSize: 9, fontFace: F.SANS, lineSpacingMultiple: 1.3, valign: 'middle' }
-  );
-
-  ctx.footer(s);
-}
-
-// ════════════════════════════════════════════════════════════════════════════
 // ACTORES DE AMENAZA
 // ════════════════════════════════════════════════════════════════════════════
 export function actoresAmenaza(ctx, D) {
@@ -862,12 +927,14 @@ export function actoresAmenaza(ctx, D) {
   }
 
   const maxPct = D.apts[0].pct || 1;
-  s.addText('TÉCNICAS COMPARTIDAS  ·  % SOBRE LAS DETECTADAS EN LA INFRAESTRUCTURA', {
-    x: PAGE.M + 3.45, y: 1.46, w: 4.6, h: 0.24, fontSize: 7.5, fontFace: F.MONO, color: C.MUTE, charSpacing: 1,
+  // Una sola línea y por debajo de la regla de la cabecera (1,46 in); antes partía en dos y la tocaba.
+  s.addText('TÉCNICAS COMPARTIDAS · % SOBRE LAS DE LA INFRAESTRUCTURA', {
+    x: PAGE.M + 3.45, y: 1.6, w: 4.6, h: 0.2, fontSize: 7, fontFace: F.MONO, color: C.MUTE, charSpacing: 1,
+    margin: 0, valign: 'middle', wrap: false,
   });
 
   D.apts.forEach((a, i) => {
-    const y = 1.74 + i * 0.475;
+    const y = 1.86 + i * 0.475;
     const bg = i % 2 === 0 ? C.PANEL : C.INK;
     s.addShape(ctx.pres.ShapeType.rect, { x: PAGE.M, y, w: 8.05, h: 0.42, fill: { color: bg } });
     // 0,44 in de ancho: a menos, el puesto «10» partía en dos líneas.
@@ -880,40 +947,41 @@ export function actoresAmenaza(ctx, D) {
       x: PAGE.M + 1.3, y, w: 2.05, h: 0.42, fontSize: 10.5, fontFace: F.SANS, bold: i < 3, color: C.TEXT, valign: 'middle',
     });
     ctx.bar(s, {
-      x: PAGE.M + 3.45, y: y + 0.13, w: 3.0, h: 0.17, value: a.pct, max: maxPct,
+      x: PAGE.M + 3.45, y: y + 0.13, w: 2.65, h: 0.17, value: a.pct, max: maxPct,
       color: i === 0 ? C.HIGH : i < 3 ? C.ACCENT : '4A4E6B',
     });
     s.addText(`${Number(a.pct).toFixed(2)}%`, {
-      x: PAGE.M + 6.57, y, w: 0.8, h: 0.42, fontSize: 9.5, fontFace: F.MONO, bold: true, color: C.TEXT, align: 'right', valign: 'middle',
+      x: PAGE.M + 6.15, y, w: 0.85, h: 0.42, fontSize: 9.5, fontFace: F.MONO, bold: true, color: C.TEXT, align: 'right', valign: 'middle',
     });
+    // Alineado a la derecha y dentro de la franja (8,05 in): antes se salía por el borde.
     s.addText(`${a.n} de ${a.totalInfra}`, {
-      x: PAGE.M + 7.45, y, w: 1.0, h: 0.42, fontSize: 8.5, fontFace: F.MONO, color: C.MUTE, valign: 'middle',
+      x: PAGE.M + 7.05, y, w: 0.95, h: 0.42, fontSize: 8, fontFace: F.MONO, color: C.MUTE, align: 'right', valign: 'middle',
     });
   });
 
   s.addShape(ctx.pres.ShapeType.roundRect, {
-    x: 8.85, y: 1.74, w: 3.93, h: 2.55,
+    x: 8.85, y: 1.86, w: 3.93, h: 2.5,
     fill: { color: C.PANEL }, line: { color: C.NIST, width: 0.9 }, rectRadius: 0.08,
   });
   s.addText('CÓMO SE INTERPRETA', {
-    x: 9.1, y: 1.94, w: 3.5, h: 0.25, fontSize: 8.5, fontFace: F.MONO, bold: true, color: C.NIST, charSpacing: 1.3,
+    x: 9.1, y: 2.04, w: 3.5, h: 0.25, fontSize: 8.5, fontFace: F.MONO, bold: true, color: C.NIST, charSpacing: 1.3,
   });
   s.addText(
     'El solapamiento no es atribución. Ninguno de estos grupos ha sido observado contra la organización: la lista dice que las técnicas habilitadas por las vulnerabilidades del inventario coinciden con las que estos actores emplean según MITRE.\n\nSu utilidad es de priorización defensiva: los informes públicos de los primeros describen procedimientos concretos sobre esas mismas técnicas, y sirven para redactar reglas de detección con un objetivo realista.',
-    { x: 9.1, y: 2.28, w: 3.5, h: 1.9, fontSize: 8.5, fontFace: F.SANS, color: C.TEXT_2, lineSpacingMultiple: 1.3 }
+    { x: 9.1, y: 2.36, w: 3.5, h: 1.9, fontSize: 8.5, fontFace: F.SANS, color: C.TEXT_2, lineSpacingMultiple: 1.3 }
   );
 
   const lider = D.apts[0];
   s.addShape(ctx.pres.ShapeType.roundRect, {
-    x: 8.85, y: 4.44, w: 3.93, h: 2.16,
+    x: 8.85, y: 4.5, w: 3.93, h: 2.06,
     fill: { color: C.PANEL }, line: { color: C.RULE, width: 0.75 }, rectRadius: 0.08,
   });
   s.addText(`COINCIDENCIAS DE MAYOR PESO — ${lider.nombre.toUpperCase()}`, {
-    x: 9.1, y: 4.62, w: 3.5, h: 0.4,
+    x: 9.1, y: 4.66, w: 3.5, h: 0.4,
     fontSize: 8, fontFace: F.MONO, bold: true, color: C.ACCENT, charSpacing: 1.1, lineSpacingMultiple: 1.2,
   });
   (lider.tecnicas.length ? lider.tecnicas : ['Sin detalle de técnicas']).slice(0, 5).forEach((t, i) => {
-    const y = 5.06 + i * 0.3;
+    const y = 5.08 + i * 0.29;
     s.addShape(ctx.pres.ShapeType.rect, { x: 9.1, y: y + 0.1, w: 0.06, h: 0.06, fill: { color: C.ACCENT } });
     s.addText(t, { x: 9.28, y, w: 3.3, h: 0.26, fontSize: 8.5, fontFace: F.SANS, color: C.TEXT_2, valign: 'middle' });
   });
@@ -933,7 +1001,7 @@ export function vencimientosProximos(ctx, D) {
     control: 'SP 800-53r4 · SI-2',
   });
 
-  const incumplidos = D.cumplimiento.Server.incumplidos + D.cumplimiento.Workstation.incumplidos;
+  const incumplidos = D.incumplidos;
 
   if (D.vencenPronto.length === 0 && incumplidos === 0) {
     s.addShape(ctx.pres.ShapeType.roundRect, {
@@ -949,11 +1017,17 @@ export function vencimientosProximos(ctx, D) {
     return;
   }
 
-  const filas = D.vencenPronto.slice(0, 14);
+  // Tope de filas: con más, la nota de lectura se montaba sobre las últimas. Las que no caben
+  // se cuentan en la nota y están completas en la pestaña de SLA y en la hoja Excel.
+  const filas = D.vencenPronto.slice(0, FILAS_COLA);
+  const restantes = D.vencenPronto.length - filas.length;
+  const aviso = restantes > 0
+    ? `Se listan las ${filas.length} más próximas; otras ${restantes} vencen también esta semana y figuran en la pestaña de SLA.`
+    : '';
   const header = [
     ctx.th('CVE'), ctx.th('SEVERIDAD', { align: 'center' }), ctx.th('CVSS', { align: 'center' }),
-    ctx.th('GRUPO', { align: 'center' }), ctx.th('DETECTADO', { align: 'center' }),
-    ctx.th('PLAZO', { align: 'center' }), ctx.th('VENCE EN', { align: 'center' }), ctx.th('ACTIVOS', { align: 'center' }),
+    ctx.th('GRUPO', { align: 'center' }), ctx.th('ACTIVO'), ctx.th('DETECTADO', { align: 'center' }),
+    ctx.th('PLAZO', { align: 'center' }), ctx.th('VENCE EN', { align: 'center' }),
   ];
   const rows = filas.map((b, i) => {
     const bg = i % 2 === 0 ? C.PANEL : C.PANEL_2;
@@ -963,34 +1037,35 @@ export function vencimientosProximos(ctx, D) {
       ctx.td(SEV_ES[b.severity] || b.severity, { align: 'center', color: SEV_COLOR[b.severity] || C.MUTE, bold: true, fill: bg }),
       ctx.td(Number(b.base_score).toFixed(1), { align: 'center', color: C.TEXT_2, mono: true, fill: bg }),
       ctx.td(CAT_LABEL[b.category] || '—', { align: 'center', color: CAT_COLOR[b.category] || C.MUTE, fill: bg }),
+      ctx.td(recortar(b.asset_name || '—', 22), { color: C.TEXT_2, mono: true, fill: bg }),
       ctx.td(fechaCorta(b.first_detected_at), { align: 'center', color: C.MUTE, mono: true, fill: bg }),
       ctx.td(`${b.sla_days} d`, { align: 'center', color: C.MUTE, mono: true, fill: bg }),
       ctx.td(`${b.days_remaining} d`, { align: 'center', color: urgente ? C.CRIT : C.WARN, bold: true, mono: true, fill: bg }),
-      ctx.td(String(b.asset_count || 1), { align: 'center', color: C.TEXT_2, mono: true, fill: bg }),
     ];
   });
 
   s.addTable([header, ...rows], {
     x: PAGE.M, y: 1.7, w: CW,
-    colW: [2.2, 1.5, 0.9, 1.9, 1.5, 0.9, 1.3, 1.0].map(v => v * (CW / 11.2)),
+    colW: [2.1, 1.35, 0.8, 1.7, 2.0, 1.3, 0.85, 1.1].map(v => v * (CW / 11.2)),
     rowH: 0.33,
     border: { type: 'solid', pt: 0.4, color: C.RULE },
     autoPage: false,
   });
 
-  const y = Math.min(1.7 + (filas.length + 1) * 0.33 + 0.22, 6.0);
+  // Cada fila es una CVE en un activo; la nota habla en hallazgos, que es la unidad del informe.
+  const y = 1.7 + (filas.length + 1) * 0.33 + 0.22;
   ctx.callout(s, {
-    x: PAGE.M, y, w: CW, h: 0.82, titulo: null,
+    x: PAGE.M, y, w: CW, h: 0.95, titulo: null,
     color: incumplidos > 0 ? C.CRIT : C.WARN,
     borde: incumplidos > 0 ? C.CRIT : C.WARN,
     runs: incumplidos > 0
       ? [
-          { text: `Además de los ${D.vencenPronto.length} que vencen, hay ${incumplidos} compromisos ya incumplidos. `, options: { bold: true, color: C.CRIT } },
-          { text: 'Estos últimos no admiten replanificación: según PROC-06 el vencimiento dispara escalado a Responsable de Infraestructura, y a los 15 días al CISO para aceptación formal del riesgo.', options: { color: C.TEXT_2 } },
+          { text: `Además de los ${D.vencenProntoHallazgos} hallazgos que vencen, hay ${incumplidos} compromisos ya incumplidos. `, options: { bold: true, color: C.CRIT } },
+          { text: `Estos últimos no admiten replanificación: según PROC-06 el vencimiento dispara escalado a Responsable de Infraestructura, y a los 15 días al CISO para aceptación formal del riesgo. ${aviso}`, options: { color: C.TEXT_2 } },
         ]
       : [
-          { text: `${D.vencenPronto.length} hallazgos agotan su plazo dentro de la ventana. `, options: { bold: true, color: C.WARN } },
-          { text: 'Cerrarlos en la próxima ventana de mantenimiento evita el primer incumplimiento del ciclo; si alguno no es parcheable, procede registrar la excepción antes del vencimiento y no después.', options: { color: C.TEXT_2 } },
+          { text: `${D.vencenProntoHallazgos} hallazgos (${D.vencenProntoCVEs} CVE) agotan su plazo dentro de la ventana. `, options: { bold: true, color: C.WARN } },
+          { text: `Cerrarlos en la próxima ventana de mantenimiento evita el primer incumplimiento del ciclo; si alguno no es parcheable, procede registrar la excepción antes del vencimiento y no después. ${aviso}`, options: { color: C.TEXT_2 } },
         ],
   });
 

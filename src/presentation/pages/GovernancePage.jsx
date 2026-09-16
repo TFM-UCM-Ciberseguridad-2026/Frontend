@@ -15,9 +15,10 @@ const formatDateToEuropean = (isoString) => {
 
 // ── SLA ────────────────────────────────────────────────────────────────────
 // El plazo de parcheo depende de dos ejes: la severidad CVSS del hallazgo y el tipo de
-// activo donde está. Hay por tanto dos acuerdos independientes, uno por categoría, y no un
-// único SLA global: un servidor de producción y el portátil de un usuario no comparten ni
-// exposición ni ventana de mantenimiento.
+// activo donde está. Hay por tanto tres acuerdos independientes y no un único SLA global: un
+// servidor de producción y el portátil de un usuario no comparten ni exposición ni ventana de
+// mantenimiento, y un contenedor ni siquiera se parchea: se reconstruye su imagen y se
+// redespliega (NIST SP 800-190), así que admite un plazo más corto.
 const SLA_SEVERITIES = ['Critical', 'High', 'Medium', 'Low'];
 
 const SLA_CATEGORIES = [
@@ -32,8 +33,20 @@ const SLA_CATEGORIES = [
     label: 'Puestos de trabajo',
     hint: 'Equipos de usuario final',
     accent: '#a78bfa'
+  },
+  {
+    value: 'Container',
+    label: 'Contenedores',
+    hint: 'Imágenes y software empaquetado en ellas: se remedian reconstruyendo la imagen',
+    accent: '#6e9bff'
   }
 ];
+
+// Cada fila del monitor es una CVE en un activo, y agrupa los hallazgos de esa CVE en él
+// (más de uno si afecta a varios paquetes instalados). El resumen se mide en hallazgos,
+// igual que los informes exportados.
+const slaWeight = (b) => b.finding_count || 1;
+const sumSlaWeight = (rows) => rows.reduce((acc, b) => acc + slaWeight(b), 0);
 
 const SLA_SEVERITY_COLORS = {
   Critical: '#ff3264',
@@ -95,7 +108,12 @@ export function GovernancePage({ selectedProjectId }) {
 
   const filteredSLABreaches = useMemo(() => {
     const filtered = slaBreaches.filter(b => {
-      if (slaSearchText && !b.cve_id.toLowerCase().includes(slaSearchText.toLowerCase())) return false;
+      if (slaSearchText) {
+        const q = slaSearchText.toLowerCase();
+        const enCVE = (b.cve_id || '').toLowerCase().includes(q);
+        const enActivo = (b.asset_name || '').toLowerCase().includes(q);
+        if (!enCVE && !enActivo) return false;
+      }
       if (slaSeverityFilter !== 'Todas' && b.severity !== slaSeverityFilter) return false;
       if (slaCategoryFilter !== 'Todas' && (b.category || '') !== slaCategoryFilter) return false;
       if (slaStatusFilter !== 'Todos') {
@@ -121,6 +139,10 @@ export function GovernancePage({ selectedProjectId }) {
         case 'category':
           valA = slaCategoryLabel(a.category);
           valB = slaCategoryLabel(b.category);
+          return slaSortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        case 'asset_name':
+          valA = a.asset_name || '';
+          valB = b.asset_name || '';
           return slaSortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
         case 'base_score':
           valA = a.base_score ?? 0;
@@ -161,16 +183,17 @@ export function GovernancePage({ selectedProjectId }) {
   const slaSummary = useMemo(() => {
     return SLA_CATEGORIES.map(cat => {
       const rows = slaBreaches.filter(b => (b.category || '') === cat.value);
-      const breached = rows.filter(b => b.days_remaining < 0).length;
-      const dueSoon = rows.filter(b => b.days_remaining >= 0 && b.days_remaining <= b.sla_days * 0.2).length;
-      const onTime = rows.length - breached;
+      const total = sumSlaWeight(rows);
+      const breached = sumSlaWeight(rows.filter(b => b.days_remaining < 0));
+      const dueSoon = sumSlaWeight(rows.filter(b => b.days_remaining >= 0 && b.days_remaining <= b.sla_days * 0.2));
+      const onTime = total - breached;
       return {
         ...cat,
-        total: rows.length,
+        total,
         breached,
         dueSoon,
         onTime,
-        percent: rows.length === 0 ? 100 : Math.round((onTime / rows.length) * 1000) / 10
+        percent: total === 0 ? 100 : Math.round((onTime / total) * 1000) / 10
       };
     });
   }, [slaBreaches]);
@@ -980,7 +1003,7 @@ export function GovernancePage({ selectedProjectId }) {
                       {s.percent}%
                     </strong>
                     <span style={{ color: 'var(--c300)', fontSize: '12px' }}>
-                      {s.total === 0 ? 'sin vulnerabilidades activas' : `${s.onTime} de ${s.total} en plazo`}
+                      {s.total === 0 ? 'sin vulnerabilidades activas' : `${s.onTime} de ${s.total} hallazgos en plazo`}
                     </span>
                   </div>
                   <div style={{ height: '5px', borderRadius: '999px', background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
@@ -998,7 +1021,7 @@ export function GovernancePage({ selectedProjectId }) {
               <p style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px dashed var(--line)', color: 'var(--c300)', fontSize: '12.5px', lineHeight: 1.55 }}>
                 <strong style={{ color: '#ffaa00' }}>{slaUnclassified}</strong>{' '}
                 {slaUnclassified === 1 ? 'vulnerabilidad activa queda' : 'vulnerabilidades activas quedan'} fuera de
-                ambos acuerdos: {slaUnclassified === 1 ? 'el activo afectado no tiene' : 'los activos afectados no tienen'} un
+                los acuerdos: {slaUnclassified === 1 ? 'el activo afectado no tiene' : 'los activos afectados no tienen'} un
                 tipo reconocido, así que no se les puede exigir plazo. Corrige el tipo del endpoint en el
                 inventario para incorporarlas al SLA que les corresponda.
               </p>
@@ -1016,7 +1039,7 @@ export function GovernancePage({ selectedProjectId }) {
               <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', flexWrap: 'wrap' }}>
                 <input
                   type="text"
-                  placeholder="Buscar por CVE..."
+                  placeholder="Buscar por CVE o activo..."
                   value={slaSearchText}
                   onChange={e => setSlaSearchText(e.target.value)}
                   style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--line)', color: 'white', padding: '8px 12px', borderRadius: '4px', fontSize: '13px', minWidth: '200px' }}
@@ -1118,6 +1141,13 @@ export function GovernancePage({ selectedProjectId }) {
                         Tipo de activo {renderSlaSortIcon('category')}
                       </th>
                       <th
+                        onClick={() => handleSlaSort('asset_name')}
+                        className="sortable-th"
+                        style={{ padding: '0.75rem 1rem', color: slaSortField === 'asset_name' ? '#a78bfa' : 'var(--c200)', fontSize: '0.75rem', fontWeight: '700', fontFamily: 'Orbitron, sans-serif', textTransform: 'uppercase' }}
+                      >
+                        Activo {renderSlaSortIcon('asset_name')}
+                      </th>
+                      <th
                         onClick={() => handleSlaSort('base_score')}
                         className="sortable-th"
                         style={{ padding: '0.75rem 1rem', color: slaSortField === 'base_score' ? '#a78bfa' : 'var(--c200)', fontSize: '0.75rem', fontWeight: '700', fontFamily: 'Orbitron, sans-serif', textTransform: 'uppercase' }}
@@ -1150,13 +1180,13 @@ export function GovernancePage({ selectedProjectId }) {
                   <tbody>
                     {slaBreaches.length === 0 ? (
                       <tr>
-                        <td colSpan={7} style={{ padding: '24px', textAlign: 'center', color: 'var(--c300)', fontStyle: 'italic' }}>
+                        <td colSpan={8} style={{ padding: '24px', textAlign: 'center', color: 'var(--c300)', fontStyle: 'italic' }}>
                           No hay vulnerabilidades activas monitorizadas
                         </td>
                       </tr>
                     ) : filteredSLABreaches.length === 0 ? (
                       <tr>
-                        <td colSpan={7} style={{ padding: '24px', textAlign: 'center', color: 'var(--c300)', fontStyle: 'italic' }}>
+                        <td colSpan={8} style={{ padding: '24px', textAlign: 'center', color: 'var(--c300)', fontStyle: 'italic' }}>
                           No hay vulnerabilidades que coincidan con los filtros
                         </td>
                       </tr>
@@ -1188,7 +1218,7 @@ export function GovernancePage({ selectedProjectId }) {
                         const catAccent = slaCategoryAccent(b.category);
 
                         return (
-                          <tr key={`${b.cve_id}-${b.category || 'none'}-${idx}`} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                          <tr key={`${b.cve_id}-${b.asset_id || b.category || 'none'}-${idx}`} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                             <td style={{ padding: '12px 16px', color: 'var(--c50)', fontFamily: 'Share Tech Mono, monospace' }}>{b.cve_id}</td>
                             <td style={{ padding: '12px 16px', color: sevColor, fontWeight: 'bold' }}>{b.severity}</td>
                             <td style={{ padding: '12px 16px' }}>
@@ -1205,9 +1235,12 @@ export function GovernancePage({ selectedProjectId }) {
                               }}>
                                 {slaCategoryLabel(b.category)}
                               </span>
-                              {b.asset_count > 1 && (
+                            </td>
+                            <td style={{ padding: '12px 16px', color: 'var(--c100)', fontFamily: 'Share Tech Mono, monospace', whiteSpace: 'nowrap' }} title={b.asset_id || ''}>
+                              {b.asset_name || '—'}
+                              {b.finding_count > 1 && (
                                 <span style={{ color: 'var(--c300)', fontSize: '11px', marginLeft: '8px' }}>
-                                  ×{b.asset_count}
+                                  ×{b.finding_count} hallazgos
                                 </span>
                               )}
                             </td>
