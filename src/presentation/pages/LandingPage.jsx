@@ -3,6 +3,7 @@ import './LandingPage.css';
 import { ImportModal } from '../components/Archive/ImportModal';
 import { RenameProjectModal, DeleteProjectModal } from '../components/HudHeader/ProjectActionModals';
 import { findProjectByName } from '../../domain/entities/projectName';
+import logoPng from '../../assets/logo.png';
 
 const REPO_URL = 'https://github.com/TFM-UCM-Ciberseguridad-2026/Orquestador';
 
@@ -82,15 +83,15 @@ export function LandingPage({
       {/* ---------- CONTENIDO PRINCIPAL CENTRADO ---------- */}
       <main className="hud-home">
         <section className="hud-hero">
-          <div className="hud-emblem" title="Orquestador">
-            {logoSrc ? (
-              <img src={logoSrc} alt="Logo" className="hud-emblem-img" />
-            ) : (
-              <div className="hud-emblem-core" />
-            )}
+          <div className="hud-emblem" title="HEIMDALL" style={{ width: '84px', height: '84px' }}>
+            <img src={logoSrc || logoPng} alt="HEIMDALL Logo" className="hud-emblem-img" style={{ padding: '4px' }} />
           </div>
-          <p className="eyebrow">Panel principal</p>
-          <h2>Bienvenido a tu Orquestador</h2>
+          <h1 style={{ fontFamily: 'Orbitron, sans-serif', fontSize: '3rem', fontWeight: '900', letterSpacing: '4px', color: '#ffffff', textShadow: '0 0 25px rgba(47, 2, 255, 0.7), 0 0 50px rgba(121, 115, 255, 0.45)', margin: '12px 0 6px 0' }}>
+            HEIMDALL
+          </h1>
+          <p style={{ fontFamily: '"Share Tech Mono", monospace', fontSize: '0.92rem', color: 'var(--c400, #7973ff)', letterSpacing: '0.8px', textTransform: 'uppercase', maxWidth: '720px', margin: '0 auto 24px auto', opacity: 0.9, lineHeight: 1.4 }}>
+            Heuristic Engine for Infrastructure Mapping & Defense Analysis & Lateral Logic
+          </p>
 
           <div className="hud-stats-row">
             <div className="hud-stat-chip mono"><i></i> {projects.length} PROYECTOS ACTIVOS</div>

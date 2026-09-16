@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { RenameProjectModal, DeleteProjectModal } from './ProjectActionModals';
+import logoPng from '../../../assets/logo.png';
 
 export function HudHeader({ 
   activeNav, 
@@ -21,6 +22,35 @@ export function HudHeader({
 
   return (
     <header className="hud-header">
+      {/* MARCA HEIMDALL CON LOGO Y SUBTÍTULO */}
+      <div
+        className="hud-brand"
+        onClick={() => setShowDashboard && setShowDashboard(false)}
+        title="HEIMDALL // Volver al panel principal"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          marginRight: '16px',
+          cursor: 'pointer',
+          userSelect: 'none',
+          flexShrink: 0
+        }}
+      >
+        <img 
+          src={logoPng} 
+          alt="HEIMDALL Logo" 
+          style={{ width: '36px', height: '36px', objectFit: 'contain', filter: 'drop-shadow(0 0 8px rgba(47, 2, 255, 0.75))' }} 
+        />
+        <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left' }}>
+          <span style={{ fontFamily: 'Orbitron, sans-serif', fontSize: '15px', fontWeight: '900', letterSpacing: '2px', color: '#ffffff', lineHeight: 1.1 }}>
+            HEIMDALL
+          </span>
+          <span style={{ fontFamily: '"Share Tech Mono", monospace', fontSize: '7.5px', color: 'var(--c400, #7973ff)', letterSpacing: '0.4px', marginTop: '2px', opacity: 0.9, whiteSpace: 'nowrap' }}>
+            Heuristic Engine for Infrastructure Mapping & Defense Analysis & Lateral Logic
+          </span>
+        </div>
+      </div>
       {/* BOTÓN COMPACTO PANEL PRINCIPAL (EN DOS LÍNEAS) */}
       <button
         type="button"
