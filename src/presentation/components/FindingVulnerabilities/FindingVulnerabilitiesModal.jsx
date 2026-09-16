@@ -89,7 +89,7 @@ export function FindingVulnerabilitiesModal({
           )}
 
           {!findingVulnsLoading && !findingVulnsError && displayVulns.map((vuln, idx) => (
-            <div key={vuln.cveId || idx} className={`path-card ${getScoreTierClass(vuln.baseScore)}`}>
+            <div key={vuln.cveId || idx} className={`path-card finding-vulnerability-card ${getScoreTierClass(vuln.baseScore)}`}>
               <div className="path-card-header">
                 <div className="path-title-group">
                   <span className="cve-chip"><span className="cve-id">{vuln.cveId}</span></span>
@@ -104,7 +104,7 @@ export function FindingVulnerabilitiesModal({
               </div>
 
               {vuln.description && (
-                <p style={{ color: 'var(--c100)', fontSize: '13px', lineHeight: 1.5, margin: 0 }}>
+                <p className="finding-vulnerability-description">
                   {vuln.description}
                 </p>
               )}
@@ -122,7 +122,7 @@ export function FindingVulnerabilitiesModal({
                   </span>
                 )}
                 {vuln.cvssVector && (
-                  <span className="tag-chip tag-cvss">{vuln.cvssVector}</span>
+                  <span className="tag-chip tag-cvss finding-vulnerability-vector">{vuln.cvssVector}</span>
                 )}
               </div>
             </div>
