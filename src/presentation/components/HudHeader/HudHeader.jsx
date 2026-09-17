@@ -22,7 +22,7 @@ export function HudHeader({
 
   return (
     <header className="hud-header">
-      {/* MARCA HEIMDALL CON LOGO Y SUBTÍTULO */}
+      {/* MARCA HEIMDALL CON LOGO */}
       <div
         className="hud-brand"
         onClick={() => setShowDashboard && setShowDashboard(false)}
@@ -40,16 +40,11 @@ export function HudHeader({
         <img 
           src={logoPng} 
           alt="HEIMDALL Logo" 
-          style={{ width: '36px', height: '36px', objectFit: 'contain', filter: 'drop-shadow(0 0 8px rgba(47, 2, 255, 0.75))' }} 
+          style={{ width: '34px', height: '34px', objectFit: 'contain', filter: 'drop-shadow(0 0 8px rgba(47, 2, 255, 0.75))' }} 
         />
-        <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left' }}>
-          <span style={{ fontFamily: 'Orbitron, sans-serif', fontSize: '15px', fontWeight: '900', letterSpacing: '2px', color: '#ffffff', lineHeight: 1.1 }}>
-            HEIMDALL
-          </span>
-          <span style={{ fontFamily: '"Share Tech Mono", monospace', fontSize: '7.5px', color: 'var(--c400, #7973ff)', letterSpacing: '0.4px', marginTop: '2px', opacity: 0.9, whiteSpace: 'nowrap' }}>
-            Heuristic Engine for Infrastructure Mapping & Defense Analysis & Lateral Logic
-          </span>
-        </div>
+        <span style={{ fontFamily: 'Orbitron, sans-serif', fontSize: '16px', fontWeight: '900', letterSpacing: '2px', color: '#ffffff', lineHeight: 1 }}>
+          HEIMDALL
+        </span>
       </div>
       {/* BOTÓN COMPACTO PANEL PRINCIPAL (EN DOS LÍNEAS) */}
       <button
